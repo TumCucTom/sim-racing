@@ -12,7 +12,7 @@ function flatTrack() {
   const x = new Float64Array(n), y = new Float64Array(n), s = new Float64Array(n + 1);
   for (let i = 0; i < n; i++) { x[i] = i - 2000; s[i] = i; } s[n] = n;
   const big = new Float64Array(n).fill(1e5);
-  return { n, ds: 1, length: n, halfWidth: 1e4, kerbWidth: 0, x, y, z, grade: z, heading: z, curv: z, s, kerb: new Uint8Array(n), gravelL: new Uint8Array(n), gravelR: new Uint8Array(n), wallL: big, wallR: big };
+  return { n, ds: 1, length: n, halfWidth: 1e4, hw: new Float64Array(n).fill(1e4), kerbWidth: 0, x, y, z, grade: z, heading: z, curv: z, s, kerb: new Uint8Array(n), gravelL: new Uint8Array(n), gravelR: new Uint8Array(n), wallL: big, wallR: big };
 }
 const track = flatTrack();
 
@@ -112,5 +112,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.table(rows);
   fs.mkdirSync('docs', { recursive: true });
   fs.writeFileSync('docs/car-validation.json', JSON.stringify(rows, null, 2));
+  fs.mkdirSync('src/data', { recursive: true }); fs.writeFileSync('src/data/car-validation.json', JSON.stringify(rows, null, 2));
   console.log(allOk ? 'ALL WITHIN REFERENCE ENVELOPE' : 'SOME METRICS OUTSIDE ENVELOPE');
 }

@@ -3,7 +3,7 @@ import { buildTrack } from '../src/sim/track.js';
 import { CARS, CAR_ORDER } from '../src/sim/cars.js';
 import { Sim } from '../src/sim/sim.js';
 import { BaselineDriver } from '../src/sim/drivers/baseline.js';
-const track = buildTrack();
+const track = buildTrack(process.env.TRACK || 'ravenscar');
 const ids = process.argv[2] && process.argv[2] !== 'all' ? [process.argv[2]] : CAR_ORDER;
 const grip = +(process.argv[3] || 0.9);
 for (const id of ids) {

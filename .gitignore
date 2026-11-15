@@ -1,4 +1,7 @@
 node_modules
 dist
+dist-single
 *.log
-rl/runs/*/ckpt_*.json
+rl/runs/test_*
+rl/runs/*/latest.json
+rl/runs/*/final.json

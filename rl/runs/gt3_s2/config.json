@@ -1,0 +1,18 @@
+{
+  "carId": "gt3",
+  "seed": 2,
+  "totalSteps": 3000000,
+  "N": 32,
+  "T": 128,
+  "gamma": 0.992,
+  "lam": 0.95,
+  "lr": 0.0003,
+  "entCoef": 0.0005,
+  "epochs": 5,
+  "minibatch": 512,
+  "hidden": [
+    64,
+    64
+  ],
+  "controlHz": 20
+}

@@ -1,9 +1,17 @@
-// "Ravenscar Ridge" — an original 2.9 km circuit.
-// The track is a closed centripetal Catmull-Rom spline through hand-placed
-// control points, resampled at uniform 1 m arc-length spacing. Everything the
-// physics needs (heading, curvature, elevation, grade, edges, surface type) is
-// precomputed into typed arrays so lookups are allocation-free and
-// deterministic.
+// Circuits. Each track is a closed centreline resampled at uniform ~1 m
+// arc-length spacing, with per-sample half-width, heading, curvature,
+// elevation, grade, kerbs, run-off type and wall offsets precomputed into
+// typed arrays so physics lookups are allocation-free and deterministic.
+//
+//  * "Ravenscar Ridge" is an original 2.9 km circuit defined by hand-placed
+//    spline control points (used for the RL benchmark).
+//  * Silverstone, Spa-Francorchamps and Monza use surveyed centreline and
+//    left/right track-width data from the open TUMFTM racetrack-database
+//    (LGPL-3.0). That data has no height channel, so their elevation is a
+//    hand-approximated profile — see each JSON's `source` note.
+import silverstone from './tracks/silverstone.json' with { type: 'json' };
+import spa from './tracks/spa.json' with { type: 'json' };
+import monza from './tracks/monza.json' with { type: 'json' };
 
 export const SURF = { ASPHALT: 0, KERB: 1, GRASS: 2, GRAVEL: 3 };
 
@@ -23,15 +31,22 @@ const CONTROL_POINTS = [
   [-440, 96], [-446, 40], [-404, 4],              // T10 "Home" final corner
 ];
 
-const HALF_WIDTH = 6.5;   // 13 m wide racing surface
 const KERB_WIDTH = 1.5;
 const DS = 1.0;
+
+export const TRACKS = {
+  ravenscar: { id: 'ravenscar', name: 'Ravenscar Ridge', country: 'Original circuit', real: false },
+  silverstone: { ...silverstone, real: true },
+  spa: { ...spa, real: true },
+  monza: { ...monza, real: true },
+};
+export const TRACK_ORDER = ['ravenscar', 'silverstone', 'spa', 'monza'];
 
 function catmullRomClosed(pts, perSeg = 40) {
   const n = pts.length;
   const out = [];
   const alpha = 0.5;
-  const tj = (ti, a, b) => ti + Math.pow(Math.hypot(b[0] - a[0], b[1] - a[1]), alpha);
+  const tj = (ti, a, b) => ti + Math.pow(Math.max(1e-6, Math.hypot(b[0] - a[0], b[1] - a[1])), alpha);
   for (let i = 0; i < n; i++) {
     const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
     const t0 = 0, t1 = tj(t0, p0, p1), t2 = tj(t1, p1, p2), t3 = tj(t2, p2, p3);
@@ -68,9 +83,38 @@ function smoothClosed(arr, passes, radius) {
   return a;
 }
 
-export function buildTrack() {
-  const dense = catmullRomClosed(CONTROL_POINTS, 60);
-  // cumulative length of dense polyline
+// Periodic smooth interpolation of [fraction, value] key points.
+function periodicProfile(keys, u) {
+  const m = keys.length;
+  let k = 0; while (k < m - 1 && keys[k + 1][0] <= u) k++;
+  const a = keys[k], b = keys[(k + 1) % m];
+  const span = (k === m - 1 ? 1 + b[0] : b[0]) - a[0];
+  const t = (u - a[0]) / span, f = t * t * (3 - 2 * t);
+  return a[1] + (b[1] - a[1]) * f;
+}
+
+const cache = new Map();
+export function buildTrack(id = 'ravenscar') {
+  if (cache.has(id)) return cache.get(id);
+  const def = TRACKS[id];
+  if (!def) throw new Error(`unknown track ${id}`);
+  const real = !!def.pts;
+  // dense polyline [x, y, halfWidth]
+  let dense;
+  if (real) {
+    // shift the surveyed centreline to the true middle of the road
+    const P = def.pts, m = P.length, mid = [];
+    for (let i = 0; i < m; i++) {
+      const a = P[(i - 1 + m) % m], b = P[(i + 1) % m], h = Math.atan2(b[1] - a[1], b[0] - a[0]);
+      const off = (P[i][3] - P[i][2]) / 2;
+      mid.push([P[i][0] - Math.sin(h) * off, P[i][1] + Math.cos(h) * off, (P[i][2] + P[i][3]) / 2]);
+    }
+    dense = catmullRomClosed(mid, 6);
+    for (let i = 0; i < dense.length; i++) { const k = Math.floor(i / 6), f = (i % 6) / 6; dense[i].push(mid[k][2] + (mid[(k + 1) % m][2] - mid[k][2]) * f); }
+  } else {
+    dense = catmullRomClosed(CONTROL_POINTS, 60);
+    for (const d of dense) d.push(6.5);
+  }
   const dn = dense.length;
   const cum = new Float64Array(dn + 1);
   for (let i = 0; i < dn; i++) {
@@ -80,7 +124,7 @@ export function buildTrack() {
   const rawLen = cum[dn];
   const n = Math.round(rawLen / DS);
   const ds = rawLen / n;
-  let x = new Float64Array(n), y = new Float64Array(n);
+  let x = new Float64Array(n), y = new Float64Array(n), hw = new Float64Array(n);
   let j = 0;
   for (let i = 0; i < n; i++) {
     const s = i * ds;
@@ -89,9 +133,12 @@ export function buildTrack() {
     const a = dense[j], b = dense[(j + 1) % dn];
     x[i] = a[0] + (b[0] - a[0]) * f;
     y[i] = a[1] + (b[1] - a[1]) * f;
+    hw[i] = a[2] + (b[2] - a[2]) * f;
   }
   // light smoothing removes curvature discontinuities at spline joints
-  x = smoothClosed(x, 2, 6); y = smoothClosed(y, 2, 6);
+  const sr = real ? 3 : 6;
+  x = smoothClosed(x, 2, sr); y = smoothClosed(y, 2, sr); hw = smoothClosed(hw, 2, 8);
+  let HALF_WIDTH = 0; for (let i = 0; i < n; i++) HALF_WIDTH += hw[i]; HALF_WIDTH /= n;
 
   const heading = new Float64Array(n), curv = new Float64Array(n);
   const segLen = new Float64Array(n), sArr = new Float64Array(n + 1);
@@ -111,12 +158,14 @@ export function buildTrack() {
   }
   const curvS = smoothClosed(curv, 2, 4);
 
-  // Elevation: periodic in s, ~26 m total relief, grades up to ~4.5 %.
-  const z = new Float64Array(n), grade = new Float64Array(n);
+  // Elevation. Ravenscar: analytic, ~23 m relief, grades up to ~4 %.
+  let z = new Float64Array(n); const grade = new Float64Array(n);
   for (let i = 0; i < n; i++) {
-    const u = (sArr[i] / length) * 2 * Math.PI;
-    z[i] = 14 + 9.0 * Math.sin(u - 1.9) + 4.0 * Math.sin(2 * u + 0.6) + 1.5 * Math.sin(5 * u + 2.0);
+    const f = sArr[i] / length, u = f * 2 * Math.PI;
+    z[i] = real ? periodicProfile(def.elevation, f)
+      : 14 + 9.0 * Math.sin(u - 1.9) + 4.0 * Math.sin(2 * u + 0.6) + 1.5 * Math.sin(5 * u + 2.0);
   }
+  if (real) z = smoothClosed(z, 3, 40);
   for (let i = 0; i < n; i++) {
     grade[i] = (z[(i + 1) % n] - z[(i - 1 + n) % n]) / (segLen[i] + segLen[(i - 1 + n) % n]);
   }
@@ -141,26 +190,46 @@ export function buildTrack() {
   }
 
   // Wall offsets. Generous run-off, but never past the centre of curvature on
-  // the inside of a tight corner.
+  // the inside of a tight corner, and never into a neighbouring piece of track.
   let wallL = new Float64Array(n), wallR = new Float64Array(n);
+  const pre = { n, x, y, ds }; buildGrid(pre);
   for (let i = 0; i < n; i++) {
     const R = Math.abs(curvS[i]) > 1e-4 ? 1 / Math.abs(curvS[i]) : 1e4;
-    const base = HALF_WIDTH + 9;
-    const outer = HALF_WIDTH + (gravelL[i] || gravelR[i] ? 22 : 9);
-    const inner = Math.min(base, Math.max(HALF_WIDTH + 2.5, 0.62 * R));
+    const base = hw[i] + 9;
+    const outer = hw[i] + (gravelL[i] || gravelR[i] ? 22 : 9);
+    const inner = Math.min(base, Math.max(hw[i] + 2.5, 0.62 * R));
     if (curvS[i] > 0) { wallL[i] = inner; wallR[i] = gravelR[i] ? outer : base; }
     else { wallR[i] = inner; wallL[i] = gravelL[i] ? outer : base; }
+    // neighbouring track: probe along each normal for foreign samples
+    if (i % 2 === 0 || true) {
+      const nx = -Math.sin(heading[i]), ny = Math.cos(heading[i]);
+      for (const side of [1, -1]) {
+        let lim = side > 0 ? wallL[i] : wallR[i];
+        for (let o = hw[i] + 3; o < lim + 14; o += 3) {
+          const px = x[i] + nx * o * side, py = y[i] + ny * o * side;
+          const q = nearestCoarse(pre, px, py);
+          let gap = Math.abs(q - i); gap = Math.min(gap, n - gap);
+          if (gap > 60) {
+            const dq = Math.hypot(x[q] - px, y[q] - py);
+            const mid = (o + dq - hw[q] + hw[i]) / 2;   // split the gap between the two roads
+            lim = Math.min(lim, Math.max(hw[i] + 1.6, mid - 0.5)); break;
+          }
+        }
+        if (side > 0) wallL[i] = lim; else wallR[i] = lim;
+      }
+    }
   }
-  wallL = smoothClosed(wallL, 2, 14); wallR = smoothClosed(wallR, 2, 14);
+  wallL = smoothClosed(wallL, 2, real ? 8 : 14); wallR = smoothClosed(wallR, 2, real ? 8 : 14);
+  for (let i = 0; i < n; i++) { wallL[i] = Math.max(wallL[i], hw[i] + 1.5); wallR[i] = Math.max(wallR[i], hw[i] + 1.5); }
 
   const t = {
-    name: 'Ravenscar Ridge',
-    n, ds, length, halfWidth: HALF_WIDTH, kerbWidth: KERB_WIDTH,
+    id, name: def.name, country: def.country, real, source: def.source || null,
+    n, ds, length, halfWidth: HALF_WIDTH, hw, kerbWidth: KERB_WIDTH,
     x, y, z, grade, heading, curv: curvS, s: sArr, kerb, gravelL, gravelR, wallL, wallR,
-    controlPoints: CONTROL_POINTS,
     sectors: [0, Math.round(n * 0.33), Math.round(n * 0.67)],
   };
   buildGrid(t);
+  cache.set(id, t);
   return t;
 }
 
@@ -181,6 +250,17 @@ function buildGrid(t) {
     (cells[cy * nx + cx] ||= []).push(i);
   }
   t.grid = { cell, minX, minY, maxX, maxY, nx, ny, cells };
+}
+
+function nearestCoarse(t, px, py) {
+  const g = t.grid, cx = Math.floor((px - g.minX) / g.cell), cy = Math.floor((py - g.minY) / g.cell);
+  let best = 0, bd = Infinity;
+  for (let yy = cy - 1; yy <= cy + 1; yy++) for (let xx = cx - 1; xx <= cx + 1; xx++) {
+    if (xx < 0 || yy < 0 || xx >= g.nx || yy >= g.ny) continue;
+    const c = g.cells[yy * g.nx + xx]; if (!c) continue;
+    for (let k = 0; k < c.length; k++) { const i = c[k], d = (t.x[i] - px) ** 2 + (t.y[i] - py) ** 2; if (d < bd) { bd = d; best = i; } }
+  }
+  return best;
 }
 
 export function nearestIndexGlobal(t, px, py) {
@@ -256,10 +336,11 @@ export function project(t, px, py, hint, out) {
 // Surface under a point with lateral offset d at sample idx.
 export function surfaceAt(t, idx, d) {
   const ad = d < 0 ? -d : d;
-  if (ad <= t.halfWidth) return SURF.ASPHALT;
-  if (t.kerb[idx] && ad <= t.halfWidth + t.kerbWidth) return SURF.KERB;
+  const h = t.hw[idx];
+  if (ad <= h) return SURF.ASPHALT;
+  if (t.kerb[idx] && ad <= h + t.kerbWidth) return SURF.KERB;
   if (d > 0 ? t.gravelL[idx] : t.gravelR[idx]) {
-    if (ad > t.halfWidth + t.kerbWidth + 2.0) return SURF.GRAVEL;
+    if (ad > h + t.kerbWidth + 2.0) return SURF.GRAVEL;
   }
   return SURF.GRASS;
 }
@@ -267,7 +348,7 @@ export function surfaceAt(t, idx, d) {
 // The outermost lateral offset that still counts as "on track" for track
 // limits (kerbs count as track).
 export function trackEdge(t, idx) {
-  return t.halfWidth + (t.kerb[idx] ? t.kerbWidth : 0);
+  return t.hw[idx] + (t.kerb[idx] ? t.kerbWidth : 0);
 }
 
 export function wrapIdx(t, i) { return ((i % t.n) + t.n) % t.n; }

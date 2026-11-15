@@ -22,6 +22,13 @@ export class RaceEnv {
   // Training reset: random place on the lap, rolling start.
   reset(seed) {
     const rng = new RNG(seed), t = this.track;
+    if (rng.next() < 0.12) {
+      // a share of episodes start from the grid so launches are in-distribution
+      this.sim.reset({ s: -rng.uniform(8, 24), d: rng.uniform(-1.5, 1.5), speed: 0 });
+      this.sim.car.gripScale = rng.uniform(0.96, 1.04);
+      this.steps = 0; this.slow = -60; this.prevA0 = 0;
+      return buildObs(this.sim.car, t, this.obs);
+    }
     const s = rng.uniform(0, t.length);
     const idx = Math.min(t.n - 1, Math.floor(s / t.ds));
     const speed = this.safeV[idx] * rng.uniform(0.35, 0.9);
@@ -59,7 +66,10 @@ export class RaceEnv {
     this.done = false; this.truncated = false;
     if (car.speed < 3) this.slow++; else this.slow = 0;
     if (crashed || sim.offTrack || Math.abs(car.headErr) > 1.4 || this.slow > 100) {
-      this.done = true; r -= 2.0;
+      // leaving the circuit ends the episode; the penalty grows with speed so
+      // 'arrive slower' is always an improvement the learner can find
+      const vc = car.speed / 50;
+      this.done = true; r -= 2.0 + 3.0 * vc * vc;
     } else if (this.steps >= this.maxSteps) this.truncated = true;
     buildObs(car, this.track, this.obs);
     return r;

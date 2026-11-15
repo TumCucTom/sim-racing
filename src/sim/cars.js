@@ -69,7 +69,7 @@ export const CARS = {
       friction: [22, 0.012],
     },
     gears: [3.12, 2.33, 1.84, 1.50, 1.24, 1.04], finalDrive: 4.0, shiftTime: 0.05, efficiency: 0.93,
-    steerLock: 0.42, body: { style: 'gt', length: 4.57, width: 2.04, height: 1.25, color: 0xf2f2f2 },
+    steerLock: 0.42, body: { style: 'gt', length: 4.57, width: 2.04, height: 1.25, color: 0xd8dbe0 },
     reference: { zeroTo100: [2.9, 3.6], brake100: [22, 29], latG: [1.45, 1.75], topKmh: [270, 295] },
   },
   formula: {

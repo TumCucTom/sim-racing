@@ -19,13 +19,14 @@ export function steerLimit(spec, v) {
 
 export function buildObs(car, track, out) {
   const spec = car.spec, n = track.n;
-  const edge = track.halfWidth + (track.kerb[car.idx] ? track.kerbWidth : 0);
+  const half = track.hw[car.idx];
+  const edge = half + (track.kerb[car.idx] ? track.kerbWidth : 0);
   let k = 0;
   out[k++] = car.vx / 50 - 0.8;
   out[k++] = car.vy / 8;
   out[k++] = car.r / 1.2;
-  out[k++] = car.d / track.halfWidth;
-  out[k++] = (edge - Math.abs(car.d)) / track.halfWidth;
+  out[k++] = car.d / half;
+  out[k++] = (edge - Math.abs(car.d)) / half;
   out[k++] = Math.max(-1.5, Math.min(1.5, car.headErr * 2.5));
   out[k++] = car.steer / Math.max(0.05, steerLimit(spec, car.vx));
   out[k++] = car.throttle - car.brake;
@@ -49,4 +50,26 @@ export function applyAction(car, a0, a1, controls) {
   controls.throttle = p > 0 ? p : 0;
   controls.brake = p < 0 ? -p : 0;
   return controls;
+}
+
+// Mirror symmetry: reflecting the world left<->right negates these observation
+// entries (lateral velocity, yaw rate, offset, heading error, steering,
+// lateral g, rear slip angle and all curvatures) and the steering action.
+export const MIRROR = (() => {
+  const m = new Float64Array(OBS_DIM).fill(1);
+  for (const i of [1, 2, 3, 5, 6, 9, 10]) m[i] = -1;
+  for (let j = 0; j < LOOKAHEAD.length; j++) m[12 + j] = -1;
+  return m;
+})();
+
+// Policy mean with left/right equivariance built in:
+//   steer(o) = -steer(mirror(o)),  pedal(o) = pedal(mirror(o))
+// followed by tanh so actions are bounded. `tmp` is scratch of size OBS_DIM.
+export function policyMean(net, obs, tmp, out) {
+  const y = net.forward(obs); const s1 = y[0], p1 = y[1];
+  for (let i = 0; i < OBS_DIM; i++) tmp[i] = obs[i] * MIRROR[i];
+  const y2 = net.forward(tmp);
+  out[0] = Math.tanh(0.5 * (s1 - y2[0]));
+  out[1] = Math.tanh(0.5 * (p1 + y2[1]));
+  return out;
 }

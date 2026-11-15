@@ -456,7 +456,7 @@ export class Vehicle {
   // Number of wheels beyond the track-limit line.
   wheelsOff() {
     const trk = this.track;
-    const edge = trk.halfWidth + (trk.kerb[this.idx] ? trk.kerbWidth : 0);
+    const edge = trk.hw[this.idx] + (trk.kerb[this.idx] ? trk.kerbWidth : 0);
     let n = 0;
     for (let i = 0; i < 4; i++) if (Math.abs(this.wheelD[i]) > edge) n++;
     return n;
