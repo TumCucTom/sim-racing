@@ -9,6 +9,7 @@ import * as TX from './textures.js';
 import { ASSETS, loadTexture, applyTextures } from './assets.js';
 import { getSky } from './sky.js';
 import { WX, WX_GLSL, wxUniforms } from './wx.js';
+import { monacoSetup } from './monaco.js';
 
 const hash2 = (ix, iy) => { let h = Math.imul(ix, 374761393) + Math.imul(iy, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 function vnoise(x, y) {
@@ -208,7 +209,9 @@ export function buildWorld(track, renderer, qualityIn) {
   const theme = THEMES[track.theme] || THEMES.default;
   const SD = { 1: { kerb: track.kerbL, col: track.kerbColL, apron: track.apronL, apronW: track.apronWL, ro: track.roL, roA: track.roAL, gA: track.gAL, gB: track.gBL, wall: track.wallL, bar: track.barL, edge: track.edgeL },
     '-1': { kerb: track.kerbR, col: track.kerbColR, apron: track.apronR, apronW: track.apronWR, ro: track.roR, roA: track.roAR, gA: track.gAR, gB: track.gBR, wall: track.wallR, bar: track.barR, edge: track.edgeR } };
-  const terrain = makeTerrainFn(track, { sea: urban });
+  // Monaco has its own ground model (src/game/monaco.js): OSM coastline, SRTM relief, terraces beside the road
+  const mc = urban && track.scene?.dem ? monacoSetup(track) : null;
+  const terrain = mc ? mc.terrain : makeTerrainFn(track, { sea: urban });
   const HW = track.halfWidth, KW = track.kerbWidth, hwA = track.hw, n = track.n;
   const wallAt = (side, i) => (side > 0 ? track.wallL[i] : track.wallR[i]);
   const gravelAt = (side, i) => SD[side].gB[i] > 0;
@@ -582,6 +585,7 @@ export function buildWorld(track, renderer, qualityIn) {
     const tyresOn = (side, i) => barAt(side, i) === BAR.TYRES, wallOn = (side, i) => barAt(side, i) === BAR.WALL || barAt(side, i) === BAR.TYRES;
     // debris fence where spectators would be: around the pits and on the outside of fast corners
     const fenceOn = (side, i) => {
+      if (mc?.inTun(i)) return false;
       const dPit = Math.min(i, n - i) * track.ds;
       if (dPit < 330 || urban || barAt(side, i) === BAR.WALL) return true;
       if (quality.detail < 1) return false;
@@ -700,7 +704,8 @@ export function buildWorld(track, renderer, qualityIn) {
   });
   photo(terrainMat, { map: [ASSETS.grassDiff, { aniso }], normalMap: [ASSETS.grassNor, { aniso, srgb: false }] });
   let groundH;
-  {
+  if (mc) groundH = (X, Y, t = terrain(X, Y)) => t.h;
+  else {
     const g = track.grid, pad = 1700;
     const x0 = g.minX - pad, y0 = g.minY - pad, x1 = g.maxX + pad, y1 = g.maxY + pad;
     const cell = Math.max(14, Math.min(40, Math.sqrt((g.maxX - g.minX) * (g.maxY - g.minY) / 26000)));
@@ -760,7 +765,7 @@ export function buildWorld(track, renderer, qualityIn) {
       [0.179, 0.984, 19, 1], [0.22, 0.984, 17, 1], [0.254, 0.984, 15, 1], [0.344, 0.984, 9, 1],
       [0.385, 0.984, 11, 0], [0.465, 0.984, 9, 0], [0.492, 0.741, 9, 0], [0.492, 0.937, 16, 1]];
     const rng = new RNG(4242);
-    const N = Math.round(Math.min(quality.treeCap, quality.trees * track.length / 1000 * (1 + 1.2 * Math.max(0, fbias))) * (urban ? 0.1 : 1) * theme.trees);
+    const N = Math.round(Math.min(quality.treeCap, quality.trees * track.length / 1000 * (1 + 1.2 * Math.max(0, fbias))) * (mc ? 0 : urban ? 0.1 : 1) * theme.trees);
     const gap = track.narrow ? 2.4 : 4.5;
     // two crossed quads with soft, outward-leaning normals
     const quad = (ang) => {
@@ -824,102 +829,8 @@ export function buildWorld(track, renderer, qualityIn) {
     }
   }
 
-  // ---- Monaco from OpenStreetMap: real building footprints extruded, harbour, yachts, tunnel ----
-  const scene = urban ? track.scene : null;
-  if (scene) {
-    // linear-space tints: ochre, salmon, cream, terracotta pink, pale yellow, off-white, peach, stone
-    const PAL = [[0.82, 0.58, 0.28], [0.8, 0.42, 0.28], [0.88, 0.78, 0.55], [0.78, 0.45, 0.38], [0.9, 0.72, 0.32], [0.84, 0.8, 0.72], [0.86, 0.56, 0.36], [0.7, 0.68, 0.62]];
-    const wp = [], wn = [], wu = [], wc = [], rp = [], rc = [], ri = [];
-    let nb = 0;
-    for (const b of scene.buildings) {
-      const hgt = b[0] / 10, P = []; for (let k = 2; k < b.length; k += 2) P.push([b[k] / 10, b[k + 1] / 10]);
-      // keep the circuit corridor clear (and nothing is built over the tunnel: it has its own structure)
-      let ok = true, lo = Infinity, hi = -Infinity;
-      for (let k = 0; k < P.length && ok; k++) { const a = P[k], c = P[(k + 1) % P.length], L = Math.hypot(c[0] - a[0], c[1] - a[1]), st = Math.max(1, Math.ceil(L / 4)); for (let q = 0; q < st; q++) { const x = a[0] + (c[0] - a[0]) * q / st, y = a[1] + (c[1] - a[1]) * q / st, t = terrain(x, y); if (t.dist < t.corr + 0.8) { ok = false; break; } if (q === 0) { const g = t.sea > 0 ? t.zMin - 2 : groundH(x, y, t); lo = Math.min(lo, g); hi = Math.max(hi, g); } } }
-      if (!ok) continue;
-      const base = lo - 1.5, top = (lo + hi) / 2 + hgt, hsh = hash2(b[2], b[3]), tint = PAL[Math.floor(hsh * PAL.length)], sh = 0.86 + 0.2 * hash2(b[3], b[2]);
-      let per = hash2(b[2] + 5, b[3]) * 3;
-      for (let k = 0; k < P.length; k++) {
-        const a = P[k], c = P[(k + 1) % P.length], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 0.05) continue;
-        const nx = (c[1] - a[1]) / L, ny = -(c[0] - a[0]) / L;
-        for (const [px, py, pz, u, v] of [[a[0], a[1], base, per, 0], [c[0], c[1], base, per + L, 0], [c[0], c[1], top, per + L, top - base], [a[0], a[1], base, per, 0], [c[0], c[1], top, per + L, top - base], [a[0], a[1], top, per, top - base]]) {
-          wp.push(px, pz, -py); wn.push(nx, 0, -ny); wu.push(u, v - (hi - base)); wc.push(tint[0] * sh, tint[1] * sh, tint[2] * sh);
-        }
-        per += L;
-      }
-      const tri = THREE.ShapeUtils.triangulateShape(P.map(p => new THREE.Vector2(p[0], p[1])), []), o = rp.length / 3, rt = hsh > 0.45 ? [0.62, 0.36, 0.26] : [0.62, 0.6, 0.57], rs = 0.8 + 0.3 * hash2(b[2], 9);
-      for (const p of P) { rp.push(p[0], top, -p[1]); rc.push(rt[0] * rs, rt[1] * rs, rt[2] * rs); }
-      for (const f of tri) ri.push(o + f[0], o + f[1], o + f[2]);
-      nb++;
-    }
-    const wg = new THREE.BufferGeometry();
-    wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); wg.setAttribute('normal', new THREE.Float32BufferAttribute(wn, 3));
-    wg.setAttribute('uv', new THREE.Float32BufferAttribute(wu, 2)); wg.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3));
-    // façade: window bays 3.2 m wide and 3.1 m floors, shutters, balconies, shop fronts at street level
-    const facMat = wettable(patch(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }), 'facade', {
-      vpars: 'varying vec2 vFac;', vmain: 'vFac = uv;', fpars: 'varying vec2 vFac; float gGlass;',
-      color: `{
-        vec2 q = vec2(vFac.x / 3.2, vFac.y / 3.1), f = fract(q), c = floor(q);
-        float street = step(vFac.y, 0.0) * step(-4.2, vFac.y);
-        float win = step(0.2, f.x) * step(f.x, 0.8) * step(0.3, f.y) * step(f.y, 0.86) * step(0.0, vFac.y);
-        float shop = street * step(0.08, f.x) * step(f.x, 0.92) * step(-3.4, vFac.y) * step(vFac.y, -0.5);
-        float h = hash12(c + 17.0), shut = step(0.62, h);
-        vec3 wall = diffuseColor.rgb * (0.92 + 0.12 * vnoise(vFac * vec2(0.3, 0.8))) * (1.0 - 0.1 * step(f.y, 0.06));
-        vec3 glass = mix(vec3(0.07, 0.1, 0.14), vec3(0.3, 0.42, 0.52), smoothstep(0.3, 0.86, f.y) * 0.7 + 0.3 * h);
-        vec3 shutter = mix(vec3(0.16, 0.3, 0.24), vec3(0.3, 0.36, 0.42), step(0.5, hash12(vec2(c.x * 0.0, floor(vFac.x / 40.0))))) * (0.8 + 0.2 * step(0.5, fract(f.y * 14.0)));
-        vec3 alb = mix(wall, mix(glass, shutter, shut), win);
-        // balcony: slab shadow and railing in front of the lower part of each window bay
-        float bal = step(0.12, f.x) * step(f.x, 0.88) * step(0.0, vFac.y) * step(0.5, hash12(vec2(c.x, 5.0)));
-        alb = mix(alb, wall * 0.55, bal * step(0.22, f.y) * step(f.y, 0.3));
-        alb = mix(alb, vec3(0.12), bal * step(0.3, f.y) * step(f.y, 0.52) * step(0.6, fract(f.x * 16.0)) * 0.8);
-        alb = mix(alb, vec3(0.05, 0.06, 0.08) + 0.25 * vec3(hash12(c), hash12(c + 3.0), hash12(c + 7.0)) * step(f.y, 0.9), shop);
-        alb = mix(alb, wall * 0.6, street * (1.0 - shop) * 0.5);
-        gGlass = max(win * (1.0 - shut), shop);
-        diffuseColor.rgb = alb;
-      }`,
-      rough: 'roughnessFactor = mix(roughnessFactor, 0.12, gGlass);' }), 0.25);
-    const walls = new THREE.Mesh(wg, facMat); walls.castShadow = quality.shadows; walls.receiveShadow = true; group.add(walls);
-    const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(rp, 3)); rg.setAttribute('color', new THREE.Float32BufferAttribute(rc, 3)); rg.setIndex(ri); rg.computeVertexNormals();
-    const roofs = new THREE.Mesh(rg, wettable(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }), 0.5)); roofs.castShadow = quality.shadows; roofs.receiveShadow = true; group.add(roofs);
-
-    // the harbour: sea level 3 m below the quay, yachts moored stern-to along the quays
-    const zs = terrain(track.x[0], track.y[0]).zMin - 3;
-    const seaN = TX.asphaltTile(aniso).normalMap.clone(); seaN.repeat.set(700, 700); seaN.needsUpdate = true;
-    const sea = new THREE.Mesh(new THREE.PlaneGeometry(16000, 16000).rotateX(-Math.PI / 2), new THREE.MeshPhysicalMaterial({ color: 0x0b3a5c, roughness: 0.08, metalness: 0, normalMap: seaN, normalScale: new THREE.Vector2(0.5, 0.5), envMapIntensity: 1.4 }));
-    sea.position.set(track.x[0], zs, -track.y[0]); sea.receiveShadow = true; group.add(sea);
-    {
-      const hull = new THREE.BoxGeometry(1, 0.5, 1).translate(0, 0.25, 0), deck = new THREE.BoxGeometry(0.62, 0.32, 0.8).translate(-0.08, 0.66, 0), brg = new THREE.BoxGeometry(0.34, 0.26, 0.62).translate(-0.12, 0.95, 0);
-      const paint = (g, r, gr, bl) => { const c = new Float32Array(g.attributes.position.count * 3); for (let k = 0; k < c.length; k += 3) { c[k] = r; c[k + 1] = gr; c[k + 2] = bl; } g.setAttribute('color', new THREE.BufferAttribute(c, 3)); return g; };
-      // pointed bow: pull the front vertices in
-      { const p = hull.attributes.position; for (let k = 0; k < p.count; k++) if (p.getX(k) > 0.4) p.setZ(k, p.getZ(k) * 0.15); }
-      const yg = mergeGeometries([paint(hull, 0.95, 0.95, 0.96), paint(deck, 0.9, 0.9, 0.92), paint(brg, 0.2, 0.26, 0.32)]);
-      const rng = new RNG(606), list = [], n0 = quality.detail > 0 ? 170 : 70;
-      let guard = 0;
-      while (list.length < n0 && guard++ < 6000) {
-        const c = scene.coast[rng.int(scene.coast.length)], k = 2 * rng.int(c.length / 2 - 1), ax = c[k] / 10, ay = c[k + 1] / 10, ex = c[k + 2] / 10 - ax, ey = c[k + 3] / 10 - ay, L = Math.hypot(ex, ey); if (L < 1) continue;
-        const u = rng.next(), len = rng.uniform(12, 42) * (rng.next() < 0.12 ? 1.8 : 1), off = len / 2 + 2.5, nx = ey / L, ny = -ex / L;     // water is to the right
-        const X = ax + ex * u + nx * off, Y = ay + ey * u + ny * off, t = terrain(X, Y);
-        if (!(t.sea > len * 0.45) || t.dist > 520 || terrain(X + nx * len * 0.5, Y + ny * len * 0.5).sea < 3) continue;
-        if (list.some(o => Math.hypot(o.X - X, o.Y - Y) < (o.len + len) * 0.3 + 2)) continue;
-        list.push({ X, Y, len, rot: Math.atan2(ny, nx) });
-      }
-      const im = new THREE.InstancedMesh(yg, wettable(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35 }), 0.2), list.length), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pv = new THREE.Vector3(), sv = new THREE.Vector3();
-      list.forEach((o, j) => { q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, o.rot); im.setMatrixAt(j, m4.compose(pv.set(o.X, zs - 0.3, -o.Y), q, sv.set(o.len, o.len * 0.2, o.len * 0.24))); });
-      im.castShadow = quality.shadows; im.receiveShadow = true; im.computeBoundingSphere(); group.add(im);
-    }
-    // the tunnel: an enclosed box section over the road with two rows of lamps
-    for (const [a, b] of scene.tunnel) {
-      if (b - a < 60) continue;
-      const inT = (i) => i >= a && i <= b, H = 5.4;
-      const shell = strip(track, ksEdge, (i, o) => { const z = track.z[i], l = track.wallL[i] + 0.25, r = track.wallR[i] + 0.25; o.push(l, z - 0.3, 0, l, z + H, 0.3, -r, z + H, 0.7, -r, z - 0.3, 1, -(r + 1.2), z - 0.3, 1, -(r + 1.2), z + H + 1.2, 0.7, l + 1.2, z + H + 1.2, 0.3, l + 1.2, z - 0.3, 0); }, { mask: inT, vScale: 3 });
-      const tm = new THREE.MeshStandardMaterial({ map: concreteFallback, color: 0x8d8a84, roughness: 0.9, side: THREE.DoubleSide }); photo(tm, { map: [ASSETS.concrete, { aniso }] });
-      add(shell, tm, { cast: true });
-      const lamps = [];
-      for (const off of [2.3, -2.3]) lamps.push(strip(track, ksEdge, (i, o) => { const z = track.z[i] + H - 0.06; o.push(off - 0.22, z, 0, off + 0.22, z, 1); }, { mask: inT, vScale: 1, flip: true }));
-      const lm = patch(new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 2.7, 1.9), fog: false, side: THREE.DoubleSide }), 'tunlamp', { ...ROAD_V, fpars: 'varying vec4 vRoad; varying float vRub;', color: 'if (fract(vRoad.y / 7.0) > 0.45) discard;' });
-      add(mergeGeometries(lamps.filter(Boolean)), lm, { receive: false });
-    }
-  } else if (urban) {
+  // ---- generic street circuit (Monaco itself is built by src/game/monaco.js, further down) ----
+  if (urban && !mc) {
     const rng = new RNG(1929);
     // one bay x one floor of facade; tinted per building
     const mkFacade = (seed, balcony) => {
@@ -994,6 +905,7 @@ export function buildWorld(track, renderer, qualityIn) {
 
   // ---- night: floodlights along the start straight (built the first time they are needed) ----
   const nightMats = [];
+  const mcWorld = mc ? mc.build({ group, quality, patch, wettable, photo, aniso, nightMats, strip, concreteMap: concreteFallback, asphaltMap: aspFallback.map, grassMap: grassFallback, TX }) : null;
   let night = null;
   function setNight(k) {
     for (const [m, e] of nightMats) m.emissiveIntensity = e * k;
@@ -1086,7 +998,7 @@ export function buildWorld(track, renderer, qualityIn) {
     roof.position.set(0, 13.4, -6.5); roof.rotation.x = -0.07; stand.add(roof);
     for (let k = -5; k <= 5; k++) { const col = new THREE.Mesh(new THREE.BoxGeometry(0.4, 13, 0.4), steel); col.position.set(k * L / 10.5, 6.5, -13.4); stand.add(col); }
     stand.position.set(-30, z0 - 0.4, -wl0 - 0.5); stand.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    if (L) sf.add(stand);
+    if (L && !mc) sf.add(stand);
 
     const pit = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(190, 6.5, 12), new THREE.MeshStandardMaterial({ color: 0xe8e8ea, roughness: 0.7 })); body.position.y = 3.25; pit.add(body);
@@ -1097,7 +1009,7 @@ export function buildWorld(track, renderer, qualityIn) {
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(190.3, 0.5, 12.3), new THREE.MeshStandardMaterial({ color: 0xd22030, roughness: 0.5 })); stripe.position.y = 6.2; pit.add(stripe);
     pit.position.set(-20, z0 - 0.4, wr0 + 6.5); pit.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     const pitScale = [1, 0.55, 0.3].find(k => fits(-20 - 95 * k, -20 + 95 * k, wr0, wr0 + 13));
-    if (pitScale) { pit.scale.x = pitScale; sf.add(pit); }
+    if (pitScale && !mc) { pit.scale.x = pitScale; sf.add(pit); }
   }
 
   // ---- trackside boards: braking distance markers and sponsor hoardings -------------
@@ -1119,7 +1031,7 @@ export function buildWorld(track, renderer, qualityIn) {
     }
     const rng = new RNG(99), names = ['VANTA', 'ARROW', 'VOLT-R', 'BRAWLER', 'FX RACING', 'KESTREL OIL', 'ANVIL TOOLS', 'RIDGE TYRES'];
     const cols = [['#0d3b66', '#faf0ca'], ['#d62828', '#ffffff'], ['#111111', '#ffd60a'], ['#f4f4f4', '#1d3557'], ['#1b4332', '#d8f3dc'], ['#ff7b00', '#111']];
-    for (let i = 60; i < n; i += 97) {
+    for (let i = 60; i < n && !mc; i += 97) {
       if (Math.abs(track.curv[i]) > 0.006) continue;
       const side = rng.next() > 0.5 ? 1 : -1, h = track.heading[i];
       const off = side * ((side > 0 ? track.wallL[i] : track.wallR[i]) + 0.6);
@@ -1141,6 +1053,7 @@ export function buildWorld(track, renderer, qualityIn) {
     tgt.copy(target).addScaledVector(lx, Math.round(px / texel) * texel - px).addScaledVector(ly, Math.round(py / texel) * texel - py);
     sunLight.target.position.copy(tgt);
     sunLight.position.copy(tgt).addScaledVector(sun, 320);
+    mcWorld?.update(target);
   }
 
   return { group, sky, sun, sunLight, hemi, flash, fogColor, terrain, brakeMarkers, updateSun, setSky, setWet, setNight, gridYaw };

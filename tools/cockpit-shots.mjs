@@ -15,7 +15,7 @@ const p = await b.newPage({ viewport: { width: +(process.env.W || 1280), height:
 const errs = [];
 p.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') errs.push(`[${m.type()}] ${m.text()}`); });
 p.on('pageerror', e => errs.push('[pageerror] ' + e.message));
-await p.goto(`http://127.0.0.1:${process.env.PORT || 5173}/?autostart&ai&${query}`);
+await p.goto(`http://127.0.0.1:${process.env.PORT || 5173}/?autostart&ai&${query}`, { timeout: 180000 });
 await p.waitForFunction(() => window.__game, null, { timeout: 60000 });
 const cars = carsArg === 'all' ? await p.evaluate(async () => (await import('/src/sim/cars.js')).CAR_ORDER) : carsArg.split(',');
 for (const id of cars) {

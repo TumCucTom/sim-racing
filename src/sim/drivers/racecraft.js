@@ -83,8 +83,9 @@ export class RaceDriver {
     this.vLine = this.base.vT;
     // usable lateral range for the car centre (never narrower than the racing line itself)
     const lim = this.lim = new Float32Array(n);
-    // (off the line a car keeps 0.7 m between its wheels and the grass: at speed the tracking error is real)
-    for (let i = 0; i < n; i++) lim[i] = Math.max(track.hw[i] - w / 2 - 0.7, Math.abs(track.lineD[i]));
+    // (off the line a car keeps about half a metre between its wheels and the grass: at speed the tracking error is real)
+    const edge = spec.ClA > 2.5 || !spec.abs ? 0.7 : 0.45;    // (more for the cars that do not forgive a wheel on the grass)
+    for (let i = 0; i < n; i++) lim[i] = Math.max(track.hw[i] - w / 2 - edge, Math.abs(track.lineD[i]));
     // speed profiles of the racing line shifted sideways (and clamped to the road): what the
     // car can carry when it is off line. Off the line there is less rubber (and, in the wet, the
     // line may be the only dry part), so a little grip is taken off as well.
@@ -100,6 +101,9 @@ export class RaceDriver {
     // a car without ABS or with a lot of downforce punishes over-driving harder: smaller liberties
     const tame = (spec.abs ? 1 : 0.5) * (spec.ClA > 2.5 ? 0.6 : 1);
     this.slipK = 1 + 0.045 * tame; this.atkK = tame;
+    // margin in a wake: the first-order cost for most cars, twice that for the high-downforce ones whose
+    // tune leaves nothing in hand (a wake is gusty)
+    this.wakeK = spec.ClA > 2.5 ? 2 : 0.8;
     this.reset();
   }
 
@@ -308,8 +312,8 @@ export class RaceDriver {
       // The further they are off that pace (a slower class, an early braker, a car in trouble), the more
       // this becomes plain "be able to slow to their speed before I get there"; for a car that is
       // crawling or spun it is a stop.
-      if (rho < 0.92 || caution) {
-        const aS = caution || rho < 0.75 ? 9 : 9 + (rho - 0.75) * 80;
+      if (rho < 0.87 || caution) {
+        const aS = caution || rho < 0.75 ? 9 : 9 + (rho - 0.75) * 110;
         const stop = x > 0 ? Math.sqrt(vA * vA + 2 * aS * x) : Math.max(0, vA + 4 * x);
         if (stop < vF) { vF = stop; if (stop < v - 1.5) panic = true; }
       }
@@ -328,7 +332,7 @@ export class RaceDriver {
     // in a wake the car has less downforce (race.js): take off what that costs at this speed. Nothing for
     // a road car, several per cent for a single-seater in a fast corner.
     this.wakeF += (rc.wake - this.wakeF) * (rc.wake > this.wakeF ? 0.2 : 0.03);     // quick to see a wake, slow to forget it
-    if (this.wakeF > 0.02) { const dl = this.aeroC * v * v, loss = 0.12 * this.wakeF * dl / (9.81 + dl); speedK *= 1 - 2 * loss; }      // (twice the first-order cost: the tune leaves no margin, a wake is gusty)
+    if (this.wakeF > 0.02) { const dl = this.aeroC * v * v, loss = 0.12 * this.wakeF * dl / (9.81 + dl); speedK *= 1 - this.wakeK * loss; }
 
     // --- state machine ---
     const lapper = rc.blue, fasterBehind = !!B && B.driver && B.driver.lapEst < this.lapEst * 0.97;

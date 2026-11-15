@@ -213,7 +213,7 @@ function buildWheel(kit, fit, spec, C, look) {
 
 function buildArms(kit, fit, spec) {
   const race = fit.klass !== 'road', e = V(...fit.eye);
-  const sleeve = kit.mat({ color: race ? 0xe6e7ea : 0x2a323c, roughness: 0.9 }), cuffM = kit.mat({ color: race ? 0xa81c26 : 0x6a4a2e, roughness: 0.7 });
+  const sleeve = kit.mat({ color: race ? 0xe6e7ea : 0x4d5f7a, roughness: 0.9 }), cuffM = kit.mat({ color: race ? 0xa81c26 : 0x6a4a2e, roughness: 0.7 });
   const narrow = fit.klass === 'formula' || fit.klass === 'proto';
   return [-1, 1].map((s) => ({
     s, shoulder: V(e.x - (narrow ? 0.05 : 0.1), e.y - (narrow ? 0.2 : 0.215), e.z + s * (narrow ? 0.17 : 0.2)),
@@ -307,7 +307,7 @@ function buildCockpit(model, spec, fit) {
       const cw = 0.29, ch = cw * 192 / 512, pc = V(xD1 - 0.012, C.y + 0.092, e.z), sc = screen(kit.group, cw, ch); facing(sc, pc, V(e.x, e.y - 0.03, e.z));
       const top = pc.y + ch / 2 + 0.022, bot = Math.min(yDr, pc.y - ch / 2) - 0.01, hw = cw / 2 + 0.03, sh = new THREE.Shape();
       sh.moveTo(-hw, bot); sh.lineTo(-hw, top - 0.04); sh.quadraticCurveTo(-hw, top, -hw + 0.05, top); sh.lineTo(hw - 0.05, top); sh.quadraticCurveTo(hw, top, hw, top - 0.04); sh.lineTo(hw, bot); sh.lineTo(-hw, bot);
-      const hood = kit.mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.2, bevelEnabled: false, curveSegments: 6 }).rotateY(Math.PI / 2), dash); hood.position.set(pc.x + 0.004, 0, e.z);
+      const hood = kit.mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.2, bevelEnabled: false, curveSegments: 6 }).rotateY(Math.PI / 2), dash); hood.position.set(pc.x + 0.022, 0, e.z);
       // centre screen and vents
       const cs = kit.mesh(new THREE.PlaneGeometry(0.23, 0.13), new THREE.MeshBasicMaterial({ toneMapped: false, map: kit.tex(canvasTex(256, 144, (g, W, H) => {
         g.fillStyle = '#0a1016'; g.fillRect(0, 0, W, H); g.strokeStyle = '#1f3b52'; g.lineWidth = 2; for (let i = 0; i < 7; i++) { g.beginPath(); g.moveTo(0, 20 + i * 22); g.bezierCurveTo(80, 10 + i * 18, 160, 50 + i * 20, W, 14 + i * 24); g.stroke(); }

@@ -3,6 +3,38 @@
 All notable changes, newest first. Numbers quoted here were measured by the
 tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
 
+## Unreleased — race mode: a field of AI cars, contact, slipstream, racecraft
+- **Multi-car racing** (`src/sim/race.js`): N cars at 300 Hz in a fixed order, deterministic and DOM-free.
+  Car-to-car contact (oriented rectangles, impulse with restitution and friction at the contact point,
+  momentum-conserving, no energy gain, no tunnelling at 300 km/h closing), slipstream (`Vehicle.dragK` /
+  `downK`, exactly 1 in free air), staggered grid, start lights, positions, gaps, classification, blue flags,
+  marshals for stuck cars, track-limit penalties. A solo `Sim` is bit-identical to before (hash test).
+- **Racecraft** (`src/sim/drivers/racecraft.js`): on top of the tuned racing-line driver (and identical to it
+  in free air): awareness of the cars around in track coordinates, pace-matched following, lanes that leave
+  a car's width, tow, pulling out late, taking the inside for the braking zone, backing out, conceding,
+  one defensive move, lane-keeping starts, local yellows, seeded personalities. No rubber-banding.
+- **In the game** (`src/game/racemode.js`, `racehud.js`, `src/audio/opponents.js`): **Race** in the menu (2–20
+  cars, laps, grid slot, same car / class / mixed, AI level) and `?race=12&laps=5&grid=6&field=class&aiskill=0.95`
+  (`&ai` for an all-AI race). A model, colour and number board per car, LOD boxes at distance, brake lights,
+  smoke and spray; start lights, timing tower, map dots, CAR LEFT / RIGHT, results; follow any car with every
+  camera (**J** / **K** / **U**), extra cameras (**B**), TV director (**O**); the three nearest opponents are
+  audible. Scriptable for filming: `__game.startRace / followCar / setCamera / fastForward / setTimeScale`.
+- **Measured** (`node tools/race-sim.js`, 38 all-AI races, every one finished, no DNF): 12 GT3 over 5 laps:
+  Ravenscar 4.2 overtakes and 2.6 contacts a race (none heavy), Monza 2.0 and 2.6, Spa 0.6 and 3.0; 20 cars
+  at Silverstone 9.7 overtakes, 0.3 contacts; Monaco no overtakes, 1.4 light or medium contacts. Weak spots,
+  reported in the README: equal cars rarely pass each other, and the Nordschleife in traffic is scruffy
+  (2 heavy contacts and 5 spins per 8-car lap). Physics: 1.4 µs per car-step, 0.14 ms a frame for 20 cars.
+- **Top AI level no longer crashes the single-seater** (owner report). 8 Formula cars at level 1.0 over 13
+  circuit / weather combinations, 2 seeds each: spins 103 -> 14.5, barrier hits 39 -> 7.5. Causes: full-pedal
+  braking for traffic without ABS, no allowance for downforce lost in a wake, offset lanes on the grass.
+  Still untidy: the Nordschleife (all classes) and the Formula car at Monaco in rain.
+- **Trackside TV camera sees the car** (`src/game/tvcam.js`; owner report "blocked or clipped into something").
+  Posts are checked against the built scene, the line of sight is ray-cast four times a second with a look
+  ahead, with helicopter and on-track fallbacks. Car visible over a lap (`node tools/tv-los.mjs`): Ravenscar
+  77.5 -> 100 %, Silverstone 73.6 -> 100 %, Spa 75.1 -> 100 %, Monza 79.1 -> 100 %, Laguna Seca 92.7 -> 100 %,
+  Monaco 74.1 -> 99.5 %, Nordschleife 78.6 -> 100 %.
+- 11 new tests (`tests/race.test.js`).
+
 ## Unreleased — a driver's seat in every car
 - **Cockpit view rebuilt** (`src/game/cockpit.js`, `cockpit-fit.js`, `cockpit-scan.js`; **C** cycles chase,
   far, bonnet, cockpit, TV). The first attempt put the eye at the windscreen and floated a wheel in front of
@@ -37,7 +69,7 @@ tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
   road-wheel and steering-wheel angle with each photograph.
 - **Camera**: rides the sprung body, so the cabin is fixed and the horizon pitches and rolls; 58–62°
   vertical field of view; looks up to 11° into the corner, moves up to 3 cm with the g-forces and tilts up
-  to 1.7°; kerb and speed shake is a third of the bonnet camera's.
+  to 1.7°; kerb and speed shake is between a third and a half of the bonnet camera's.
 - **Bonnet camera**: on the centreline 14 cm above everything around the base of the windscreen (nose
   camera ahead of the cockpit on the formula car), pitched so the far edge of the bodywork sits low in the
   frame. Near plane 7 cm in the cockpit, 10 cm on the bonnet, 30 cm elsewhere as before.

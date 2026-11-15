@@ -382,6 +382,146 @@ separate mixes. **Nobody has listened to this**: this environment has no audio
 output, so everything was tuned by spectra and level meters. AUDIO.md lists
 what to listen for first and the known weak spots.
 
+## Race mode
+
+Wheel-to-wheel racing against a field of AI cars: **Race** in the menu (2–20 cars, laps, your grid slot,
+opponents of the same car / same class / mixed classes, five AI levels) or by URL, e.g.
+`?race=12&laps=5&grid=6&field=class&aiskill=0.95&track=spa&car=gt3` (`&ai` puts an AI in your car as well, so a
+whole race can be watched or run headless; `&seed=`, `&order=quali|reverse|random`, `&cam=`, `&follow=`,
+`&director`, `&tags=0`). The hot-lap mode is unchanged and a solo `Sim` is bit-for-bit what it was (hash test).
+
+**Simulation** (`src/sim/race.js`, DOM-free, deterministic, 300 Hz). A `Race` is N solo `Sim`s stepped in a
+fixed order, plus three stages the solo car never sees:
+
+- *Contact.* Body rectangles (`spec.body` length × width), bounding-circle broad phase, separating-axis
+  narrow phase, one impulse per pair and step with restitution 0.18 and Coulomb friction 0.35 applied at the
+  contact point, so an off-centre hit yaws both cars, then a positional push-out split by inverse mass.
+  Tests: linear and angular momentum conserved to 1e-9, kinetic energy never rises in the impulse stage, no
+  tunnelling at 300 km/h closing speed, bodies never stay overlapped for more than 10 steps.
+- *Slipstream.* `Vehicle.dragK` / `downK` (exactly 1 in free air): up to −40 % drag and −12 % downforce
+  directly behind another car, falling with distance (90 m) and sideways offset.
+- *Race logic.* Staggered two-wide grid behind the line, five red lights then a seeded random hold, per-driver
+  reaction times, positions by race distance, gaps and intervals from 25 m time stamps, sector / lap / best
+  lap per car (the solo lap timer), blue flags, finish when the leader completes the distance (everyone else
+  finishes the lap they are on), classification, marshals who put a spun or stuck car back on the road off
+  the racing line when no one is about to arrive (four times, then DNF), and track limits: every third
+  four-wheels-off excursion not caused by a contact costs 5 s.
+
+**Racecraft** (`src/sim/drivers/racecraft.js`). `RaceDriver` wraps the tuned racing-line `BaselineDriver`: in
+free air it *is* that driver, bit for bit (test). Thirty times a second it decides which path and which
+speed to feed it:
+
+- *Path* = racing line + a lateral offset, in a lane that leaves a car's width to anyone alongside (their
+  path is predicted as the line's shape at their present offset, clamped to the road). The offset moves at a
+  human rate on the straights and is held through corners. Speed profiles are precomputed for the line
+  shifted by ±1.5, ±3 and ±6 m (clamped to the road), with less grip off line (and the wet model's drying
+  line), so a car that is off line brakes for the corner it will actually drive.
+- *Following.* Match the car ahead's pace as a fraction of what I could do *where it is* (so I brake where it
+  braked, not when); the closer, the less surplus. Into slow corners the gap must open for both cars to fit at
+  apex speed (the accordion). In a wake the profile is cut by the downforce lost at that speed and braking
+  starts earlier; no-ABS cars are threshold-braked; braking for traffic is limited to what cornering leaves of
+  the friction circle. Stopped or spun cars ahead raise a local yellow.
+- *Overtaking.* Close up in the tow, pull out late (the tow is behind the car, not beside it), take the inside
+  for the next braking zone when within range, use the braking the tune keeps in reserve, and back out if not
+  alongside by turn-in; two abreast into a corner the car behind concedes unless it is on the inside with its
+  nose well alongside; hairpins and chicanes are single file. Held up into a corner that leads onto a
+  straight, a driver drops back before the apex to get a run on the exit.
+- *Defending.* One move to the inside on the approach to a braking zone when a car is close behind, held to
+  the apex; never against a lapping car or a faster class; room is always left to a car alongside.
+- *Start.* Lanes are kept off the grid; the field funnels onto the line only near the first corner, with
+  bigger gaps and earlier braking until it is through.
+- *Personality* (seeded): skill (share of the validated tune, never more than 100 %), aggression,
+  consistency (lap-to-lap pace noise), mistakes (a late-braking error per braking zone, likelier under
+  pressure, rarer with skill, smaller in cars without ABS or with a lot of downforce), reaction time.
+  The grid is qualifying order with noise. Nobody is given grip or power they would not have alone.
+
+**Game** (`src/game/racemode.js`, `racehud.js`, `tvcam.js`, `src/audio/opponents.js`). Every car has its own
+model (GLB files are loaded once and their geometry shared), a colour and a number board (**Y**), brake
+lights, turning wheels, and within 90–160 m tyre smoke, skid marks and spray; beyond 60 / 120 / 200 m
+(low / medium / high) a car is drawn as three boxes. HUD: start lights, position / lap / gaps, timing tower
+(**P**), a dot per car on the map, CAR LEFT / RIGHT, flags, results. **J** / **K** follow another car (the
+cluster, engine audio and all cameras including the cockpit follow), **U** own car, **B** extra cameras
+(heli, side, front, rear, orbit), **O** TV director (picks the closest fight and cuts between cameras).
+The three nearest opponents are heard through cheap oscillator voices with distance roll-off, pan and
+Doppler; contacts trigger the impact sound.
+
+Scripting, for filming: `__game.startRace({ n, laps, grid, klass, skill, seed, order, ai })`,
+`__game.followCar(i | 'leader' | 'player' | 'battle' | 'next' | 'prev' | 'p3')`,
+`__game.setCamera('chase' | 'far' | 'bonnet' | 'cockpit' | 'tv' | 'heli' | 'side' | 'front' | 'rear' | 'orbit' | 'director')`,
+`__game.fastForward(seconds)` (the whole race, deterministic with `&ai`), `__game.setTimeScale(k)`,
+`__game.setTags(false)`, `__game.raceInfo()`. `tools/race-shot.mjs` drives these from a headless browser.
+
+### Measured race statistics
+
+`node tools/race-sim.js --track spa --n 12 --laps 5 --seeds 1,2,3,4,5` (all-AI races in Node, default AI level
+0.96, GT3 class unless noted). Overtakes are on-track position changes after lap 1 (clean = no contact
+between the two within 4 s and the passed car at racing speed); contacts by closing speed at the contact
+point: light < 2 m/s, medium 2–6, heavy > 6. Means per race.
+
+| race | seeds | finished | overtakes (clean) | contacts L / M / H | heavy per car-lap | off-tracks | spins | respawns | DNF |
+|---|---|---|---|---|---|---|---|---|---|
+| Ravenscar, 12 cars, 5 laps | 5 | 5/5 | 4.2 (3.0) | 0.8 / 1.8 / 0.0 | 0.000 | 0.6 | 0.6 | 0.2 | 0 |
+| Spa, 12 cars, 5 laps | 5 | 5/5 | 0.6 (0.4) | 0.8 / 1.8 / 0.4 | 0.007 | 0.4 | 1.0 | 1.0 | 0 |
+| Monza, 12 cars, 5 laps | 5 | 5/5 | 2.0 (1.0) | 2.0 / 0.4 / 0.2 | 0.003 | 0.6 | 0.4 | 0.2 | 0 |
+| Monza, reverse grid | 3 | 3/3 | 3.7 (1.3) | 3.3 / 0.3 / 0.0 | 0.000 | 0.7 | 0.0 | 0.0 | 0 |
+| Laguna Seca, 12 cars, 5 laps | 3 | 3/3 | 0.0 (0.0) | 0.0 / 0.7 / 0.0 | 0.000 | 0.0 | 0.0 | 0.0 | 0 |
+| Silverstone, 20 cars, 5 laps | 3 | 3/3 | 9.7 (9.3) | 0.0 / 0.3 / 0.0 | 0.000 | 0.0 | 0.0 | 0.0 | 0 |
+| Spa, mixed classes (prototypes, GT3, road cars), 5 laps | 3 | 3/3 | 1.7 (1.0) | 0.7 / 0.7 / 2.0 | 0.033 | 1.3 | 0.7 | 0.3 | 0 |
+| Monaco, 12 cars, 5 laps | 3 | 3/3 | 0.0 (0.0) | 0.7 / 0.7 / 0.0 | 0.000 | 0.0 | 0.0 | 0.0 | 0 |
+| Nordschleife, 8 cars, 1 lap | 3 | 3/3 | 0.0 (0.0) | 0.7 / 2.0 / 2.0 | 0.250 | 4.7 | 5.0 | 3.7 | 0 |
+| Ravenscar in rain, 12 cars, 5 laps | 3 | 3/3 | 0.7 (0.7) | 0.0 / 0.3 / 0.0 | 0.000 | 0.0 | 0.7 | 0.7 | 0 |
+| Spa in a storm, 12 cars, 3 laps | 2 | 2/2 | 0.0 (0.0) | 0.5 / 0.0 / 0.0 | 0.000 | 0.0 | 0.0 | 0.0 | 0 |
+
+All 38 races finished with every car classified; no deadlocks. In the mixed-class races two or three cars
+are lapped by the prototypes.
+
+*Top AI level in every class* (`--diff 1.0`, 8 identical cars, 3 laps, 1 on the Nordschleife; 7 circuits dry and
+6 in rain; 2 seeds each; totals over the 26 races of a class): Formula spins 14.5 / barrier hits 7.5 (before
+the fixes below: 103 / 39), hypercar 10 / 6.5, LMP1 3 / 0, GT3 7.5 / 3; no DNF. What remains is the
+Nordschleife in every class (3–6.5 spins a race) and the Formula car at Monaco in the rain (5.5); every other
+combination is at most 1.5 spins a race and most are zero. The owner's report "the top AI keeps crashing the
+F1 car" had three causes: braking for traffic at full pedal in a car without ABS (now threshold braking from
+the live wheel loads, within the friction circle), no allowance for the downforce lost in a wake (now taken off
+the speed profile in proportion to how much of the car's grip is aero), and offset lanes that put a wheel on
+the grass (wider margin, and a reflex that steers back when the car is about to run out of road). Skill can
+no longer exceed the validated tune.
+
+*Physics cost*: 1.4 µs per car per 300 Hz step in Node on the development machine, racecraft included, i.e.
+0.08 ms per 60 Hz frame for 12 cars and 0.14 ms for 20 (solo: 0.01–0.03 ms). In the software-GL test browser
+(no GPU, machine shared with other rendering jobs) a 12-car race at Spa at low quality ran at 10–12 fps:
+10–21 ms of CPU a frame, of which 0.65–0.8 ms is the race physics (30 physics steps a frame at that rate,
+i.e. about 1.9 µs per car-step in the browser), 310–650 draw calls and 0.23–0.47 M triangles depending on
+the camera. Frame rates on real GPUs were not measured.
+
+*Trackside TV camera* (`src/game/tvcam.js`, `node tools/tv-los.mjs`; one AI lap per circuit, a ray from the
+camera to the car against the built world every 0.25 s): car visible **before → after**: Ravenscar 77.5 → 100 %,
+Silverstone 73.6 → 100 %, Spa 75.1 → 100 %, Monza 79.1 → 100 %, Laguna Seca 92.7 → 100 %, Monaco 74.1 → 99.5 %
+(the tunnel: the camera rides behind the car there), Nordschleife 78.6 → 100 %. Posts are validated against the scene (nothing within
+2.5 m, standing on whatever is beneath, sight of the road); at run time a post that is about to lose the car
+is left for one that will keep it, with a helicopter and then an on-track fallback.
+
+### Where the racing is still weak
+
+- **Processional among equal cars.** With a qualifying-order grid, 12 GT3 cars at Spa change places 0.6 times
+  in five laps and from a reverse grid at Monza the slowest car still wins from pole: a faster car closes up,
+  shows its nose and is usually refused. Passing needs a clear pace or straight-line advantage (20 cars at
+  Silverstone: 9.7 a race). There is no cut-back / switchback planning beyond "drop back before the apex",
+  no late-apex defending, and out-braking is conservative because the inside lane's speed profile is that of
+  a smooth shifted line, not of a real dive.
+- **The Nordschleife in traffic** is the one place where races are scruffy in every class: narrow, fast, and
+  the line follower's tuning there is already marginal; two heavy contacts and five spins per 8-car lap.
+- **Mixed classes**: lapping works, but a heavy contact every other race, typically a prototype arriving on a
+  road car that is 40 % slower in a fast corner.
+- A car that is hit is not damaged; contact is a rigid-body impulse on the chassis (no deformation, no
+  wheel-to-wheel, no height: a formula car's open wheels are a box). Slipstream is one cone; no side draft.
+- Marshals are a teleport (after 4–12 s, to a safe spot within 160 m), there is no pit lane, no fuel or tyre
+  strategy, no safety car, no jump starts (cars are held until the lights go out), penalties are only for
+  track limits.
+- The AI avoids a parked or slow human and brakes for an early-braking one, but it assumes a car alongside
+  keeps its lane: turn in on it and it will hit you. It reads positions and speeds, not intent.
+- Opponent models that keep their own livery (Huracán, R8, the prototypes, the formula car) cannot be
+  recoloured; the number boards tell them apart. Opponent audio is two oscillators and a filter per car.
+
 ## Reinforcement learning
 
 The AI driver is trained with PPO on the **same** `src/sim` code the game runs.
