@@ -24,7 +24,7 @@ import { buildTrack, nearestIndexGlobal, TRACKS, TRACK_ORDER } from '../sim/trac
 import { CARS, CAR_ORDER } from '../sim/cars.js';
 import { Sim } from '../sim/sim.js';
 import { SIM_DT, peakPower } from '../sim/vehicle.js';
-import { BaselineDriver } from '../sim/drivers/baseline.js';
+import { BaselineDriver, lineDriverOptions } from '../sim/drivers/baseline.js';
 import { PolicyDriver } from '../sim/drivers/policy-driver.js';
 import { OBS_DIM } from '../sim/drivers/rl-interface.js';
 import { buildWorld, trackHeight } from './world.js';
@@ -224,7 +224,7 @@ class Game {
     const pol = this.trackId === 'ravenscar' ? POLICIES[spec.id] : null;
     // ignore a policy trained against a different observation layout
     if (pol && pol.policy.sizes[0] === OBS_DIM) return { driver: new PolicyDriver(this.track, pol), label: 'RL policy' };
-    return { driver: new BaselineDriver(this.track, spec, this.track.real ? { grip: 0.84, brake: spec.abs ? 0.8 : 0.62 } : { grip: 0.88 }), label: 'scripted baseline' };
+    return { driver: new BaselineDriver(this.track, spec, lineDriverOptions(this.track, spec)), label: 'racing-line driver' };
   }
 
   setCar(id) {

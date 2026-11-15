@@ -10,7 +10,7 @@ import crypto from 'node:crypto';
 import { buildTrack } from '../src/sim/track.js';
 import { CARS } from '../src/sim/cars.js';
 import { evaluateDriver } from './env.js';
-import { BaselineDriver } from '../src/sim/drivers/baseline.js';
+import { BaselineDriver, lineDriverOptions } from '../src/sim/drivers/baseline.js';
 import { PolicyDriver } from '../src/sim/drivers/policy-driver.js';
 
 const args = Object.fromEntries(process.argv.slice(2).join(' ').split('--').filter(Boolean).map(s => { const [k, ...v] = s.trim().split(/\s+/); return [k, v.join(' ') || true]; }));
@@ -39,6 +39,14 @@ for (const grip of [0.84, 0.88, 0.92, 0.96, 1.0, 1.04]) { const st = stats(basel
 const clean = sweep.filter(s => s.completed === trials).sort((a, b) => a.mean - b.mean)[0] || sweep.sort((a, b) => b.completed - a.completed)[0];
 const baseline = { name: `Scripted baseline (grip ${clean.grip})`, grip: clean.grip, ...stats(baselineAt(clean.grip)) };
 
+// A stronger scripted reference: the same controller following the optimised
+// racing line with trail-braking (grip swept the same way).
+const lineAt = (grip) => run(() => { const d = new BaselineDriver(track, spec, { ...lineDriverOptions(track, spec), grip }); return c => d.control(c); });
+const lsweep = [];
+for (const grip of [0.9, 0.94, 0.98, 1.02, 1.06]) { const st = stats(lineAt(grip)); lsweep.push({ grip, completed: st.stintClean, mean: st.stintMean }); }
+const lclean = lsweep.filter(s => s.completed === trials).sort((a, b) => a.mean - b.mean)[0] || lsweep.sort((a, b) => b.completed - a.completed)[0];
+const lineDriver = { name: `Racing-line driver (grip ${lclean.grip})`, grip: lclean.grip, ...stats(lineAt(lclean.grip)) };
+
 const policies = [];
 const dir = 'rl/runs';
 for (const d of fs.readdirSync(dir).filter(n => n.startsWith(`${carId}_s`) && fs.existsSync(`${dir}/${n}/policy.json`)).sort()) {
@@ -60,10 +68,10 @@ if (champ) {
   deterministic = { identical: h(again) === h(champ), hash: h(champ) };
   fs.mkdirSync('src/policies', { recursive: true }); fs.copyFileSync(`${dir}/${champ.run}/policy.json`, `src/policies/${carId}.json`);
 }
-const out = { carId, track: track.name, trials, seeds, stintLaps: STINT, baselineSweep: sweep, baseline, policies, champion: champ?.run ?? null, deterministic };
+const out = { carId, track: track.name, trials, seeds, stintLaps: STINT, baselineSweep: sweep, baseline, lineSweep: lsweep, lineDriver, policies, champion: champ?.run ?? null, deterministic };
 fs.mkdirSync('docs', { recursive: true });
 fs.writeFileSync(`docs/benchmark-${carId}.json`, JSON.stringify(out, null, 2));
 const f = (v) => (v === null ? '   -   ' : v.toFixed(3));
 console.log(`Benchmark: ${spec.name} @ ${track.name}, ${trials} fixed seeds, ${STINT}-lap stints`);
-console.table([baseline, ...policies].map(p => ({ driver: p.name, 'stints clean': `${p.stintClean}/${p.trials}`, 'stint pace': f(p.stintMean), 'tyre max C': p.tyreMaxC.toFixed(0), 'flying clean': `${p.completed}/${p.trials}`, flying: f(p.mean), sd: p.sd.toFixed(3), best: f(p.best), worst: f(p.worst), 'vmax km/h': p.vmaxKmh.toFixed(0), validation: p.validationTrials ? `${p.validationClean}/${p.validationTrials} stints @ ${p.validationLap?.toFixed(2) ?? '-'}` : '' })));
+console.table([baseline, lineDriver, ...policies].map(p => ({ driver: p.name, 'stints clean': `${p.stintClean}/${p.trials}`, 'stint pace': f(p.stintMean), 'tyre max C': p.tyreMaxC.toFixed(0), 'flying clean': `${p.completed}/${p.trials}`, flying: f(p.mean), sd: p.sd.toFixed(3), best: f(p.best), worst: f(p.worst), 'vmax km/h': p.vmaxKmh.toFixed(0), validation: p.validationTrials ? `${p.validationClean}/${p.validationTrials} stints @ ${p.validationLap?.toFixed(2) ?? '-'}` : '' })));
 if (champ) console.log(`Champion (by validation): ${champ.run}  ->  stint ${f(champ.stintMean)} s vs baseline ${f(baseline.stintMean)} s  (${((1 - champ.stintMean / baseline.stintMean) * 100).toFixed(1)} % faster); flying ${f(champ.mean)} vs ${f(baseline.mean)}; deterministic re-run identical: ${deterministic.identical}`);

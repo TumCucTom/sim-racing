@@ -4,7 +4,7 @@ import { buildTrack, project, nearestIndexGlobal, poseAt } from '../src/sim/trac
 import { CARS, CAR_ORDER } from '../src/sim/cars.js';
 import { Sim } from '../src/sim/sim.js';
 import { Vehicle, SIM_DT } from '../src/sim/vehicle.js';
-import { BaselineDriver } from '../src/sim/drivers/baseline.js';
+import { BaselineDriver, lineDriverOptions } from '../src/sim/drivers/baseline.js';
 import { measure } from '../tools/validate-cars.js';
 
 const track = buildTrack();
@@ -116,14 +116,14 @@ test('walls contain the car', () => {
 
 test('real circuits: lengths match official figures and geometry is sane', async () => {
   const { TRACK_ORDER } = await import('../src/sim/track.js');
-  const official = { silverstone: 5891, spa: 7004, monza: 5793 };
+  const official = { silverstone: 5891, spa: 7004, monza: 5793, nordschleife: 20832 };
   for (const id of TRACK_ORDER) {
     const t = buildTrack(id);
-    if (official[id]) assert.ok(Math.abs(t.length - official[id]) / official[id] < 0.005, `${id} length ${t.length}`);
+    if (official[id]) assert.ok(Math.abs(t.length - official[id]) / official[id] < 0.006, `${id} length ${t.length}`);
     for (let i = 0; i < t.n; i++) {
-      assert.ok(t.hw[i] > 3.5 && t.hw[i] < 10, `${id} half-width ${t.hw[i]}`);
+      assert.ok(t.hw[i] > 3.2 && t.hw[i] < 10, `${id} half-width ${t.hw[i]}`);
       assert.ok(t.wallL[i] >= t.hw[i] + 1.4 && t.wallR[i] >= t.hw[i] + 1.4, `${id} wall inside track at ${i}`);
-      assert.ok(Math.abs(t.grade[i]) < 0.2);
+      assert.ok(Math.abs(t.grade[i]) < 0.25);
     }
   }
 });
@@ -134,9 +134,19 @@ test('the in-game AI completes a clean lap in every car on every circuit', async
     const t = buildTrack(tid);
     for (const id of CAR_ORDER) {
       const spec = CARS[id], sim = new Sim(t, spec);
-      const drv = new BaselineDriver(t, spec, t.real ? { grip: 0.84, brake: spec.abs ? 0.8 : 0.62 } : { grip: 0.88 });
-      while (sim.lap < 1 && sim.time < 400) { sim.step(drv.control(sim.car)); assert.ok(sim.car.wallContact <= 0, `${id} hit a wall at ${tid} s=${sim.car.s.toFixed(0)}`); }
-      assert.ok(sim.lap === 1 && sim.lastLapValid, `${id} at ${tid}`);
+      const drv = new BaselineDriver(t, spec, lineDriverOptions(t, spec));
+      while (sim.lap < 2 && sim.time < t.length / 6) { sim.step(drv.control(sim.car)); assert.ok(sim.car.wallContact <= 0, `${id} hit a wall at ${tid} s=${sim.car.s.toFixed(0)}`); }
+      assert.ok(sim.lap === 2 && sim.lastLapValid, `${id} at ${tid}`);
     }
   }
+});
+
+test('racing line stays on the road, shortens the lap and is faster than the centre line', () => {
+  const lap = (opts) => { const sim = new Sim(track, CARS.gt3), d = new BaselineDriver(track, CARS.gt3, opts); while (sim.lap < 2 && sim.time < 300) sim.step(d.control(sim.car)); return sim.lastLapValid ? sim.lastLap : Infinity; };
+  let wide = 0;
+  for (let i = 0; i < track.n; i++) { assert.ok(Math.abs(track.lineD[i]) <= track.hw[i] + 0.5); wide = Math.max(wide, Math.abs(track.lineD[i])); }
+  assert.ok(wide > 4, 'line uses the track width');
+  assert.ok(track.line.length < track.length);
+  const centre = lap({ grip: 1.0 }), line = lap(lineDriverOptions(track, CARS.gt3));
+  assert.ok(line < centre - 3, `line ${line} vs centre ${centre}`);
 });

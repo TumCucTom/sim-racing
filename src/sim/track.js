@@ -9,9 +9,11 @@
 //    left/right track-width data from the open TUMFTM racetrack-database
 //    (LGPL-3.0). That data has no height channel, so their elevation is a
 //    hand-approximated profile — see each JSON's `source` note.
+import { computeRacingLine } from './racing-line.js';
 import silverstone from './tracks/silverstone.json' with { type: 'json' };
 import spa from './tracks/spa.json' with { type: 'json' };
 import monza from './tracks/monza.json' with { type: 'json' };
+import nordschleife from './tracks/nordschleife.json' with { type: 'json' };
 
 export const SURF = { ASPHALT: 0, KERB: 1, GRASS: 2, GRAVEL: 3 };
 
@@ -39,8 +41,9 @@ export const TRACKS = {
   silverstone: { ...silverstone, real: true },
   spa: { ...spa, real: true },
   monza: { ...monza, real: true },
+  nordschleife: { ...nordschleife, real: true },
 };
-export const TRACK_ORDER = ['ravenscar', 'silverstone', 'spa', 'monza'];
+export const TRACK_ORDER = ['ravenscar', 'silverstone', 'spa', 'monza', 'nordschleife'];
 
 function catmullRomClosed(pts, perSeg = 40) {
   const n = pts.length;
@@ -165,7 +168,8 @@ export function buildTrack(id = 'ravenscar') {
     z[i] = real ? periodicProfile(def.elevation, f)
       : 14 + 9.0 * Math.sin(u - 1.9) + 4.0 * Math.sin(2 * u + 0.6) + 1.5 * Math.sin(5 * u + 2.0);
   }
-  if (real) z = smoothClosed(z, 3, 40);
+  // hand-approximated profiles need heavy smoothing; surveyed ones only a little
+  if (real) z = def.elevation.length > 100 ? smoothClosed(z, 3, 22) : smoothClosed(z, 3, 40);
   for (let i = 0; i < n; i++) {
     grade[i] = (z[(i + 1) % n] - z[(i - 1 + n) % n]) / (segLen[i] + segLen[(i - 1 + n) % n]);
   }
@@ -195,8 +199,9 @@ export function buildTrack(id = 'ravenscar') {
   const pre = { n, x, y, ds }; buildGrid(pre);
   for (let i = 0; i < n; i++) {
     const R = Math.abs(curvS[i]) > 1e-4 ? 1 / Math.abs(curvS[i]) : 1e4;
-    const base = hw[i] + 9;
-    const outer = hw[i] + (gravelL[i] || gravelR[i] ? 22 : 9);
+    const ro = def.runoff ?? 9;   // narrow old-school circuits have barriers close to the road
+    const base = hw[i] + ro;
+    const outer = hw[i] + (gravelL[i] || gravelR[i] ? (def.runoff ? ro + 7 : 22) : ro);
     const inner = Math.min(base, Math.max(hw[i] + 2.5, 0.62 * R));
     if (curvS[i] > 0) { wallL[i] = inner; wallR[i] = gravelR[i] ? outer : base; }
     else { wallR[i] = inner; wallL[i] = gravelL[i] ? outer : base; }
@@ -229,6 +234,9 @@ export function buildTrack(id = 'ravenscar') {
     sectors: [0, Math.round(n * 0.33), Math.round(n * 0.67)],
   };
   buildGrid(t);
+  // racing line (minimum curvature); lineD = lateral offset from the centreline
+  t.line = computeRacingLine(t);
+  t.lineD = t.line.d;
   cache.set(id, t);
   return t;
 }
