@@ -29,6 +29,7 @@ import { PolicyDriver } from '../sim/drivers/policy-driver.js';
 import { OBS_DIM } from '../sim/drivers/rl-interface.js';
 import { buildWorld, trackHeight } from './world.js';
 import { buildCarModel } from './carmodel.js';
+import { getSky } from './sky.js';
 import { Input } from './input.js';
 import { Effects } from './effects.js';
 import { HUD, fmtTime } from './hud.js';
@@ -48,9 +49,10 @@ const store = {
   set(k, v) { try { window.localStorage.setItem(k, v); } catch { /* ignore */ } },
 };
 const QUALITY = {
-  low: { shadows: false, shadowMap: 1024, trees: 350, maxDpr: 1, bloom: false },
-  medium: { shadows: true, shadowMap: 2048, trees: 800, maxDpr: 1.5, bloom: false },
-  high: { shadows: true, shadowMap: 4096, trees: 1400, maxDpr: 2, bloom: true },
+  // trees: impostor cards per km of track (capped by treeCap); detail: trackside geometry level
+  low: { shadows: false, shadowMap: 1024, shadowRange: 70, trees: 260, treeCap: 3500, detail: 0, maxDpr: 1, bloom: false },
+  medium: { shadows: true, shadowMap: 2048, shadowRange: 80, trees: 750, treeCap: 9000, detail: 1, maxDpr: 1.5, bloom: false },
+  high: { shadows: true, shadowMap: 4096, shadowRange: 110, trees: 1500, treeCap: 20000, detail: 2, maxDpr: 2, bloom: true },
 };
 const params = new URLSearchParams(location.search);
 const CAMS = ['chase', 'far', 'bonnet', 'tv'];
@@ -71,12 +73,18 @@ class Game {
     this.camera = new THREE.PerspectiveCamera(58, 1, 0.3, 9000);
     this.world = buildWorld(this.track, r, this.quality);
     this.scene.add(this.world.group);
-    this.scene.fog = new THREE.Fog(this.world.fogColor, 350, 4200);
-    // image-based lighting from the procedural sky
+    this.scene.fog = new THREE.FogExp2(this.world.fogColor.clone(), 0.00021);
+    r.info.autoReset = false;   // reset once per frame (updateCamera) so the counters cover every pass
+    // image-based lighting: analytic sky now, the photographed HDRI as soon as it has loaded
     const pm = new THREE.PMREMGenerator(r), envScene = new THREE.Scene();
     const skyClone = this.world.sky.clone(); envScene.add(skyClone);
     this.scene.environment = pm.fromScene(envScene, 0, 1, 10000).texture; this.scene.environmentIntensity = 0.55;
     pm.dispose();
+    getSky(r).whenReady((s) => {
+      this.scene.environment = s.env; this.scene.environmentIntensity = 1; this.scene.fog.color.copy(s.fogColor);
+      r.toneMapping = { aces: THREE.ACESFilmicToneMapping, neutral: THREE.NeutralToneMapping, agx: THREE.AgXToneMapping }[params.get('tm')] ?? THREE.AgXToneMapping;
+      r.toneMappingExposure = +(params.get('ev') || 0.8);
+    });
     this.setupComposer();
     this.effects = new Effects(this.scene);
     this.props = new Props(this.scene, this.track, this.world);
@@ -402,6 +410,7 @@ class Game {
   updateCamera(dt) {
     const car = this.sim.car, cam = this.camera, pos = this.model.root.position, mode = CAMS[this.cam];
     const spd = car.speed;
+    this.renderer.info.reset();
     // direction of travel blended with heading so slides are visible
     const travel = spd > 3 ? Math.atan2(car.vx * Math.sin(car.yaw) + car.vy * Math.cos(car.yaw), car.vx * Math.cos(car.yaw) - car.vy * Math.sin(car.yaw)) : car.yaw;
     let dyaw = travel - car.yaw; while (dyaw > Math.PI) dyaw -= 2 * Math.PI; while (dyaw < -Math.PI) dyaw += 2 * Math.PI;

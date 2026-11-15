@@ -6,6 +6,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { nearestIndexGlobal } from '../sim/track.js';
 import { RNG } from '../sim/rng.js';
 import * as TX from './textures.js';
+import { ASSETS, loadTexture, applyTextures } from './assets.js';
+import { getSky } from './sky.js';
 
 const hash2 = (ix, iy) => { let h = Math.imul(ix, 374761393) + Math.imul(iy, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 function vnoise(x, y) {
@@ -50,208 +52,447 @@ export function makeTerrainFn(track) {
   };
 }
 
-function ribbon(track, step, offA, offB, { zA = 0, zB = 0, vScale = 13, mask = null, closed = true } = {}) {
-  // Build a strip between lateral offsets offA(i) and offB(i). When `mask` is
-  // given only the masked spans are emitted.
-  const pos = [], uv = [], idx = [];
-  const n = track.n;
-  let prev = -1;
-  const f = (v, i) => (typeof v === 'function' ? v(i) : v);
-  for (let k = 0; k <= n; k += step) {
+// ---------------------------------------------------------------- shader glue
+const GLSL_NOISE = `
+float hash12(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), f.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), f.x), f.y); }
+float lum(vec3 c){ return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+`;
+// Extend a built-in material: `color` runs after the albedo map is sampled
+// (diffuseColor is live), `rough` after the roughness map (roughnessFactor).
+function patch(mat, key, { uniforms = {}, vpars = '', vmain = '', fpars = '', color = '', rough = '', normal = '' }) {
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, uniforms);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + vpars).replace('#include <begin_vertex>', '#include <begin_vertex>\n' + vmain);
+    let f = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + GLSL_NOISE + fpars)
+      .replace('#include <map_fragment>', '#include <map_fragment>\n' + color)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n' + rough);
+    if (normal) f = f.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + normal);
+    sh.fragmentShader = f;
+  };
+  mat.customProgramCacheKey = () => key;
+  return mat;
+}
+const ROAD_V = { vpars: 'attribute vec4 aRoad; attribute float aRub; varying vec4 vRoad; varying float vRub;', vmain: 'vRoad = aRoad; vRub = aRub;' };
+
+// Along-track sample list: dense where the track curves or crests, sparse on straights.
+function sampleList(track, minM, maxM, sag) {
+  const n = track.n, ds = track.ds, ks = [0];
+  let k = 0;
+  while (k < n) {
+    const i = k % n, j = (k + 1) % n;
+    const kv = Math.abs(track.grade[j] - track.grade[i]) / ds;                 // vertical curvature
+    const curv = Math.max(Math.abs(track.curv[i]), kv * 3, 1e-5);
+    let step = Math.max(1, Math.round(Math.min(maxM, Math.max(minM, Math.sqrt(8 * sag / curv))) / ds));
+    // never step over a tighter section that is coming up
+    for (let q = 1; q < step; q++) { const c2 = Math.abs(track.curv[(k + q) % n]); if (c2 > 2.5 * curv) { step = Math.max(1, q); break; } }
+    k = Math.min(n, k + step); ks.push(k);
+  }
+  return ks;
+}
+
+// Generic swept strip. `prof(i, out)` appends [lateral offset, absolute height, u] triples for
+// track sample i (same count every sample). Emits road-space attributes for the shaders.
+function strip(track, ks, prof, { mask = null, vScale = 1, flip = false, uMetric = 0, color = null, rub = null } = {}) {
+  const n = track.n, pos = [], uv = [], road = [], rb = [], col = [], idx = [], pts = [];
+  let prev = -1, P = 0;
+  for (const k of ks) {
     const i = k % n;
     if (mask && !mask(i)) { prev = -1; continue; }
-    if (!closed && k === n) break;
-    const h = track.heading[i], nx = -Math.sin(h), ny = Math.cos(h);
-    const a = f(offA, i), b = f(offB, i);
+    const h = track.heading[i], nx = -Math.sin(h), ny = Math.cos(h), s = k * track.ds;
+    pts.length = 0; prof(i, pts); P = pts.length / 3;
     const base = pos.length / 3;
-    pos.push(track.x[i] + nx * a, track.z[i] + f(zA, i), -(track.y[i] + ny * a));
-    pos.push(track.x[i] + nx * b, track.z[i] + f(zB, i), -(track.y[i] + ny * b));
-    const v = (k * track.ds) / vScale;
-    uv.push(0, v, 1, v);
-    if (prev >= 0) idx.push(prev, base, prev + 1, prev + 1, base, base + 1);
+    for (let p = 0; p < P; p++) {
+      const off = pts[p * 3], X = track.x[i] + nx * off, Y = track.y[i] + ny * off;
+      pos.push(X, pts[p * 3 + 1], -Y);
+      uv.push(uMetric ? off / uMetric : pts[p * 3 + 2], s / vScale);
+      road.push(off, s, track.lineD ? track.lineD[i] : 0, track.hw[i]); rb.push(rub ? rub[i] : 0);
+      if (color) color(X, Y, col);
+    }
+    if (prev >= 0) for (let p = 0; p < P - 1; p++) {
+      const a = prev + p, b = base + p;
+      if (flip) idx.push(a, a + 1, b, a + 1, b + 1, b); else idx.push(a, b, a + 1, a + 1, b, b + 1);
+    }
     prev = base;
   }
+  if (!idx.length) return null;
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  g.setIndex(idx);
-  g.computeVertexNormals();
+  g.setAttribute('aRoad', new THREE.Float32BufferAttribute(road, 4));
+  g.setAttribute('aRub', new THREE.Float32BufferAttribute(rb, 1));
+  if (color) g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx); g.computeVertexNormals();
   return g;
 }
 
-export function buildWorld(track, renderer, quality) {
+const FOREST_BIAS = { nordschleife: 0.32, spa: 0.12, monza: 0.16, silverstone: -0.14, ravenscar: 0.02 };
+
+export function buildWorld(track, renderer, qualityIn) {
+  const quality = { detail: 1, trees: 700, treeCap: 9000, shadowRange: 95, ...qualityIn };
   const group = new THREE.Group();
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const terrain = makeTerrainFn(track);
-  const HW = track.halfWidth, KW = track.kerbWidth, hwA = track.hw;
-  const hwP = (i) => hwA[i], hwN = (i) => -hwA[i];
+  const HW = track.halfWidth, KW = track.kerbWidth, hwA = track.hw, n = track.n;
+  const wallAt = (side, i) => (side > 0 ? track.wallL[i] : track.wallR[i]);
+  const gravelAt = (side, i) => (side > 0 ? track.gravelL[i] : track.gravelR[i]);
+  const add = (geo, mat, { cast = false, receive = true } = {}) => { if (!geo) return null; const m = new THREE.Mesh(geo, mat); m.castShadow = cast && quality.shadows; m.receiveShadow = receive; group.add(m); return m; };
+  const photo = (mat, slots) => { applyTextures(mat, slots); return mat; };
 
   // ---- sky, sun, fog ------------------------------------------------------
+  // Analytic sky first; the photographic sky takes over as soon as it has loaded.
+  const skySys = getSky(renderer);
   const sky = new Sky(); sky.scale.setScalar(9000);
   const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - 34), THREE.MathUtils.degToRad(-128));
   const U = sky.material.uniforms;
   U.turbidity.value = 3.2; U.rayleigh.value = 1.25; U.mieCoefficient.value = 0.004; U.mieDirectionalG.value = 0.86;
   U.sunPosition.value.copy(sun);
   group.add(sky);
+  const dome = skySys.makeDome(); dome.visible = false; group.add(dome);
   const hemi = new THREE.HemisphereLight(0xbfd8ff, 0x55603a, 0.7);
   const sunLight = new THREE.DirectionalLight(0xfff1dc, 2.5);
   sunLight.position.copy(sun).multiplyScalar(300);
   sunLight.castShadow = quality.shadows;
   sunLight.shadow.mapSize.set(quality.shadowMap, quality.shadowMap);
-  const sc = sunLight.shadow.camera; sc.left = -95; sc.right = 95; sc.top = 95; sc.bottom = -95; sc.near = 50; sc.far = 700;
-  sunLight.shadow.bias = -0.0004; sunLight.shadow.normalBias = 0.05;
+  const SR = quality.shadowRange || 95;
+  const sc = sunLight.shadow.camera; sc.left = -SR; sc.right = SR; sc.top = SR; sc.bottom = -SR; sc.near = 60; sc.far = 640;
+  sunLight.shadow.bias = -0.0003; sunLight.shadow.normalBias = 0.06; sunLight.shadow.radius = 1.6;
   group.add(hemi, sunLight, sunLight.target);
   const fogColor = new THREE.Color(0xb9cee0);
+  skySys.whenReady((s) => {
+    sun.copy(s.sunDir); sunLight.color.copy(s.sunColor); sunLight.intensity = s.sunIntensity;
+    hemi.intensity = 0; sky.visible = false; dome.visible = true; fogColor.copy(s.fogColor);
+  });
+
+  // rubber build-up: everywhere on the line, heaviest through braking zones and corners
+  const rub = new Float32Array(n);
+  {
+    const raw = new Float32Array(n);
+    for (let i = 0; i < n; i++) { let m = 0; for (let q = 0; q <= 70; q += 10) m = Math.max(m, Math.abs(track.curv[(i + q) % n]) * (1 - q / 110)); raw[i] = Math.min(1, 0.5 + m * 55); }
+    for (let i = 0; i < n; i++) { let a = 0; for (let q = -6; q <= 6; q++) a += raw[(i + q + n) % n]; rub[i] = a / 13; }
+  }
 
   // ---- asphalt ------------------------------------------------------------
-  const asp = TX.asphaltTextures(aniso);
-  const asphaltMat = new THREE.MeshStandardMaterial({ map: asp.map, roughnessMap: asp.roughnessMap, normalMap: asp.normalMap, normalScale: new THREE.Vector2(0.18, 0.18), roughness: 1, metalness: 0 });
-  const road = new THREE.Mesh(ribbon(track, 2, hwN, hwP, { vScale: 2 * HW }), asphaltMat);
-  road.receiveShadow = true; group.add(road);
-
-  // ---- kerbs (red/white, slightly raised) -----------------------------------
+  // UVs are metric (4.2 m tile); the shader lays the racing groove along track.lineD,
+  // paints the edge lines and adds resurfacing patches, seams and dusty edges.
+  const ksRoad = sampleList(track, 1, 4, 0.006), ksEdge = sampleList(track, 1.5, 7, 0.02), ksFar = sampleList(track, 3, 12, 0.08);
+  const aspFallback = TX.asphaltTile(aniso);
+  const oldU = { value: aspFallback.map }, avgU = { value: 0.068 };
+  const asphaltMat = patch(new THREE.MeshStandardMaterial({ map: aspFallback.map, normalMap: aspFallback.normalMap, normalScale: new THREE.Vector2(0.5, 0.5), roughness: 0.86, metalness: 0 }), 'road', {
+    ...ROAD_V, uniforms: { uOld: oldU, uAvg: avgU },
+    fpars: 'uniform sampler2D uOld; uniform float uAvg; varying vec4 vRoad; varying float vRub; float gRub; float gPaint;',
+    color: `{
+      vec2 m = vRoad.xy;                                   // metres across (+left) / along
+      vec3 a1 = diffuseColor.rgb;
+      vec3 a2 = texture2D(map, m.yx / 23.0 + 0.37).rgb;    // same tile, large and rotated: breaks up repetition
+      vec3 alb = a1 * mix(1.0, lum(a2) / uAvg, 0.55);
+      // stretches of older, cracked surface
+      float sect = smoothstep(0.55, 0.62, vnoise(vec2(m.y / 310.0, 3.7)));
+      vec3 old = texture2D(uOld, m / 7.0).rgb;
+      alb = mix(alb, old * 0.78 * mix(1.0, lum(a2) / uAvg, 0.4), sect * 0.85);
+      alb = mix(vec3(lum(alb)), alb, 0.55) * 1.22;
+      // resurfacing patches with sealed edges
+      vec2 pg = vec2(m.x / 3.6, m.y / 19.0), pc = floor(pg), pf = fract(pg);
+      float ph = hash12(pc + 11.0);
+      if (ph > 0.93) {
+        alb *= 0.74 + 0.5 * hash12(pc + 3.1);
+        vec2 e = min(pf, 1.0 - pf) * vec2(3.6, 19.0);
+        alb *= 0.55 + 0.45 * smoothstep(0.02, 0.07, min(e.x, e.y));
+      }
+      // paving joint down the middle and broad dark/light lanes left by the paver
+      alb *= 0.72 + 0.28 * smoothstep(0.012, 0.04, abs(m.x - 0.3));
+      alb *= 0.95 + 0.1 * vnoise(vec2(m.x * 0.55, m.y / 90.0));
+      // rubbered-in racing line: two wheel tracks inside a broad dark band
+      float x = m.x - vRoad.z;
+      float streak = 0.55 + 0.9 * vnoise(vec2(m.x * 2.2, m.y / 28.0)) * vnoise(vec2(m.x * 0.4 + 9.0, m.y / 140.0));
+      float g = 0.55 * exp(-x * x / 5.3) + 0.36 * (exp(-(x - 0.82) * (x - 0.82) / 0.2) + exp(-(x + 0.82) * (x + 0.82) / 0.2));
+      gRub = clamp(g * vRub * streak, 0.0, 1.0);
+      alb *= 1.0 - 0.52 * gRub;
+      // dust and marbles collect towards the edges
+      float de = vRoad.w - abs(m.x);
+      float dust = smoothstep(2.2, 0.0, de) * (0.5 + 0.5 * vnoise(m * vec2(1.5, 0.12)));
+      alb = mix(alb, alb * 1.3 + vec3(0.02, 0.017, 0.011), dust * 0.55);
+      // painted edge lines, worn where the aggregate stands proud
+      float aa = fwidth(de) * 0.8;
+      float ln = smoothstep(0.05 - aa, 0.05 + aa, de) * (1.0 - smoothstep(0.21 - aa, 0.21 + aa, de));
+      float wear = smoothstep(0.8, 1.5, lum(a1) / uAvg + 0.9 * vnoise(m * vec2(7.0, 1.2)) - 0.25);
+      gPaint = ln * (1.0 - 0.75 * wear);
+      alb = mix(alb, vec3(0.6, 0.6, 0.58) * (0.85 + 0.15 * lum(a1) / uAvg), gPaint);
+      diffuseColor.rgb = alb;
+    }`,
+    rough: 'roughnessFactor = clamp(roughnessFactor - 0.3 * gRub - 0.22 * gPaint, 0.28, 1.0);',
+    normal: 'normal = normalize(mix(normal, nonPerturbedNormal, clamp(0.55 * gRub + 0.7 * gPaint, 0.0, 1.0)));',
+  });
+  photo(asphaltMat, { map: [ASSETS.asphaltDiff, { aniso }], normalMap: [ASSETS.asphaltNor, { aniso, srgb: false }], roughnessMap: [ASSETS.asphaltRough, { aniso, srgb: false }] });
+  loadTexture(ASSETS.asphaltOld, { aniso }).then((t) => { if (t) oldU.value = t; });
+  loadTexture(ASSETS.asphaltDiff, { aniso }).then((t) => { if (t) { avgU.value = 0.062; asphaltMat.roughness = 1; asphaltMat.normalScale.set(0.9, 0.9); } });
   {
+    const g = strip(track, ksRoad, (i, o) => { o.push(-hwA[i], track.z[i], 0, hwA[i], track.z[i], 0); }, { uMetric: 4.2, vScale: 4.2, rub });
+    add(g, asphaltMat);
+  }
+
+  // ---- kerbs: painted concrete blocks, striped in the shader so the edges stay crisp ----
+  const concreteFallback = TX.concreteTexture(aniso);
+  {
+    const kerbMat = patch(new THREE.MeshStandardMaterial({ map: concreteFallback, roughness: 0.62 }), 'kerb', {
+      ...ROAD_V, fpars: 'varying vec4 vRoad; varying float vRub;',
+      color: `{
+        vec2 m = vRoad.xy; float c = lum(diffuseColor.rgb);
+        float q = m.y / 1.6, f = fract(q), aa = fwidth(q);
+        float blk = smoothstep(0.5 - aa, 0.5 + aa, f) * (1.0 - smoothstep(1.0 - aa, 1.0, f)) + (1.0 - smoothstep(0.0, aa, f));
+        vec3 paint = mix(vec3(0.5, 0.022, 0.02), vec3(0.66, 0.66, 0.63), clamp(blk, 0.0, 1.0));
+        float chip = smoothstep(0.62, 0.74, vnoise(m * vec2(9.0, 5.0)) * 0.6 + vnoise(m * vec2(2.0, 0.7)) * 0.5);
+        vec3 alb = mix(paint, vec3(0.33, 0.32, 0.3), chip * 0.6) * (0.72 + 0.6 * c);
+        float d = abs(m.x) - vRoad.w;                                            // distance onto the kerb
+        float scuff = smoothstep(0.75, 0.05, d) * vnoise(vec2(m.x * 3.0, m.y / 6.0)) * (0.4 + 0.6 * vRub);
+        alb *= 1.0 - 0.6 * scuff;
+        alb *= 0.6 + 0.4 * smoothstep(0.0, 0.03, min(f, 1.0 - f) * 1.6);          // joints between blocks
+        diffuseColor.rgb = alb;
+      }`,
+    });
+    photo(kerbMat, { map: [ASSETS.concrete, { aniso }] });
     const geos = [];
     for (const side of [1, -1]) {
-      const g1 = ribbon(track, 1, i => side * hwA[i], i => side * (hwA[i] + KW * 0.5), { zA: 0.004, zB: 0.045, mask: i => track.kerb[i], closed: false });
-      const g2 = ribbon(track, 1, i => side * (hwA[i] + KW * 0.5), i => side * (hwA[i] + KW), { zA: 0.045, zB: 0.012, mask: i => track.kerb[i], closed: false });
-      for (const g of [g1, g2]) {
-        if (side < 0) g.index.array.reverse();
-        const col = [], p = g.attributes.uv;
-        for (let k = 0; k < p.count; k++) { const red = Math.floor(p.getY(k) * 13 / 2.2) % 2 === 0; col.push(red ? 0.72 : 0.92, red ? 0.07 : 0.92, red ? 0.07 : 0.9); }
-        g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-        g.computeVertexNormals();
-        geos.push(g);
-      }
+      const g = strip(track, ksRoad, (i, o) => {
+        const h = hwA[i], z = track.z[i];
+        o.push(side * (h - 0.02), z + 0.003, 0, side * (h + KW * 0.45), z + 0.05, 0.5, side * (h + KW * 0.9), z + 0.035, 0.9, side * (h + KW), z - 0.01, 1);
+      }, { mask: i => track.kerb[i], vScale: 1.3, flip: side < 0, uMetric: 1.3, rub });
+      if (g) geos.push(g);
     }
-    const kerbs = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75 }));
-    kerbs.receiveShadow = true; group.add(kerbs);
+    if (geos.length) add(mergeGeometries(geos), kerbMat);
   }
 
   // ---- verges: grass run-off and gravel traps ------------------------------
-  const grassTex = TX.grassTexture(aniso);
-  const grassMat = new THREE.MeshStandardMaterial({ map: grassTex, roughness: 1, color: 0xd6e6c8 });
-  const gravelMat = new THREE.MeshStandardMaterial({ map: TX.gravelTexture(aniso), roughness: 1 });
+  const grassFallback = TX.grassTexture(aniso);
+  const GROUND_F = `
+    vec3 groundAlbedo(sampler2D tex, vec2 uvm, vec3 near){
+      vec3 far = texture2D(tex, uvm / 31.0 + 0.19).rgb, mid = texture2D(tex, uvm.yx / 9.0 + 0.6).rgb;
+      float fade = smoothstep(25.0, 140.0, vViewPosition.z);                      // detail gives way to tone with distance
+      vec3 c = mix(near, mid, 0.35 + 0.4 * fade) * mix(1.0, lum(far) / 0.075, 0.7);
+      return mix(c, vec3(lum(c)) * vec3(0.9, 1.0, 0.62), 0.12);
+    }`;
+  const grassMat = patch(new THREE.MeshStandardMaterial({ map: grassFallback, roughness: 0.95, normalScale: new THREE.Vector2(1.2, 1.2) }), 'verge', {
+    ...ROAD_V, fpars: 'varying vec4 vRoad; varying float vRub;' + GROUND_F,
+    color: `{
+      vec2 m = vRoad.xy; float d = abs(m.x) - vRoad.w;                           // metres outside the track edge
+      vec3 alb = groundAlbedo(map, m, diffuseColor.rgb);
+      // mower stripes run with the track
+      float q = d / 2.4, aa = fwidth(q) * 1.5, f = abs(fract(q) - 0.5);
+      alb *= 0.93 + 0.14 * smoothstep(0.25 - aa, 0.25 + aa, f);
+      alb *= 0.8 + 0.42 * vnoise(vec2(m.x / 7.0, m.y / 33.0));
+      // drier, yellower patches and a worn dirt strip where cars drop wheels
+      float dry = smoothstep(0.5, 0.8, vnoise(vec2(m.x / 3.0 + 5.0, m.y / 14.0)));
+      alb = mix(alb, lum(alb) * vec3(1.75, 1.5, 0.75), dry * 0.4);
+      float worn = smoothstep(1.5, 0.1, d + 1.1 * vnoise(vec2(m.x * 0.8, m.y / 5.0)));
+      alb = mix(alb, vec3(0.2, 0.165, 0.11) * (0.6 + 6.0 * lum(alb)), worn * 0.7);
+      diffuseColor.rgb = alb;
+    }`,
+  });
+  photo(grassMat, { map: [ASSETS.grassDiff, { aniso }], normalMap: [ASSETS.grassNor, { aniso, srgb: false }] });
+  const gravelMat = patch(new THREE.MeshStandardMaterial({ map: TX.gravelTexture(aniso), roughness: 0.95, color: 0xcfc3ad }), 'gravel', {
+    ...ROAD_V, fpars: 'varying vec4 vRoad; varying float vRub;',
+    color: `{
+      vec2 m = vRoad.xy;
+      vec3 far = texture2D(map, m / 13.0 + 0.3).rgb;
+      diffuseColor.rgb *= mix(1.0, lum(far) / 0.55, 0.5) * (0.86 + 0.24 * vnoise(vec2(m.x / 2.5, m.y / 11.0)));
+      // raked furrows running along the trap
+      diffuseColor.rgb *= 0.94 + 0.08 * sin(m.x * 7.5 + 2.0 * vnoise(m * 0.2));
+    }`,
+  });
+  photo(gravelMat, { map: [ASSETS.gravelDiff, { aniso }], normalMap: [ASSETS.gravelNor, { aniso, srgb: false }] });
   for (const side of [1, -1]) {
-    const wall = i => side * (side > 0 ? track.wallL[i] : track.wallR[i]);
-    const isGravel = i => (side > 0 ? track.gravelL[i] : track.gravelR[i]);
-    const inner = i => side * (hwA[i] + (track.kerb[i] ? KW : 0));
-    const gStart = i => side * Math.min(hwA[i] + KW + 2.0, (side > 0 ? track.wallL[i] : track.wallR[i]));
-    const fix = g => { if (side < 0) { g.index.array.reverse(); g.computeVertexNormals(); } scaleUV(g, 1, 13 / 6); return g; };
-    // grass from track edge to wall (or to gravel start)
-    const g1 = fix(ribbon(track, 2, inner, i => (isGravel(i) ? gStart(i) : wall(i)), { zA: 0.0, zB: -0.02, vScale: 6 }));
-    const grass = new THREE.Mesh(g1, grassMat); grass.receiveShadow = true; group.add(grass);
-    const g2 = fix(ribbon(track, 2, gStart, wall, { zA: -0.02, zB: -0.02, vScale: 6, mask: isGravel, closed: false }));
-    const gravel = new THREE.Mesh(g2, gravelMat); gravel.receiveShadow = true; group.add(gravel);
-    // skirt behind the wall down to the terrain
-    const g3 = fix(ribbon(track, 4, wall, i => wall(i) + side * 5, { zA: -0.02, zB: -0.6, vScale: 6 }));
-    group.add(new THREE.Mesh(g3, grassMat));
+    const inner = i => hwA[i] + (track.kerb[i] ? KW - 0.02 : -0.01);
+    const gStart = i => Math.min(hwA[i] + KW + 2.0, wallAt(side, i));
+    const outer = i => (gravelAt(side, i) ? gStart(i) : wallAt(side, i));
+    // grass from the track edge to the wall (or to the start of the gravel)
+    add(strip(track, ksEdge, (i, o) => {
+      const z = track.z[i], a = inner(i), b = outer(i), mid = a + Math.min(1.2, (b - a) * 0.5);
+      o.push(side * a, z - 0.004, 0, side * mid, z - 0.012, 0, side * b, z - 0.03, 0);
+    }, { uMetric: 2.3, vScale: 2.3, flip: side < 0, rub }), grassMat);
+    add(strip(track, ksEdge, (i, o) => { const z = track.z[i] - 0.03; o.push(side * gStart(i), z, 0, side * wallAt(side, i), z, 0); },
+      { uMetric: 1.7, vScale: 1.7, flip: side < 0, mask: i => gravelAt(side, i), rub }), gravelMat);
   }
 
   // ---- barriers -------------------------------------------------------------
   {
-    const armco = TX.armcoTexture(aniso), tyres = TX.tyreWallTexture(aniso);
-    const armcoMat = new THREE.MeshStandardMaterial({ map: armco, roughness: 0.45, metalness: 0.55, side: THREE.DoubleSide });
-    const tyreMat = new THREE.MeshStandardMaterial({ map: tyres, roughness: 0.9, side: THREE.DoubleSide });
+    const armcoMat = new THREE.MeshStandardMaterial({ map: TX.armcoTexture(aniso), roughness: 0.42, metalness: 0.82, side: THREE.DoubleSide, envMapIntensity: 0.9 });
+    const tyreMat = new THREE.MeshStandardMaterial({ map: TX.tyreWallTexture(aniso), roughness: 0.88, side: THREE.DoubleSide });
+    const beltMat = new THREE.MeshStandardMaterial({ color: 0xd8d8d4, roughness: 0.7 });
+    const fenceMat = new THREE.MeshStandardMaterial({ map: TX.fenceTexture(aniso), transparent: true, roughness: 0.5, metalness: 0.6, side: THREE.DoubleSide, depthWrite: false, alphaTest: 0.02 });
+    const beams = quality.detail > 0 ? 3 : 2, bh = 0.31, top = 0.06 + beams * (bh + 0.012);
+    const armGeo = [], tyreGeo = [], fenceGeo = [], beltGeo = [];
+    // debris fence where spectators would be: around the pits and on the outside of fast corners
+    const fenceOn = (side, i) => {
+      const dPit = Math.min(i, n - i) * track.ds;
+      if (dPit < 330) return true;
+      if (quality.detail < 1) return false;
+      return vnoise(i * track.ds / 420 + (side > 0 ? 17 : 91), 0.5) > 0.56;
+    };
     for (const side of [1, -1]) {
-      const wallOff = i => side * (side > 0 ? track.wallL[i] : track.wallR[i]);
-      const isTyre = i => (side > 0 ? track.gravelL[i] : track.gravelR[i]);
-      for (const [mask, mat, hgt, vs] of [[i => !isTyre(i), armcoMat, 0.95, 4], [isTyre, tyreMat, 1.15, 1.6]]) {
-        const pos = [], uv = [], idx = []; let prev = -1;
-        for (let k = 0; k <= track.n; k += 2) {
-          const i = k % track.n;
-          if (!mask(i)) { prev = -1; continue; }
-          const h = track.heading[i], o = wallOff(i);
-          const x = track.x[i] - Math.sin(h) * o, y = track.y[i] + Math.cos(h) * o;
-          const b = pos.length / 3;
-          pos.push(x, track.z[i] - 0.05, -y, x, track.z[i] + hgt, -y);
-          uv.push(k * track.ds / vs, 0, k * track.ds / vs, 1);
-          if (prev >= 0) idx.push(prev, b, prev + 1, prev + 1, b, b + 1);
-          prev = b;
+      armGeo.push(strip(track, ksEdge, (i, o) => {
+        const w = wallAt(side, i), z = track.z[i] - 0.04;
+        o.push(side * w, z, 0);
+        for (let b = 0; b < beams; b++) {
+          const y = z + 0.06 + b * (bh + 0.012), u0 = b / beams, du = 1 / beams;
+          o.push(side * w, y, u0 + 0.02 * du, side * (w - 0.075), y + 0.085, u0 + 0.28 * du, side * (w - 0.075), y + bh - 0.085, u0 + 0.72 * du, side * w, y + bh, u0 + 0.98 * du);
         }
-        if (!pos.length) continue;
-        const g = new THREE.BufferGeometry();
-        g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-        g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-        g.setIndex(idx); g.computeVertexNormals();
-        const m = new THREE.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true; group.add(m);
-      }
+        o.push(side * (w + 0.11), z + top, 1, side * (w + 0.11), z, 1);     // posts side: closes the section from behind
+      }, { mask: i => !gravelAt(side, i), vScale: 4, flip: side > 0 }));
+      tyreGeo.push(strip(track, ksEdge, (i, o) => {
+        const w = wallAt(side, i), z = track.z[i] - 0.04, rows = 5, rh = 0.21;
+        for (let r = 0; r < rows; r++) { const y = z + r * rh, u0 = r / rows * 0.86, du = 0.86 / rows; o.push(side * (w - 0.5), y, u0, side * (w - 0.62), y + rh * 0.3, u0 + du * 0.3, side * (w - 0.62), y + rh * 0.7, u0 + du * 0.7); }
+        o.push(side * (w - 0.5), z + rows * rh, 0.86, side * (w + 0.1), z + rows * rh, 1);
+      }, { mask: i => gravelAt(side, i), vScale: 1.24, flip: side > 0 }));
+      // concrete wall behind the tyres
+      beltGeo.push(strip(track, ksEdge, (i, o) => { const w = wallAt(side, i), z = track.z[i]; o.push(side * (w + 0.1), z - 0.05, 0, side * (w + 0.1), z + 1.25, 0.5, side * (w + 0.35), z + 1.25, 0.6, side * (w + 0.35), z - 0.3, 1); },
+        { mask: i => gravelAt(side, i), vScale: 3, flip: side > 0 }));
+      fenceGeo.push(strip(track, ksEdge, (i, o) => { const w = wallAt(side, i) + 0.75, z = track.z[i]; o.push(side * w, z + 0.2, 0, side * w, z + 3.3, 0.86, side * (w - 0.55), z + 3.85, 1); },
+        { mask: i => fenceOn(side, i), vScale: 3, flip: side > 0 }));
     }
+    const merge = (list) => { const l = list.filter(Boolean); return l.length ? mergeGeometries(l) : null; };
+    add(merge(armGeo), armcoMat, { cast: true });
+    add(merge(tyreGeo), tyreMat, { cast: true });
+    const wallMat = new THREE.MeshStandardMaterial({ map: concreteFallback, roughness: 0.85, color: 0xd9d9d6 }); photo(wallMat, { map: [ASSETS.concrete, { aniso }] });
+    add(merge(beltGeo), wallMat, { cast: true });
+    const fence = add(merge(fenceGeo), fenceMat, { receive: false }); if (fence) { fence.renderOrder = 5; }
+    void beltMat;
   }
 
   // ---- terrain ---------------------------------------------------------------
+  // A coarse landscape grid plus a corridor of finer ground that follows the
+  // circuit, so the cost grows with track length rather than with the area the
+  // circuit happens to enclose.
+  const fbias = FOREST_BIAS[track.id] ?? 0;
+  const forestAt = (X, Y) => smooth(0.42, 0.6, vnoise(X / 270 + 40, Y / 270 + 40) * 0.8 + vnoise(X / 75 + 3, Y / 75 + 8) * 0.3 + fbias);
+  const tint = (X, Y, h, out) => {
+    const n1 = vnoise(X / 60, Y / 60), n2 = vnoise(X / 9, Y / 9), fld = vnoise(X / 190 + 9, Y / 190 + 4), f = forestAt(X, Y);
+    const rock = smooth(70, 150, h - zMean) * (0.5 + 0.5 * n1);
+    const dry = 0.78 + 0.34 * n1 + 0.12 * n2;
+    const crop = smooth(0.58, 0.63, fld) * (1 - f);                                   // cut hay / crop fields
+    let r = dry * (1 + 0.75 * crop), g = dry * (1 + 0.38 * crop), b = dry * (1 - 0.25 * crop);
+    const fd = 1 - 0.62 * f; r *= fd * (1 - 0.1 * f); g *= fd; b *= fd * (1 - 0.15 * f);     // forest floor / canopy tone
+    out.push(r * (1 - rock) + 1.9 * rock, g * (1 - rock) + 1.5 * rock, b * (1 - rock) + 2.2 * rock);
+  };
+  let zMean = 0; for (let i = 0; i < n; i++) zMean += track.z[i] / n;
+  const terrainMat = patch(new THREE.MeshStandardMaterial({ map: grassFallback, vertexColors: true, roughness: 0.96 }), 'terrain', {
+    vpars: 'varying vec2 vWxz;', vmain: 'vWxz = (modelMatrix * vec4(position, 1.0)).xz;',
+    fpars: 'varying vec2 vWxz;' + GROUND_F,
+    color: 'diffuseColor.rgb = groundAlbedo(map, vWxz, diffuseColor.rgb);',
+  });
+  photo(terrainMat, { map: [ASSETS.grassDiff, { aniso }], normalMap: [ASSETS.grassNor, { aniso, srgb: false }] });
+  let groundH;
   {
-    const g = track.grid, pad = 1500, cell = 10;
+    const g = track.grid, pad = 1700;
     const x0 = g.minX - pad, y0 = g.minY - pad, x1 = g.maxX + pad, y1 = g.maxY + pad;
-    // non-uniform grid: fine near the circuit, coarse towards the horizon
-    const axis = (a, b, lo, hi) => { const out = []; let v = a; while (v < b) { out.push(v); const far = v < lo ? lo - v : v > hi ? v - hi : 0; v += cell + far * 0.09; } out.push(b); return out; };
-    const xs = axis(x0, x1, g.minX + 120, g.maxX - 120), ys = axis(y0, y1, g.minY + 120, g.maxY - 120);
-    const pos = new Float32Array(xs.length * ys.length * 3), col = new Float32Array(xs.length * ys.length * 3), uv = new Float32Array(xs.length * ys.length * 2);
-    let p = 0, q = 0, c = 0;
-    for (let j = 0; j < ys.length; j++) for (let i = 0; i < xs.length; i++) {
-      const X = xs[i], Y = ys[j], t = terrain(X, Y);
-      pos[p++] = X; pos[p++] = t.h; pos[p++] = -Y;
-      uv[q++] = X / 7; uv[q++] = Y / 7;
-      const n1 = vnoise(X / 60, Y / 60), n2 = vnoise(X / 9, Y / 9);
-      const rock = smooth(55, 120, t.h) * (0.5 + 0.5 * n1);
-      const dry = 0.82 + 0.3 * n1 + 0.1 * n2;
-      col[c++] = (0.80 * dry) * (1 - rock) + 0.62 * rock;
-      col[c++] = (0.95 * dry) * (1 - rock) + 0.60 * rock;
-      col[c++] = (0.72 * dry) * (1 - rock) + 0.58 * rock;
+    const cell = Math.max(14, Math.min(40, Math.sqrt((g.maxX - g.minX) * (g.maxY - g.minY) / 26000)));
+    const axis = (a, b, lo, hi) => { const out = []; let v = a; while (v < b) { out.push(v); const far = v < lo ? lo - v : v > hi ? v - hi : 0; v += cell + far * 0.1; } out.push(b); return out; };
+    const xs = axis(x0, x1, g.minX + 60, g.maxX - 60), ys = axis(y0, y1, g.minY + 60, g.maxY - 60), NX = xs.length, NY = ys.length;
+    const H0 = new Float32Array(NX * NY), pos = new Float32Array(NX * NY * 3), col = [], uv = new Float32Array(NX * NY * 2);
+    for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
+      const X = xs[i], Y = ys[j], t = terrain(X, Y), k = j * NX + i;
+      H0[k] = t.h;
+      // under the corridor the coarse grid is dropped out of sight
+      pos[k * 3] = X; pos[k * 3 + 1] = t.h - (t.dist < t.corr + 30 ? 30 : 0); pos[k * 3 + 2] = -Y;
+      uv[k * 2] = X / 2.3; uv[k * 2 + 1] = Y / 2.3;
+      tint(X, Y, t.h, col);
     }
     const idx = [];
-    for (let j = 0; j < ys.length - 1; j++) for (let i = 0; i < xs.length - 1; i++) {
-      const a = j * xs.length + i, b = a + 1, d = a + xs.length, e = d + 1;
-      idx.push(a, b, d, b, e, d);
-    }
+    for (let j = 0; j < NY - 1; j++) for (let i = 0; i < NX - 1; i++) { const a = j * NX + i, b = a + 1, d = a + NX, e = d + 1; idx.push(a, b, d, b, e, d); }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     geo.setIndex(idx); geo.computeVertexNormals();
-    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: grassTex, vertexColors: true, roughness: 1 }));
-    mesh.receiveShadow = true; group.add(mesh);
+    add(geo, terrainMat);
+    // exact height of the coarse (undropped) grid at any point
+    const find = (arr, v) => { let lo = 0, hi = arr.length - 2; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (arr[m] <= v) lo = m; else hi = m - 1; } return lo; };
+    const coarseH = (X, Y) => {
+      const i = find(xs, X), j = find(ys, Y), fx = Math.min(1, Math.max(0, (X - xs[i]) / (xs[i + 1] - xs[i]))), fy = Math.min(1, Math.max(0, (Y - ys[j]) / (ys[j + 1] - ys[j])));
+      const a = H0[j * NX + i], b = H0[j * NX + i + 1], d = H0[(j + 1) * NX + i], e = H0[(j + 1) * NX + i + 1];
+      return fx + fy <= 1 ? a + (b - a) * fx + (d - a) * fy : e + (d - e) * (1 - fx) + (b - e) * (1 - fy);
+    };
+    // ground height everywhere: true terrain near the circuit, the coarse grid further out
+    groundH = (X, Y, t = terrain(X, Y)) => { const w = smooth(38, 62, t.dist - t.corr); return w <= 0 ? t.h : t.h + (coarseH(X, Y) + 0.2 - t.h) * w; };
+    const rings = [0, 3, 9, 20, 38, 62, 96];
+    const geos = [];
+    for (const side of [1, -1]) {
+      geos.push(strip(track, ksFar, (i, o) => {
+        const w = wallAt(side, i), h = track.heading[i], nx = -Math.sin(h), ny = Math.cos(h);
+        o.push(side * (w - 0.3), track.z[i] - 0.05, 0);
+        let last = 0;
+        for (const r of rings) { const off = side * (w + r + 0.4), X = track.x[i] + nx * off, Y = track.y[i] + ny * off; last = groundH(X, Y); o.push(off, last, 0); }
+        o.push(side * (w + 97), last - 6, 0);
+      }, { flip: side < 0, color: (X, Y, out) => tint(X, Y, terrain(X, Y).h, out) }));
+    }
+    const cg = mergeGeometries(geos.filter(Boolean));
+    { const p = cg.attributes.position, u = cg.attributes.uv; for (let k = 0; k < p.count; k++) u.setXY(k, p.getX(k) / 2.3, -p.getZ(k) / 2.3); }
+    cg.deleteAttribute('aRoad'); cg.deleteAttribute('aRub');
+    add(cg, terrainMat);
   }
 
-  // ---- trees (instanced) -------------------------------------------------------
+  // ---- trees: photographic impostor cards, instanced in chunks along the circuit --------
   {
-    const rng = new RNG(4242), N = Math.round(quality.trees * Math.min(2.2, track.length / 2900));
-    const trunkG = new THREE.CylinderGeometry(0.22, 0.34, 1, 6); trunkG.translate(0, 0.5, 0);
-    const pineG = mergeGeometries([
-      new THREE.ConeGeometry(1.0, 1.1, 7).translate(0, 0.55, 0),
-      new THREE.ConeGeometry(0.78, 1.0, 7).translate(0, 1.15, 0),
-      new THREE.ConeGeometry(0.5, 0.9, 7).translate(0, 1.75, 0)]);
-    const leafG = new THREE.IcosahedronGeometry(1, 1); leafG.scale(1, 0.85, 1); leafG.translate(0, 0.8, 0);
-    const trunks = new THREE.InstancedMesh(trunkG, new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 1 }), N);
-    const pines = new THREE.InstancedMesh(pineG, new THREE.MeshStandardMaterial({ roughness: 0.95, flatShading: true }), N);
-    const leaves = new THREE.InstancedMesh(leafG, new THREE.MeshStandardMaterial({ roughness: 0.95, flatShading: true }), N);
-    const m = new THREE.Matrix4(), qn = new THREE.Quaternion(), s = new THREE.Vector3(), v = new THREE.Vector3(), cc = new THREE.Color();
-    const g = track.grid; let np = 0, nl = 0, nt = 0, guard = 0;
-    while (nt < N && guard++ < N * 40) {
-      const X = rng.uniform(g.minX - 150, g.maxX + 150), Y = rng.uniform(g.minY - 150, g.maxY + 150);
+    const TILES = [ // [half width, height] as fractions of a square atlas tile, typical height (m), conifer?
+      [0.179, 0.984, 19, 1], [0.22, 0.984, 17, 1], [0.254, 0.984, 15, 1], [0.344, 0.984, 9, 1],
+      [0.385, 0.984, 11, 0], [0.465, 0.984, 9, 0], [0.492, 0.741, 9, 0], [0.492, 0.937, 16, 1]];
+    const rng = new RNG(4242);
+    const N = Math.round(Math.min(quality.treeCap, quality.trees * track.length / 1000 * (1 + 1.2 * Math.max(0, fbias))));
+    // two crossed quads with soft, outward-leaning normals
+    const quad = (ang) => {
+      const c = Math.cos(ang), s = Math.sin(ang), g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute([-c, 0, -s, c, 0, s, c, 1, s, -c, 1, -s], 3));
+      g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+      g.setAttribute('normal', new THREE.Float32BufferAttribute([-c * 0.7, 0.7, -s * 0.7, c * 0.7, 0.7, s * 0.7, c * 0.5, 0.86, s * 0.5, -c * 0.5, 0.86, -s * 0.5], 3));
+      g.setIndex([0, 1, 2, 0, 2, 3]); return g;
+    };
+    const cardG = mergeGeometries(quality.detail > 0 ? [quad(0), quad(Math.PI / 2)] : [quad(0.4)]);
+    const uvPatch = (m) => { m.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aTile;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvMapUv = aTile.xy + uv * aTile.zw;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal = normalize(vNormal);');
+    }; m.customProgramCacheKey = () => 'tree'; return m; };
+    // stand-in until the atlas has loaded: flat dark-green cards would look worse than nothing
+    const treeMat = uvPatch(new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0, alphaTest: 0.42, side: THREE.DoubleSide, visible: false, envMapIntensity: 0.8 }));
+    const depthMat = uvPatch(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, alphaTest: 0.42, side: THREE.DoubleSide }));
+    loadTexture(ASSETS.trees, { repeat: false, aniso: 4 }).then((t) => { if (!t) return; treeMat.map = t; depthMat.map = t; treeMat.visible = true; treeMat.needsUpdate = depthMat.needsUpdate = true; });
+    const c0 = Math.cos(track.heading[0]), s0 = Math.sin(track.heading[0]);
+    const CH = 420, nCh = Math.max(1, Math.ceil(track.length / CH)), chunks = Array.from({ length: nCh }, () => []);
+    const reach = quality.detail > 0 ? 85 : 55;
+    let placed = 0, guard = 0;
+    while (placed < N && guard++ < N * 12) {
+      const i = rng.int(n), side = rng.next() < 0.5 ? 1 : -1, u = rng.next();
+      const off = wallAt(side, i) + 4.5 + reach * Math.pow(u, 1.8);
+      const h = track.heading[i], X = track.x[i] - Math.sin(h) * off * side, Y = track.y[i] + Math.cos(h) * off * side;
       const t = terrain(X, Y);
-      if (t.dist < t.corr + 7) continue;
-      const density = vnoise(X / 90 + 40, Y / 90 + 40);
-      if (density < 0.42 && rng.next() > 0.12) continue;
+      if (t.dist < t.corr + 3.5) continue;                       // inside some other part of the circuit
+      const f = forestAt(X, Y);
+      if (rng.next() > 0.07 + 0.93 * f) continue;
       // keep the main-straight facilities clear
-      { const dx = X - track.x[0], dy = Y - track.y[0], c0 = Math.cos(track.heading[0]), s0 = Math.sin(track.heading[0]);
-        const lx = dx * c0 + dy * s0, ly = -dx * s0 + dy * c0; if (lx > -230 && lx < 190 && ly > -75 && ly < 75) continue; }
-      const pine = vnoise(X / 200, Y / 200) > 0.5 ? rng.next() < 0.8 : rng.next() < 0.2;
-      const hgt = rng.uniform(6, 13) * (pine ? 1.15 : 0.9), th = hgt * (pine ? 0.22 : 0.42);
-      qn.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rng.uniform(0, 6.28));
-      v.set(X, t.h - 0.2, -Y);
-      trunks.setMatrixAt(nt++, m.compose(v, qn, s.set(1, th, 1)));
-      v.y += th * 0.8;
-      if (pine) {
-        const w = hgt * 0.26; m.compose(v, qn, s.set(w, (hgt - th * 0.8) / 2.2, w));
-        pines.setMatrixAt(np, m); pines.setColorAt(np++, cc.setHSL(0.33 + rng.uniform(-0.03, 0.03), 0.42, 0.14 + rng.uniform(0, 0.07)));
-      } else {
-        const w = hgt * 0.38; m.compose(v, qn, s.set(w, (hgt - th * 0.8) / 1.65, w));
-        leaves.setMatrixAt(nl, m); leaves.setColorAt(nl++, cc.setHSL(0.26 + rng.uniform(-0.05, 0.04), 0.5, 0.2 + rng.uniform(0, 0.1)));
-      }
+      { const dx = X - track.x[0], dy = Y - track.y[0], lx = dx * c0 + dy * s0, ly = -dx * s0 + dy * c0; if (lx > -230 && lx < 190 && ly > -75 && ly < 75) continue; }
+      const conifer = vnoise(X / 210 + 1.5, Y / 210 + 6.5) + (track.id === 'nordschleife' || track.id === 'spa' ? 0.12 : -0.08) > 0.5;
+      let k; do { k = rng.int(TILES.length); } while ((TILES[k][3] === 1) !== conifer && rng.next() < 0.82);
+      const T = TILES[k], hgt = T[2] * rng.uniform(0.75, 1.3) * (0.8 + 0.35 * f);
+      chunks[Math.min(nCh - 1, Math.floor(i * track.ds / CH))].push({ X, Y, y: groundH(X, Y, t) - 0.25, k, hgt, w: hgt * T[0] / T[1], rot: rng.uniform(0, Math.PI), shade: rng.uniform(0.8, 1.12) * (1 - 0.18 * f), hue: rng.uniform(-0.035, 0.035) });
+      placed++;
     }
-    trunks.count = nt; pines.count = np; leaves.count = nl;
-    for (const im of [trunks, pines, leaves]) { im.castShadow = quality.shadows; im.receiveShadow = false; im.frustumCulled = false; group.add(im); }
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sv = new THREE.Vector3(), pv = new THREE.Vector3(), cc = new THREE.Color();
+    for (const list of chunks) {
+      if (!list.length) continue;
+      const geo = cardG.clone(), tile = new Float32Array(list.length * 4);
+      const im = new THREE.InstancedMesh(geo, treeMat, list.length);
+      list.forEach((t, j) => {
+        q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, t.rot);
+        im.setMatrixAt(j, m4.compose(pv.set(t.X, t.y, -t.Y), q, sv.set(t.w, t.hgt, t.w)));
+        im.setColorAt(j, cc.setRGB(t.shade * (1 + t.hue * 4), t.shade, t.shade * (1 - t.hue * 5)));
+        const T = TILES[t.k], col = t.k % 4, row = t.k >> 2;
+        tile.set([(col + 0.5 - T[0]) / 4, 1 - (row + 1) / 2, 2 * T[0] / 4, T[1] / 2], j * 4);
+      });
+      geo.setAttribute('aTile', new THREE.InstancedBufferAttribute(tile, 4));
+      im.customDepthMaterial = depthMat;
+      im.castShadow = quality.shadows; im.receiveShadow = false;
+      im.computeBoundingSphere(); im.computeBoundingBox();
+      group.add(im);
+    }
   }
 
   // ---- start/finish furniture ---------------------------------------------------
@@ -361,12 +602,17 @@ export function buildWorld(track, renderer, quality) {
     }
   }
 
+  // The shadow frustum follows the car; it moves in whole shadow texels so
+  // static shadows do not shimmer as it travels.
+  const lx = new THREE.Vector3(), ly = new THREE.Vector3(), tgt = new THREE.Vector3();
   function updateSun(target) {
-    sunLight.target.position.copy(target);
-    sunLight.position.copy(target).addScaledVector(sun, 320);
+    lx.crossVectors(THREE.Object3D.DEFAULT_UP, sun).normalize(); ly.crossVectors(sun, lx);
+    const texel = (sc.right - sc.left) / sunLight.shadow.mapSize.x;
+    const px = target.dot(lx), py = target.dot(ly);
+    tgt.copy(target).addScaledVector(lx, Math.round(px / texel) * texel - px).addScaledVector(ly, Math.round(py / texel) * texel - py);
+    sunLight.target.position.copy(tgt);
+    sunLight.position.copy(tgt).addScaledVector(sun, 320);
   }
 
   return { group, sky, sun, sunLight, hemi, fogColor, terrain, brakeMarkers, updateSun };
 }
-
-function scaleUV(g, su, sv) { const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv); }
