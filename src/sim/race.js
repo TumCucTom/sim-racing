@@ -81,7 +81,7 @@ export class Race {
         gapLeader: 0, interval: 0, lapsDown: 0, blue: false, wake: 0,
         hit: 0, hitSide: 0, lastContactT: -1e9, contacts: 0,
         stuckT: 0, wrongT: 0, waitT: 0, needRespawn: false, respawns: 0, lastRespawnT: -1e9,
-        offs: 0, strikes: 0, penalty: 0, lastOff: 0, lastOffT: -1e9,
+        offs: 0, strikes: 0, penalty: 0, lastOff: 0, lastOffT: -1e9, walls: 0, lastWallT: -1e9, spins: 0, spinning: false,
         lapTimes: [], bestLap: null, nextBin: 0, lastPos: c.index + 1,
       });
       c.ctrl.steer = 0; c.ctrl.throttle = 0; c.ctrl.brake = 1;
@@ -272,6 +272,9 @@ export class Race {
         if (c.strikes % 3 === 0) { c.penalty += 5; this.onEvent?.('penalty', c); }
       }
     }
+    // incident counters: barrier hits (above walking pace) and spins
+    if (car.impact > 1.5 && this.time - c.lastWallT > 1) { c.walls++; c.lastWallT = this.time; }
+    const sp = Math.abs(car.headErr) > 1.25; if (sp && !c.spinning) c.spins++; c.spinning = sp;
     if (c.finished) return;
     if (this.raceTime > 6) {
       if (Math.abs(car.vx) < 2.5) c.stuckT += dt; else if (c.stuckT > 0) c.stuckT = Math.max(0, c.stuckT - 4 * dt);
@@ -418,7 +421,7 @@ export class Race {
       index: c.index, name: c.name, car: c.spec.id, carName: c.spec.name, player: c.player, grid: c.gridPos,
       laps: c.finished ? c.finishLaps : Math.max(0, c.sim.lap), finished: c.finished, retired: c.retired, reason: c.retireReason,
       time: c.finished ? c.finishTime + c.penalty : null, penalty: c.penalty, dist: c.dist,
-      bestLap: c.bestLap, lapTimes: c.lapTimes.slice(), contacts: c.contacts, offs: c.offs, strikes: c.strikes, respawns: c.respawns,
+      bestLap: c.bestLap, lapTimes: c.lapTimes.slice(), contacts: c.contacts, offs: c.offs, strikes: c.strikes, respawns: c.respawns, walls: c.walls, spins: c.spins,
     }));
     const key = (r) => (r.finished ? 2 : r.retired ? 0 : 1);
     rows.sort((a, b) => {

@@ -194,7 +194,7 @@ function buildWheel(kit, fit, spec, C, look) {
     else kit.mesh(new THREE.BoxGeometry(0.07, 0.045, 0.006), dark, spin).position.set(0, 0.008, 0.004);
   }
   if (race || (!spec.engine.electric && (spec.shiftTime ?? 1) <= 0.15)) {
-    for (const s of [-1, 1]) { const p = kit.mesh(new THREE.BoxGeometry(race ? 0.055 : 0.04, race ? 0.1 : 0.13, 0.005), race ? dark : metal, spin); p.position.set(s * (R - (race ? 0.025 : 0.05)), 0.012, -0.034); p.rotation.y = s * 0.25; out.paddles.push(p); }
+    for (const s of [-1, 1]) { const p = kit.mesh(new THREE.BoxGeometry(race ? 0.065 : 0.04, race ? 0.12 : 0.13, 0.005), race ? metal : metal, spin); p.position.set(s * (R - (race ? 0.012 : 0.05)), 0.03, -0.034); p.rotation.y = s * 0.25; out.paddles.push(p); }
   }
   // hands: rigid on the rim at nine and three; the arms follow through the wrists
   const glove = kit.mat({ color: race ? 0xa81c26 : 0x6a4a2e, roughness: race ? 0.8 : 0.55 }), trim = kit.mat({ color: race ? 0x141416 : 0x4a321e, roughness: 0.7 });
@@ -205,7 +205,7 @@ function buildWheel(kit, fit, spec, C, look) {
     for (let f = 0; f < 4; f++) kit.mesh(new THREE.TorusGeometry(R, rt + 0.0105 - (f === 3 ? 0.0015 : 0), 8, 5, fa * 0.94).rotateZ((1.3 - f) * fa - fa * 0.47), glove, hand);
     const back = kit.mesh(new THREE.SphereGeometry(1, 14, 10), glove, hand); back.scale.set(0.03, 0.047, 0.026); back.position.set(R + 0.012, -0.002, 0.03); back.rotation.y = 0.5;
     kit.mesh(new THREE.BoxGeometry(0.022, 0.05, 0.004), trim, hand).position.set(R + 0.03, -0.002, 0.048);
-    const th = kit.mesh(new THREE.CapsuleGeometry(0.0115, 0.036, 4, 8), glove, hand); th.position.set(R - 0.006, 0.05, 0.022); th.rotation.z = 0.25;
+    const th = kit.mesh(new THREE.CapsuleGeometry(0.0115, 0.026, 4, 8), glove, hand); th.position.set(R - 0.004, 0.04, 0.024); th.rotation.z = 0.35;
     out.wrists.push({ s, hand, local: V(R + 0.034, -0.034, 0.078) });
   }
   return out;
@@ -226,7 +226,7 @@ function buildArms(kit, fit, spec) {
 function buildCockpit(model, spec, fit) {
   const kit = new Kit(), E = fit.E, k = fit.klass, race = k !== 'road', e = V(...fit.eye), s = fit.side;
   const C = V(e.x + E.reach, e.y - E.fall, e.z);
-  const dash = kit.mat({ color: race ? 0x0d0e10 : 0x151617, roughness: 0.9 }), trim = kit.mat({ color: race ? 0x0b0b0d : 0x1c1d20, roughness: 0.92 }), liner = race ? trim : kit.mat({ color: 0x4a4c50, roughness: 1 });
+  const dash = kit.mat({ color: race ? 0x121316 : 0x17181a, roughness: 0.72, envMapIntensity: 0.75 }), trim = kit.mat({ color: race ? 0x0b0b0d : 0x1c1d20, roughness: 0.92 }), liner = race ? trim : kit.mat({ color: 0x4a4c50, roughness: 1 });
   const dark = kit.mat({ color: 0x08080a, roughness: 0.9 }), soft = kit.mat({ color: 0x1f2023, roughness: 0.95 });
   const rig = { kit, fit, C, t: 0, phi: 0, gear: null, flick: [0, 0], head: { yaw: 0, sway: 0, surge: 0, roll: 0 } };
 
@@ -269,7 +269,8 @@ function buildCockpit(model, spec, fit) {
       if (tw) { kit.mesh(new THREE.BoxGeometry(xD1 - xR + 0.1, ty - yF, 2 * tw), race ? dark : soft).position.set((xD1 + 0.1 + xR) / 2, (ty + yF) / 2, 0);
         if (!race && !spec.engine.electric && (spec.shiftTime ?? 0) > 0.15) {                               // manual: gear lever
           const base = V(e.x + 0.34, ty, 0), knob = V(e.x + 0.3, ty + 0.17, s * 0.015); kit.tube(kit.mat({ color: 0x9a9da3, metalness: 0.8, roughness: 0.3 }), base, knob, 0.007);
-          kit.mesh(new THREE.SphereGeometry(0.027, 12, 10), soft).position.copy(knob); kit.mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.05, 12), dark).position.copy(base).y += 0.02; rig.lever = { knob };
+          kit.mesh(new THREE.SphereGeometry(0.027, 12, 10), soft).position.copy(knob); kit.mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.05, 12), dark).position.copy(base).y += 0.02;
+          const fist = kit.mesh(new THREE.SphereGeometry(1, 12, 10), kit.mat({ color: 0x6a4a2e, roughness: 0.55 })); fist.scale.set(0.043, 0.034, 0.04); fist.visible = false; rig.lever = { knob, fist, t: 0 };
         } }
       for (const sd of [-1, 1]) {
         const p0 = V(xR, fit.belt, sd * sideZ(xR, fit.belt)), p1 = V(wsX(fit.belt), fit.belt, sd * sideZ(wsX(fit.belt), fit.belt));
@@ -320,6 +321,7 @@ function buildCockpit(model, spec, fit) {
       const cw = 0.225, ch = cw * 192 / 512, yb = E.wheelR * Math.sin(0.75) + 0.026, wt = V(C.x + Math.sin(E.rake) * yb, C.y + Math.cos(E.rake) * yb, e.z);
       const px = C.x + 0.15, pc = V(px, e.y + (wt.y - e.y) / (wt.x - e.x) * (px - e.x) + ch / 2 + 0.004, e.z), pod = new THREE.Group(); kit.group.add(pod); facing(pod, pc, V(e.x, e.y - 0.02, e.z));
       kit.mesh(new THREE.BoxGeometry(cw + 0.02, ch + 0.02, 0.03), dark, pod).position.z = -0.016; screen(pod, cw, ch);
+      kit.mesh(new THREE.BoxGeometry(cw + 0.03, 0.007, 0.06), dark, pod).position.set(0, ch / 2 + 0.013, 0.0);
       kit.tube(dark, V(pc.x + 0.02, pc.y - 0.02, pc.z), V(xD1 + 0.05, yDr - 0.04, pc.z), 0.014);
       const pp = V(xD1 - 0.01, yDr - 0.13, 0), pn = new THREE.Group(); kit.group.add(pn); facing(pn, pp, V(e.x, e.y, e.z * 0.6));
       const carbon = kit.mat({ color: 0xffffff, map: kit.tex(carbonTex()), roughness: 0.5 }); kit.mesh(new THREE.BoxGeometry(0.2, 0.13, 0.02), carbon, pn);
@@ -368,9 +370,13 @@ function updateRig(rig, dt, car, spec, info) {
   if (rig.gear !== null && car.gear !== rig.gear) { const up = car.gear > rig.gear ? 1 : 0; rig.flick[up] = 0.16; }
   rig.gear = car.gear;
   for (let i = 0; i < 2; i++) { rig.flick[i] = Math.max(0, rig.flick[i] - dt); if (wh.paddles[i]) wh.paddles[i].position.z = -0.034 + (rig.flick[i] > 0 ? 0.016 : 0); }
+  // manual gearbox: the inboard hand goes to the lever for the change (0 = on the wheel, 1 = on the knob)
+  const lv = rig.lever; let reach = 0;
+  if (lv) { if (rig.flick[0] === 0.16 || rig.flick[1] === 0.16) lv.t = 0.55; lv.t = Math.max(0, lv.t - dt); const u = lv.t / 0.55; reach = THREE.MathUtils.smoothstep(Math.min(u, 1 - u) * 2, 0, 0.45); lv.fist.visible = reach > 0.04; }
   // arms: two-bone IK from the shoulders to the wrists, elbows down and out
   for (let i = 0; i < 2; i++) {
     const arm = rig.arms[i], L = rig.L, S = _s.copy(arm.shoulder), W = wristPos(rig, wh.wrists[i], _w);
+    if (lv && arm.s === -rig.fit.side) { wh.wrists[i].hand.visible = reach <= 0.04; if (reach > 0) { W.lerp(_e.copy(lv.knob).add(_d.set(-0.07, 0.05, 0)), reach); lv.fist.position.copy(W).add(_d.set(0.065, -0.03, 0)); } }
     let d = _d.subVectors(W, S), dist = d.length(); const max = 2 * L * 0.985;
     if (dist > max) { S.addScaledVector(d, (dist - max) / dist); d.subVectors(W, S); dist = max; }      // lean the shoulder into a long reach
     d.divideScalar(dist);

@@ -273,7 +273,14 @@ export class RaceDriver {
       const x = gapA - gMin, kk = (idx + Math.round(v * 0.12 / t.ds)) % n;
       vF = Math.max(0, rho * Math.min(this.vAt(kk, this.o), 1.08 * v + 2) + Math.max(-10, x / (0.9 - 0.3 * p.aggression)));
       // a car that is far off the pace (spun, crawling, damaged) is an obstacle: be able to stop short of it
-      if (rho < 0.75 || caution) { const stop = x > 0 ? Math.sqrt(vA * vA + 2 * 9 * x) : Math.max(0, vA + 4 * x); if (stop < vF) { vF = stop; if (stop < v - 1.5) panic = true; } }
+      // The further they are off that pace (a slower class, an early braker, a car in trouble), the more
+      // this becomes plain "be able to slow to their speed before I get there"; for a car that is
+      // crawling or spun it is a stop.
+      if (rho < 0.92 || caution) {
+        const aS = caution || rho < 0.75 ? 9 : 9 + (rho - 0.75) * 80;
+        const stop = x > 0 ? Math.sqrt(vA * vA + 2 * aS * x) : Math.max(0, vA + 4 * x);
+        if (stop < vF) { vF = stop; if (stop < v - 1.5) panic = true; }
+      }
       // about to touch: hard on the brakes now, not when the speed error has built up
       if (x < 0.5 || (closing > 0.5 && x < closing * 0.45)) panic = true;
       if (panic && vA - 3 < vF) vF = Math.max(0, vA - 3);
@@ -298,7 +305,8 @@ export class RaceDriver {
       const limT = this.lim[tc.idx], dStar = Math.max(-limT, Math.min(limT, tc.d + this.side * (sepW + 0.8)));
       const room = Math.abs(dStar - tc.d) - sepW;          // is there (still) a car's width beside them?
       const overlap = ds < sepL - 0.5;                      // my nose is past their tail
-      if (T.retired || ds < -(sepL + 1.2 + 0.02 * v)) {     // clear ahead: done
+      // clear ahead, with room for them not to have to lift when I come back across: done
+      if (T.retired || ds < -(sepL + 2 + 0.07 * v + Math.max(0, tc.vx - v) * 1.5)) {
         if (!T.retired) this.passes++;
         this.mode = 'line'; this.target = null; this.keepT = 0.4; this.cool = 0.5;
       } else {

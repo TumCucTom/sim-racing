@@ -23,7 +23,7 @@ npm run plot       # docs/learning-curve-gt3.svg, docs/benchmark-gt3.svg
 ```
 
 Controls: **WASD / arrows** drive (gamepad supported) · **Q / E** shift ·
-**M** auto/manual · **R** recover · **Enter** restart · **C** camera ·
+**M** auto/manual · **R** recover · **Enter** restart · **C** camera (chase → far → bonnet → cockpit → TV) ·
 **T** telemetry · **G** ghost (best / AI) · **I** AI autopilot · **Z** ABS ·
 **X** TC · **H** driving difficulty · **L** racing-line guide · **V** weather · **F** perf stats · **N** mute ·
 **1–9, 0** first ten cars · **[ ]** previous / next car (all sixteen) · **Esc** menu.
@@ -253,6 +253,32 @@ high quality. Eleven of the sixteen cars use detailed third-party glTF models
 (Draco-compressed, wheels cut out and re-rigged offline by
 `tools/models-build.mjs`); every asset, author and licence is listed in
 [ASSETS.md](ASSETS.md).
+
+### In-car cameras
+**C** cycles chase, far, bonnet, cockpit and trackside TV. The two in-car views need no per-car
+tuning (`src/game/cockpit*.js`): the body, whether a glTF model or a code-generated shell, is
+rasterised once into a 2.5 cm height map, and the roof, windscreen header and base, belt line and
+glasshouse width are read off it. From those come the **eye point** (left seat; the Mini is
+right-hand drive; offset-centre in the prototypes, central in the single-seater; a fixed distance
+behind the header but kept within the part of the wheelbase where a driver sits, about 20 cm under
+the roof skin, never less than 12 cm above the scuttle), the **bonnet camera** (centreline, 15 cm
+above everything around the base of the screen; a nose camera on the formula car) and a convex
+*cabin hull*. A **procedural cockpit** is built on the same measurements and shown only in the
+driver's-eye view: dashboard, instrument cluster drawn live to one canvas texture at 20 Hz (dials
+in road cars; rev bar, gear, speed, lap time and ABS / TC lamps on a race logger; on the wheel
+itself in the prototypes and the formula car), steering column and wheel (round with an airbag
+hub, or a flat butterfly wheel with buttons, rotaries, paddles and shift LEDs), gloved hands at
+nine and three with two-bone IK arms, A-pillars, header, mirror, roof lining and door tops, a
+roll cage and window net in GT cars, and a gear lever the inboard hand reaches for in the
+manual cars. While you are inside, everything the exterior model has within the hull (its own
+static interior and steering wheel, opaque or tinted glass, the roof) is clipped away per
+fragment, so no model shows a second wheel, and what you see through the openings is the real
+model: bonnet, wings and door mirrors. The wheel turns the road-wheel angle times a steering ratio
+(14:1 road, 11:1 GT, 9:1 prototype, 7:1 formula), eased towards about 115–125° so the hands can
+stay on the rim; the camera rides on the sprung body (the cabin stays put, the horizon pitches and
+rolls), looks a little into the corner and moves a couple of centimetres with the g-forces.
+Per-car exceptions go in `spec.cockpit` (`side`, `eye` nudge, any ergonomic field); see
+`tools/cockpit-shots.mjs` for the check that photographs every car.
 
 ### Weather and time of day
 Six conditions, chosen in the menu, with **V** while driving, or by URL
