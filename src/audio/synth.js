@@ -406,6 +406,7 @@ export function audioConfigFor(spec) {
     gt3: { gearWhine: 1.0, squealGain: 0.55, bankGain: 1.08, bankName: 'gt3' },
     f458: { gearWhine: 0.15, squealGain: 0.9, bankName: 'f458' },
     hypercar: { turbo: true, gearWhine: 1.0, squealGain: 0.45, whineTeeth: 37, turboGain: 1.3, bankName: 'hypercar' },
+    lmp1: { turbo: true, gearWhine: 1.0, squealGain: 0.45, whineTeeth: 37, turboGain: 1.6, bright: 0.5 },   // no open turbodiesel race recording: synthesised
     formula: { gearWhine: 0.7, squealGain: 0.35, bankName: 'formula' },
     ev: { gearWhine: 0, squealGain: 1.0 },
   }[id] || {};

@@ -36,7 +36,7 @@ redistributes them under the same licences.
 | `models/hatch.glb` | Vanta RS | "Honda Civic Type-R" — https://sketchfab.com/3d-models/honda-civic-type-r-770a5c9b025449f59769d8cd27d915bb | shindedhirendra780 | CC BY 4.0 | 0.55 MB, 172k |
 | `models/coupe.glb` | Brawler GT 5.0 | "'67 Mustang (High poly)" — https://sketchfab.com/3d-models/67-mustang-high-poly-4223fcc87baa4ac58be2910a5367d7d0 | Nick Broad | CC BY 4.0 | 0.74 MB, 138k |
 | `models/formula.glb` | FX-10 | "RaceCar RC-09 (Re-imagined model)" — https://sketchfab.com/3d-models/racecar-rc-09-re-imagined-model-a56b6fdcf3b742758b7c37f1e181004d | Dahie (original model and tyres based on work by Enzojz, as credited by the author) | CC BY 4.0 | 1.14 MB, 91k |
-| `models/hypercar.glb` | Aurelia LMH | "AUDI R18" — https://sketchfab.com/3d-models/audi-r18-3a5f4938e662429b8633120aa62805a4 | Godheim | CC BY 4.0 | 0.32 MB, 44k |
+| `models/lmp1.glb` | Audi R18 e-tron quattro | "AUDI R18" — https://sketchfab.com/3d-models/audi-r18-3a5f4938e662429b8633120aa62805a4 | Godheim | CC BY 4.0 | 0.32 MB, 44k |
 | `models/ev.glb` | Volt-R Quad | "Generic Electric sedan vector" — https://sketchfab.com/3d-models/generic-electric-sedan-95f32d0d23bf4db48b1b28843385685f | Antonis_zks | CC BY 4.0 | 0.44 MB, 144k |
 
 Changes made to every file (`tools/models-build.mjs`; `tools/models-preview.mjs` renders a quick check): node transforms baked

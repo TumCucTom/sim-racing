@@ -159,6 +159,29 @@ CARS.hypercar = {
   reference: { zeroTo100: [2.4, 3.1], brake100: [17, 23], latG: [1.9, 2.8], topKmh: [325, 350] },
 };
 
+// Audi R18 e-tron quattro (2012 LMP1) from published figures: 3.7 V6 TDI single
+// turbo, ~375 kW and 850+ Nm, 915 kg dry. The real car's 150 kW front-axle
+// flywheel hybrid (usable above 120 km/h) is not modelled: rear-wheel drive only.
+CARS.lmp1 = {
+  id: 'lmp1', name: 'Audi R18 e-tron quattro', klass: 'Le Mans Prototype (LMP1, 2012) · RWD · 3.7 V6 turbodiesel',
+  blurb: 'Diesel torque from 2,500 rpm, 1,000 kg with driver, closed-cockpit prototype downforce, no ABS.',
+  mass: 1000, wheelbase: 2.92, frontWeight: 0.47, cgHeight: 0.29, trackF: 1.66, trackR: 1.62,
+  yawK: 0.9, wheelRadius: 0.355, wheelInertia: 1.5,
+  drive: 'RWD', diff: { lock: 140, preload: 110, ramp: 0.5 },
+  tireStagger: 1.0, tire: { muX: 1.92, muY: 1.80, loadSens: 0.11, peakAlpha: 0.105, peakKappa: 0.085, C: 1.58, tOpt: 95, tWin: 40, squeal: 0.4 }, rollStiffFront: 0.52,
+  CdA: 0.76, ClA: 3.6, aeroBalance: 0.45,
+  brakeTorque: 14000, brakeBias: 0.60, abs: false, tc: true,
+  engine: {
+    layout: 'V6T', cylinders: 6, turbo: true, inertia: 0.14,
+    idle: 1200, redline: 4800, limiter: 5000,
+    torque: [[1200, 420], [1800, 640], [2500, 830], [3000, 870], [3500, 870], [4000, 860], [4250, 843], [4500, 780], [4800, 690], [5100, 500]],
+    friction: [24, 0.016],
+  },
+  gears: [2.9, 2.1, 1.6, 1.27, 1.03, 0.85], finalDrive: 2.2, shiftTime: 0.04, efficiency: 0.94,
+  steerLock: 0.38, body: { style: 'gt', length: 4.65, width: 2.0, height: 1.03, color: 0xc8ccd0 },
+  reference: { zeroTo100: [2.6, 3.4], brake100: [17, 23], latG: [1.9, 2.8], topKmh: [315, 340] },
+};
+
 // Stock Mini Cooper S (F56, 2.0 turbo, 6-speed manual) from published figures.
 CARS.mini = {
   id: 'mini', name: 'Mini Cooper S', klass: 'Stock road car · FWD · 2.0 turbo I4',
@@ -180,4 +203,4 @@ CARS.mini = {
   reference: { zeroTo100: [6.4, 7.3], brake100: [33, 38], latG: [0.88, 1.02], topKmh: [225, 240] },
 };
 
-export const CAR_ORDER = ['gt3', 'f458', 'hypercar', 'mini', 'hatch', 'coupe', 'formula', 'ev'];
+export const CAR_ORDER = ['gt3', 'f458', 'hypercar', 'lmp1', 'mini', 'hatch', 'coupe', 'formula', 'ev'];

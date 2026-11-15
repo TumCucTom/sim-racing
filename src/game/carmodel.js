@@ -423,7 +423,7 @@ const GLB_MODELS = {
   // "RaceCar RC-09" V10-era grand-prix car by Dahie, CC BY 4.0 (own livery, not repainted)
   formula: { url: 'models/formula.glb', lamps: [[-2.0, 0.375, 0, 0.11, 0.11]], shadow: [4.9, 1.75] },
   // Audi R18 e-tron quattro (LMP1) by Godheim, CC BY 4.0 (own livery, not repainted)
-  hypercar: { url: 'models/hypercar.glb', lamps: [[-2.185, 0.5, -0.86, 0.05, 0.3], [-2.185, 0.5, 0.86, 0.05, 0.3]] },
+  lmp1: { url: 'models/lmp1.glb', lamps: [[-2.185, 0.5, -0.86, 0.05, 0.3], [-2.185, 0.5, 0.86, 0.05, 0.3]] },
   // "Generic Electric sedan" by Antonis_zks, CC BY 4.0
   ev: { url: 'models/ev.glb', paint: ['Material.018'], glass: ['Material.020'], tyre: ['Material.002'], tail: ['Material.067'] },
 };

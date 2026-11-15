@@ -3,6 +3,14 @@
 All notable changes, newest first. Numbers quoted here were measured by the
 tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
 
+## 0.7.1 — both prototypes
+- The Audi R18 model is now its own car (**Audi R18 e-tron quattro**, 2012
+  LMP1 turbodiesel, rear-drive only; passes its reference envelope, clean laps
+  on all six circuits) instead of standing in for the 499P-class hypercar,
+  which gets its red-and-yellow generated body back. Nine cars. The R18's
+  engine is synthesised: the petrol V6 recordings failed the pitch and
+  firing-order tests when stretched down to diesel revs.
+
 ## 0.7.0 — racing line, two more circuits, two more cars, real models and recorded engines
 - **AI drives a racing line and trail-brakes.** Minimum-curvature line computed
   for every circuit; a line-following driver with a curvature speed profile
