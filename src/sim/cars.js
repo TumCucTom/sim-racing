@@ -203,4 +203,113 @@ CARS.mini = {
   reference: { zeroTo100: [6.4, 7.3], brake100: [33, 38], latG: [0.88, 1.02], topKmh: [225, 240] },
 };
 
-export const CAR_ORDER = ['gt3', 'f458', 'hypercar', 'lmp1', 'mini', 'hatch', 'coupe', 'formula', 'ev'];
+// ---------------------------------------------------------------------------
+// GT3 class. Real cars from published homologation / manufacturer figures; power
+// and weight sit at typical balance-of-performance levels (restricted well below
+// what the engines can make), mass includes driver and some fuel. Track widths,
+// CG heights and aero numbers are estimates (not published). All run the same
+// slick, race ABS, TC and a 6-speed sequential, and share one class envelope
+// (the same one the Arrow GT3-R was given): ~3 s 0-100, ~1.5-1.7 g, 270-295 km/h.
+const GT3_REF = { zeroTo100: [2.9, 3.6], brake100: [22, 29], latG: [1.45, 1.75], topKmh: [270, 295] };
+const gt3Car = (o) => ({
+  yawK: 0.95, wheelRadius: 0.345, wheelInertia: 1.6, drive: 'RWD', tireStagger: 1.0, tire: TIRES.slick,
+  brakeTorque: 11500, abs: true, tc: true, shiftTime: 0.05, efficiency: 0.93, steerLock: 0.42,
+  reference: GT3_REF, ...o,
+});
+
+// Audi R8 LMS GT3 evo II: 5.2 V10 (road-car block, dry sump) amidships, 2,650 mm
+// wheelbase, 4,583 x 1,997 x 1,171 mm, 1,235 kg homologated. Benign and planted.
+CARS.r8lms = gt3Car({
+  id: 'r8lms', name: 'Audi R8 LMS GT3', klass: 'GT3 race car · RWD · 5.2 V10',
+  blurb: 'Mid-engined, naturally aspirated V10 to 8,500 rpm. Planted and forgiving; mild understeer at the limit.',
+  mass: 1315, wheelbase: 2.65, frontWeight: 0.43, cgHeight: 0.39, trackF: 1.69, trackR: 1.64,
+  diff: { lock: 140, preload: 120, ramp: 0.45 }, rollStiffFront: 0.50,
+  CdA: 1.04, ClA: 2.50, aeroBalance: 0.415, brakeBias: 0.66,
+  engine: {
+    layout: 'V10', cylinders: 10, turbo: false, inertia: 0.12,
+    idle: 1500, redline: 8500, limiter: 8650,
+    torque: [[2000, 370], [3500, 432], [5000, 488], [6500, 520], [7500, 498], [8000, 476], [8500, 446], [8800, 380]],
+    friction: [24, 0.013],
+  },
+  gears: [3.08, 2.31, 1.83, 1.49, 1.24, 1.05], finalDrive: 3.67,
+  body: { style: 'gt', shape: 'r8', length: 4.58, width: 2.0, height: 1.17, color: 0xe4e6e8 },
+});
+
+// Lamborghini Huracan GT3 EVO2: the same 5.2 V10 family, 2,645 mm wheelbase,
+// 4,551 mm long, 1,230 kg homologated. Set up pointier than its Audi cousin:
+// more front aero and less front roll stiffness, a looser diff, a little less drag.
+CARS.huracan = gt3Car({
+  id: 'huracan', name: 'Lamborghini Huracán GT3', klass: 'GT3 race car · RWD · 5.2 V10',
+  blurb: 'Same V10 as the Audi, sharper set-up: turns in harder, rotates on the brakes, asks for tidier hands.',
+  mass: 1310, wheelbase: 2.645, frontWeight: 0.42, cgHeight: 0.385, trackF: 1.70, trackR: 1.66, yawK: 0.92,
+  diff: { lock: 125, preload: 95, ramp: 0.40 }, rollStiffFront: 0.47,
+  CdA: 1.00, ClA: 2.42, aeroBalance: 0.425, brakeBias: 0.655,
+  engine: {
+    layout: 'V10', cylinders: 10, turbo: false, inertia: 0.115,
+    idle: 1500, redline: 8500, limiter: 8650,
+    torque: [[2000, 365], [3500, 428], [5000, 484], [6500, 516], [7500, 497], [8000, 477], [8500, 449], [8800, 380]],
+    friction: [24, 0.013],
+  },
+  gears: [3.00, 2.27, 1.81, 1.48, 1.24, 1.06], finalDrive: 3.62,
+  body: { style: 'gt', shape: 'huracan', length: 4.55, width: 2.05, height: 1.18, color: 0x3fb618 },
+});
+
+// Mercedes-AMG GT3: 6.2 (6,208 cc) naturally aspirated cross-plane V8 behind the
+// front axle, transaxle at the rear, 2,665 mm wheelbase, 4,746 x 2,049 x 1,238 mm,
+// 1,285 kg homologated. Near-even weight distribution and a high polar moment:
+// stable, kind to its driver, big torque from low revs, but it carries more drag.
+CARS.amggt3 = gt3Car({
+  id: 'amggt3', name: 'Mercedes-AMG GT3', klass: 'GT3 race car · RWD · 6.2 V8 (front-mid)',
+  blurb: 'Front-mid cross-plane V8, 650 Nm from 3,500 rpm. Long, stable and draggy; wins on traction and braking stability.',
+  mass: 1345, wheelbase: 2.665, frontWeight: 0.495, cgHeight: 0.41, trackF: 1.70, trackR: 1.68, yawK: 1.06,
+  diff: { lock: 150, preload: 140, ramp: 0.5 }, rollStiffFront: 0.55,
+  CdA: 1.10, ClA: 2.58, aeroBalance: 0.475, brakeBias: 0.71,
+  engine: {
+    layout: 'V8X', cylinders: 8, turbo: false, inertia: 0.17,
+    idle: 1100, redline: 7300, limiter: 7450,
+    torque: [[1500, 470], [2500, 575], [3500, 632], [4500, 650], [5500, 640], [6300, 606], [6800, 568], [7300, 518], [7600, 430]],
+    friction: [28, 0.015],
+  },
+  gears: [2.96, 2.21, 1.75, 1.43, 1.20, 1.03], finalDrive: 3.22,
+  body: { style: 'gt', shape: 'amg', length: 4.75, width: 2.05, height: 1.24, color: 0xb9bec4 },
+});
+
+// Ferrari 296 GT3: 2,992 cc 120-degree twin-turbo V6 (no hybrid in the race car),
+// 2,660 mm wheelbase, 2,050 mm wide, 1,250 kg dry; 600 cv / 712 Nm unrestricted,
+// held to ~525 hp by boost limits under BoP. Very low engine, efficient aero.
+CARS.f296gt3 = gt3Car({
+  id: 'f296gt3', name: 'Ferrari 296 GT3', klass: 'GT3 race car · RWD · 3.0 twin-turbo V6',
+  blurb: 'Boost-limited 120° V6: a flat wall of torque from 4,000 rpm, low centre of gravity, slippery and agile.',
+  mass: 1325, wheelbase: 2.66, frontWeight: 0.435, cgHeight: 0.37, trackF: 1.72, trackR: 1.69, yawK: 0.93,
+  diff: { lock: 135, preload: 110, ramp: 0.45 }, rollStiffFront: 0.49,
+  CdA: 0.97, ClA: 2.48, aeroBalance: 0.42, brakeBias: 0.66,
+  engine: {
+    layout: 'V6T', cylinders: 6, turbo: true, inertia: 0.10,
+    idle: 1600, redline: 7500, limiter: 7650,
+    torque: [[2000, 365], [3000, 500], [4000, 592], [5000, 622], [5500, 622], [6500, 574], [7000, 534], [7250, 514], [7500, 482], [7800, 395]],
+    friction: [20, 0.012],
+  },
+  gears: [2.80, 2.16, 1.75, 1.43, 1.20, 1.03], finalDrive: 3.30,
+  body: { style: 'gt', shape: 'f296', length: 4.57, width: 2.05, height: 1.19, color: 0xc4161c },
+});
+
+// McLaren 720S GT3: 3,994 cc M840T twin-turbo flat-plane V8, carbon tub, 2,696 mm
+// wheelbase, 4,664 x 2,040 mm. Restricted to ~520 hp; the longest wheelbase of the
+// mid-engined cars and the least drag, strong in fast corners.
+CARS.mc720s = gt3Car({
+  id: 'mc720s', name: 'McLaren 720S GT3', klass: 'GT3 race car · RWD · 4.0 twin-turbo V8',
+  blurb: 'Flat-plane twin-turbo V8 in a carbon tub. Low drag, superb in fast sweeps, a touch nervous over kerbs.',
+  mass: 1315, wheelbase: 2.696, frontWeight: 0.425, cgHeight: 0.375, trackF: 1.69, trackR: 1.65, yawK: 0.94,
+  diff: { lock: 130, preload: 105, ramp: 0.42 }, rollStiffFront: 0.485,
+  CdA: 0.96, ClA: 2.44, aeroBalance: 0.415, brakeBias: 0.66,
+  engine: {
+    layout: 'V8F', cylinders: 8, turbo: true, inertia: 0.11,
+    idle: 1500, redline: 8000, limiter: 8100,
+    torque: [[2000, 345], [3000, 480], [4000, 577], [5000, 605], [6000, 594], [6500, 568], [7000, 530], [7500, 492], [8000, 443], [8300, 365]],
+    friction: [22, 0.012],
+  },
+  gears: [2.82, 2.20, 1.80, 1.47, 1.23, 1.05], finalDrive: 3.45,
+  body: { style: 'gt', shape: 'mc720', length: 4.66, width: 2.04, height: 1.20, color: 0xff7a00 },
+});
+
+export const CAR_ORDER = ['gt3', 'r8lms', 'huracan', 'amggt3', 'f296gt3', 'mc720s', 'f458', 'hypercar', 'lmp1', 'mini', 'hatch', 'coupe', 'formula', 'ev'];
