@@ -110,6 +110,22 @@ export function score(ref, render) {
 }
 export const mean = (rows, k, flt = () => true) => { const v = rows.filter(flt).map(r => r[k]).filter(Number.isFinite); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : NaN; };
 
+// Cross-recording check: the same car scored against recordings that contributed NOTHING to its bank
+// (a different car of the same engine type), tools/audio-ref/x-<car>-<what>.json.
+function crossCheck(cars) {
+  const dir = path.join(here, 'audio-ref'); let any = false;
+  for (const f of fs.readdirSync(dir).filter(f => f.startsWith('x-')).sort()) {
+    const [, id, what] = f.replace('.json', '').split('-'); if (!CARS[id] || !cars.includes(id)) continue;
+    const ref = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')), spec = CARS[id], cfg = audioConfigFor(spec), bank = loadBank(cfg.bankName);
+    const red = spec.engine.redline; ref.bands = ref.bands.filter(b => b.rpm <= red * 1.03 && b.rpm >= spec.engine.idle * 0.8);
+    let lcfg; try { lcfg = legacy.audioConfigFor(spec); if (!lcfg.off) throw 0; } catch (e) { lcfg = Object.assign({}, legacy.RaceAudioSynth.layouts().I4, { redline: red, turbo: true }); }
+    const before = score(ref, (rpm, on) => renderSynth(legacy.RaceAudioSynth, lcfg, null, rpm, on)), after = score(ref, (rpm, on) => renderSynth(RaceAudioSynth, cfg, bank, rpm, on));
+    if (!any) { console.log('\ncross-recording (reference = a different car of the same engine type, not in the bank)'); any = true; }
+    const f1 = (v) => Number.isFinite(v) ? v.toFixed(1).padStart(5) : '    -';
+    console.log(`${id.padEnd(9)} vs ${what.padEnd(12)} ${String(before.length).padStart(3)} bands | LSD before ${f1(mean(before, 'lsd'))} after ${f1(mean(after, 'lsd'))} | ORD before ${f1(mean(before, 'ord'))} after ${f1(mean(after, 'ord'))}`);
+  }
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2).filter(a => !a.startsWith('-')), verbose = process.argv.includes('-v');
   const cars = args.length ? args : Object.keys(CARS);
@@ -128,4 +144,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     console.log(`${id.padEnd(10)} ${String(before.length).padStart(5)}  ${String(held).padStart(8)} |        ${f1(mean(before, 'lsd', on))}  ${f1(mean(synth, 'lsd', on))}  ${after ? f1(mean(after, 'lsd', on)) : '    -'} |        ${f1(mean(before, 'ord', on))}  ${f1(mean(synth, 'ord', on))}  ${after ? f1(mean(after, 'ord', on)) : '    -'} |               ${f1(mean(before, 'lsd', offf))} ${after ? f1(mean(after, 'lsd', offf)) : '    -'} |     ${mean(before, 'qref', on).toFixed(2)}  ${mean(before, 'q', on).toFixed(2)}  ${after ? mean(after, 'q', on).toFixed(2) : '-'}`);
     if (verbose) for (let i = 0; i < before.length; i++) console.log(`    ${before[i].rpm.toFixed(0).padStart(6)} rpm ${before[i].state.padEnd(3)} held=${before[i].held ? 'y' : 'n'}  LSD ${f1(before[i].lsd)} -> ${after ? f1(after[i].lsd) : '-'}   ORD ${f1(before[i].ord)} -> ${after ? f1(after[i].ord) : '-'}`);
   }
+  crossCheck(cars);
 }

@@ -20,3 +20,35 @@ missing the game falls back to the procedural version of that material.
 Everything else (armco, tyre walls, debris fence, facades, labels, kerb paint, road markings, car bodies) is generated procedurally in `src/game/textures.js`, `src/game/world.js` and `src/game/carmodel.js`.
 
 Total added download: about 11 MB (`public/env` 3.0 MB, `public/tex` 7.4 MB).
+
+## Car models
+
+Detailed car bodies loaded by `attachGLB` in `src/game/carmodel.js` (per-car settings in `GLB_MODELS` there). Each car keeps
+its procedural body as the loading stand-in, the ghost and the fallback. All six new files came from Sketchfab uploads whose
+licence is recorded both on the model page and inside the downloaded file (`asset.extras`: author, license, source, title —
+kept in the shipped `.glb`). Sketchfab's download API needs a login, so the files were fetched from the Objaverse 1.0 mirror
+(Allen Institute for AI, `https://huggingface.co/datasets/allenai/objaverse`, path `glbs/<group>/<sketchfab uid>.glb`), which
+redistributes them under the same licences.
+
+| File (under `public/`) | Car in the game | Source | Author | Licence | Size, triangles |
+|---|---|---|---|---|---|
+| `models/gt3.glb` | Arrow GT3-R | "(FREE) Porsche 911 Carrera 4S" — https://sketchfab.com/3d-models/free-porsche-911-carrera-4s-d01b254483794de3819786d93e0e1ebf | Karol Miklas | **CC BY-SA 4.0** (the modified file is shared under the same licence) | 0.72 MB, 108k |
+| `models/hatch.glb` | Vanta RS | "Honda Civic Type-R" — https://sketchfab.com/3d-models/honda-civic-type-r-770a5c9b025449f59769d8cd27d915bb | shindedhirendra780 | CC BY 4.0 | 0.55 MB, 172k |
+| `models/coupe.glb` | Brawler GT 5.0 | "'67 Mustang (High poly)" — https://sketchfab.com/3d-models/67-mustang-high-poly-4223fcc87baa4ac58be2910a5367d7d0 | Nick Broad | CC BY 4.0 | 0.74 MB, 138k |
+| `models/formula.glb` | FX-10 | "RaceCar RC-09 (Re-imagined model)" — https://sketchfab.com/3d-models/racecar-rc-09-re-imagined-model-a56b6fdcf3b742758b7c37f1e181004d | Dahie (original model and tyres based on work by Enzojz, as credited by the author) | CC BY 4.0 | 1.14 MB, 91k |
+| `models/hypercar.glb` | Aurelia LMH | "AUDI R18" — https://sketchfab.com/3d-models/audi-r18-3a5f4938e662429b8633120aa62805a4 | Godheim | CC BY 4.0 | 0.32 MB, 44k |
+| `models/ev.glb` | Volt-R Quad | "Generic Electric sedan vector" — https://sketchfab.com/3d-models/generic-electric-sedan-95f32d0d23bf4db48b1b28843385685f | Antonis_zks | CC BY 4.0 | 0.44 MB, 144k |
+
+Changes made to every file (`tools/models-build.mjs`; `tools/models-preview.mjs` renders a quick check): node transforms baked
+and the car re-oriented to the game's axes (+X forward, +Y up, metres, on the ground, origin at mid-wheelbase); the four wheels
+cut out of the body into `wheel_fl|fr|rl|rr` nodes (the 911's steered front wheels straightened); meshes merged per material,
+welded and simplified; textures re-encoded as WebP at up to 1024 px; Draco compression. Per file: the 911 lost its ground plane
+and separate clear-coat shell and was scaled to a 2.45 m wheelbase; the Civic to 2.70 m; the Mustang to 2.74 m; the RC-09 to
+3.05 m; the electric saloon to 2.90 m; the R18's blended body material was made opaque. At run time the game replaces paint,
+glass and tyre materials on the 911 (white), Civic (blue), Mustang (red) and electric saloon (dark grey), scales each model to
+the simulated wheelbase and adds brake lamps. The RC-09 and R18 keep the liveries their authors painted (including the sponsor
+names on them). Brand names and badges on these models belong to their owners; the cars keep fictional names in the game.
+
+The Mini Cooper S is still procedural: no openly licensed F56 model with a credible origin was found.
+
+Car models add about 3.9 MB (`public/models/*.glb` is 5.6 MB including the existing Ferrari).

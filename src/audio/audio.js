@@ -147,7 +147,8 @@ export class AudioEngine {
       if (sf === SURF.KERB) kerb += 0.5;
     }
     const v = car.speed, vf = Math.min(1, v / 18);
-    const load = car.limiterOn || car.shiftTimer > 0 ? 0 : Math.max(-0.3, Math.min(1, car.engineTorque / this.peakTorque));
+    const tq = (car.engineTorque || 0) / this.peakTorque;      // engineTorque is undefined before the first sim step
+    const load = car.limiterOn || car.shiftTimer > 0 ? 0 : Math.max(-0.3, Math.min(1, tq));
     if (car.gear !== this.lastGear) { this.trigger('shift', spec.shiftTime < 0.1 ? 0.9 : 0.35); this.lastGear = car.gear; }
     if (car.impact > 0.8) this.trigger('impact', car.impact / 7);
     const tv = cam === 'tv', cockpit = cam === 'bonnet';
@@ -155,7 +156,7 @@ export class AudioEngine {
       rpm: Math.max(spec.engine.electric ? 0 : spec.engine.idle * 0.9, car.rpm), throttle: car.limiterOn ? 0 : car.throttle, load,
       speed: v, squeal, scrub, grass: grass * vf, gravel: gravel * vf, kerb: Math.min(1, kerb) * (v > 3 ? 1 : 0),
       brake: (car.brake || 0) * (v > 2 ? 1 : 0),
-      boost: car.boost, wheelRps: v / (6.2832 * spec.wheelRadius), motor: car.engineTorque / this.peakTorque,
+      boost: car.boost, wheelRps: v / (6.2832 * spec.wheelRadius), motor: tq,
       cockpit: cockpit ? 1 : 0, tv: tv ? 1 : 0,
       master: this.muted || paused ? 0 : this.volume,
     };

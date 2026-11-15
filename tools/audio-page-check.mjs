@@ -21,12 +21,16 @@ const argv = process.argv.slice(2); let url = 'http://127.0.0.1:5173/';
 const ui = argv.indexOf('--url'); if (ui >= 0) { url = argv[ui + 1]; argv.splice(ui, 2); }
 const cars = argv.length ? argv : Object.keys(CARS);
 
-const TAP = `(() => { const a = window.__game.audio, c = a.ctx; const sp = c.createScriptProcessor(4096, 2, 1); const z = c.createGain(); z.gain.value = 0;
-  window.__tap = { chunks: [], on: false, sr: c.sampleRate, sp, z };
-  sp.onaudioprocess = (e) => { if (!window.__tap.on) return; const l = e.inputBuffer.getChannelData(0), r = e.inputBuffer.getChannelData(1), m = new Float32Array(l.length); for (let i = 0; i < l.length; i++) m[i] = (l[i] + r[i]) / 2; window.__tap.chunks.push(m); };
-  a.out.connect(sp); sp.connect(z); z.connect(c.destination); })()`;
-const GRAB = `(() => { const t = window.__tap; t.on = false; let n = 0; for (const c of t.chunks) n += c.length; const o = new Float32Array(n); let p = 0; for (const c of t.chunks) { o.set(c, p); p += c.length; } t.chunks = [];
-  const b = new Uint8Array(o.buffer); let s = ''; for (let i = 0; i < b.length; i += 8192) s += String.fromCharCode.apply(null, b.subarray(i, i + 8192)); return btoa(s); })()`;
+const TAP = `(async () => { const a = window.__game.audio, c = a.ctx;
+  const src = "class R extends AudioWorkletProcessor { constructor() { super(); this.on = false; this.ch = []; this.port.onmessage = (e) => { if (e.data === 'on') { this.ch = []; this.on = true; } else { this.on = false; this.port.postMessage(this.ch); this.ch = []; } }; } process(i) { const x = i[0]; if (this.on && x && x[0]) { const m = new Float32Array(x[0].length), r = x[1] || x[0]; for (let k = 0; k < m.length; k++) m[k] = (x[0][k] + r[k]) / 2; this.ch.push(m); } return true; } } registerProcessor('tap-rec', R);";
+  await c.audioWorklet.addModule(URL.createObjectURL(new Blob([src], { type: 'application/javascript' })));
+  const n = new AudioWorkletNode(c, 'tap-rec', { numberOfInputs: 1, numberOfOutputs: 0, channelCount: 2, channelCountMode: 'explicit' });
+  a.out.connect(n); window.__tap = { n, sr: c.sampleRate };
+  window.__tapOn = () => n.port.postMessage('on');
+  window.__hold = (h) => { a.hold = h; if (h) a._send({ set: h }); };
+  window.__tapGrab = () => new Promise((res) => { n.port.onmessage = (e) => { let len = 0; for (const ch of e.data) len += ch.length; const o = new Float32Array(len); let p = 0; for (const ch of e.data) { o.set(ch, p); p += ch.length; }
+    const b = new Uint8Array(o.buffer); let s = ''; for (let i = 0; i < b.length; i += 8192) s += String.fromCharCode.apply(null, b.subarray(i, i + 8192)); res(btoa(s)); }; n.port.postMessage('off'); }); })()`;
+const GRAB = `window.__tapGrab()`;
 const decode = (b64, sr) => { const b = Buffer.from(b64, 'base64'); const x = new Float32Array(b.buffer, b.byteOffset, b.length >> 2); if (sr === SR) return x; const n = Math.floor(x.length * SR / sr), y = new Float32Array(n); for (let i = 0; i < n; i++) { const q = i * sr / SR, k = q | 0; y[i] = x[k] + (q - k) * ((x[k + 1] || 0) - x[k]); } return y; };
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -55,19 +59,19 @@ for (const id of cars) {
     const caps = new Map();
     for (const b of ref.bands) {
       const on = b.state === 'on', rpm = b.rpm / (ref.rpmScale || 1);
-      await page.evaluate(([h]) => { window.__game.audio.hold = h; }, [Object.assign({ rpm, throttle: on ? 1 : 0, load: on ? 1 : -0.12, motor: on ? 1 : 0 }, quiet)]);
+      await page.evaluate(([h]) => { window.__hold(h); }, [Object.assign({ rpm, throttle: on ? 1 : 0, load: on ? 1 : -0.12, motor: on ? 1 : 0 }, quiet)]);
       await sleep(350);
-      await page.evaluate(() => { window.__tap.on = true; });
+      await page.evaluate(() => { window.__tapOn(); });
       await sleep(900);
       caps.set(b, decode(await page.evaluate(GRAB), st.sr));
     }
-    await page.evaluate(() => { window.__game.audio.hold = null; });
+    await page.evaluate(() => { window.__hold(null); });
     const rows2 = []; for (const b of ref.bands) rows2.push(...score({ ...ref, bands: [b] }, () => caps.get(b)));
     const on = r => r.state === 'on', off = r => r.state === 'off';
     line += ` | in-page LSD on ${f1(mean(rows2, 'lsd', on))} dB, off ${f1(mean(rows2, 'lsd', off))} dB, ORD on ${f1(mean(rows2, 'ord', on))} dB (${rows2.length} bands)`;
   } else line += ' | no reference recording (synthesis only)';
   // free driving: level and clipping of the real mix
-  await page.evaluate(() => { window.__tap.on = true; });
+  await page.evaluate(() => { window.__tapOn(); });
   await sleep(8000);
   const x = decode(await page.evaluate(GRAB), st.sr);
   let pk = 0, e = 0, clip = 0; for (const v of x) { const a = Math.abs(v); if (a > pk) pk = a; if (a >= 0.999) clip++; e += v * v; }
@@ -76,10 +80,10 @@ for (const id of cars) {
   await page.close();
   if (cfg.bankName) {
     const fb = await open(browser, id, true); await sleep(2500);
-    await fb.page.evaluate(TAP); await fb.page.evaluate(() => { window.__tap.on = true; }); await sleep(5000);
-    const y = decode(await fb.page.evaluate(GRAB), st.sr); let e2 = 0; for (const v of y) e2 += v * v;
-    const v2 = await fb.page.evaluate(() => window.__game.audio.voice);
-    console.log(`          bank blocked -> voice=${v2}, rms ${(20 * Math.log10(Math.sqrt(e2 / Math.max(1, y.length)) + 1e-9)).toFixed(1)} dBFS, errors ${fb.errors.length}`);
+    await fb.page.evaluate(TAP); await fb.page.evaluate(() => { window.__tapOn(); }); await sleep(2500);
+    const y = decode(await fb.page.evaluate(GRAB), st.sr); let e2 = 0, bad = 0; for (const v of y) { if (Number.isFinite(v)) e2 += v * v; else bad++; }
+    const v2 = await fb.page.evaluate(() => window.__game.audio.voice); if (bad) console.log("   debug", Array.from(y.slice(0, 3)), Array.from(y.slice(50000, 50003)), await fb.page.evaluate(() => JSON.stringify(window.__game.audio.cfg).slice(0, 200)));
+    console.log(`          bank blocked -> voice=${v2}, rms ${(20 * Math.log10(Math.sqrt(e2 / Math.max(1, y.length)) + 1e-9)).toFixed(1)} dBFS (${y.length} samples, ${bad} non-finite), errors ${fb.errors.length}`);
     await fb.page.close();
   }
 }

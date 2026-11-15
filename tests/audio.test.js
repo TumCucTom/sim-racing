@@ -66,10 +66,18 @@ test('even-firing engines peak at cylinders/2 x crank frequency (synth and recor
       const rpm = Math.round(e.redline * frac), firing = rpm / 60 * cyl / 2;
       const x = render(id, rpm, { voice });
       // firing fundamental plus its octave (exhaust formants can favour either)
-      const atFiring = goertzel(x, firing) + goertzel(x, firing * 2);
-      // energy at the firing order must dominate the half-order and an inharmonic neighbour
-      assert.ok(atFiring > 2 * goertzel(x, firing * 0.5), `${id}/${voice}@${rpm} firing vs half order`);
-      assert.ok(atFiring > 8 * goertzel(x, firing * 1.37), `${id}/${voice}@${rpm} firing vs inharmonic`);
+      const atFiring = goertzel(x, firing) + goertzel(x, firing * 2), half = goertzel(x, firing * 0.5);
+      // Energy at the firing order must dominate the half-order and an inharmonic neighbour. One physical
+      // exception: a V10 recorded trackside is heard one exhaust bank at a time, and a bank of five fires at
+      // HALF the engine's firing frequency (2.5x crank) - in the real F1 recordings that order is the
+      // strongest. There the firing order must still be clearly present and the series strictly harmonic.
+      if (voice === 'bank' && cyl === 10) {
+        assert.ok(atFiring > 0.25 * half, `${id}/${voice}@${rpm} firing order present next to the bank order`);
+        assert.ok(atFiring + half > 8 * (goertzel(x, firing * 1.37) + goertzel(x, firing * 0.685)), `${id}/${voice}@${rpm} harmonic vs inharmonic`);
+      } else {
+        assert.ok(atFiring > 2 * half, `${id}/${voice}@${rpm} firing vs half order`);
+        assert.ok(atFiring > 8 * goertzel(x, firing * 1.37), `${id}/${voice}@${rpm} firing vs inharmonic`);
+      }
     }
   }
 });
@@ -180,6 +188,18 @@ test('tyre squeal is tonal and tracks slip; cockpit is darker than outside; trac
   assert.ok(tilt(cab) < 0.5 * tilt(out), `cockpit tilt ${tilt(cab)} vs ${tilt(out)}`);
   const wind = render('ev', 0, { throttle: 0, set: { ...quiet, speed: 70 } }), tv = render('ev', 0, { throttle: 0, set: { ...quiet, speed: 70, tv: 1 }, seconds: 2.5 });
   assert.ok(stats(wind).rms > 5 * stats(tv).rms, 'no wind or tyre roar at the trackside camera');
+});
+
+test('bad parameters (NaN, undefined) never poison the voice', () => {
+  for (const id of ['gt3', 'ev']) for (const voice of voicesOf(id)) {
+    const s = new RaceAudioSynth(SR), cfg = audioConfigFor(CARS[id]); s.configure(cfg);
+    if (voice === 'bank') { const b = bankFor(id); s.setBank(Object.assign({}, b.meta, { car: cfg.id }), b.pcm); }
+    const L = new Float32Array(4800), R = new Float32Array(4800);
+    s.set({ rpm: NaN, load: NaN, motor: undefined, throttle: Infinity, speed: null, master: 0.6 }); s.trigger('impact', NaN); s.trigger('shift', undefined);
+    s.process(L, R, 4800);
+    s.set({ rpm: 5000, load: 1, motor: 1, throttle: 1 }); s.process(L, R, 4800);
+    assert.ok(stats(L).rms > 0.003, `${id}/${voice} recovers`);
+  }
 });
 
 test('surfaces, kerbs, brakes, impacts and shifts each add sound', () => {

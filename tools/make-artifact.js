@@ -11,7 +11,9 @@ const b64 = (f) => fs.readFileSync(f).toString('base64');
 // Binary assets the page cannot fetch as side files (.glb, .hdr) are always embedded.
 // Images (.jpg/.png) are copied next to the page as side files under their normal
 // relative URLs; pass --inline-images to embed them as data: URIs instead (adds ~11 MB).
-const assets = { 'models/ferrari.glb': b64('public/models/ferrari.glb'), 'env/sky_1k.hdr': b64('public/env/sky_1k.hdr') };
+const assets = { 'env/sky_1k.hdr': b64('public/env/sky_1k.hdr') };
+// every car model (see GLB_MODELS in src/game/carmodel.js); about 5.7 MB of .glb in total
+for (const f of fs.readdirSync('public/models').filter(f => f.endsWith('.glb')).sort()) assets['models/' + f] = b64('public/models/' + f);
 const images = ['models/ferrari_ao.png', 'env/sky_8k.jpg', ...fs.readdirSync('public/tex').filter(f => /\.(jpg|png)$/.test(f)).map(f => 'tex/' + f)];
 const inlineImages = process.argv.includes('--inline-images');
 fs.mkdirSync('artifact', { recursive: true });

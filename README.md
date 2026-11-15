@@ -1,14 +1,18 @@
 # Racing Simulator
 
-A browser racing simulator with a deterministic vehicle-dynamics core, five
-cars from different classes plus a real Ferrari 458 Italia, four circuits (one original, three real layouts),
-synthesised engine audio, an interactive telemetry overlay — and an AI driver
-trained with reinforcement learning on the same physics code the browser runs.
+A browser racing simulator with a deterministic vehicle-dynamics core, eight
+cars from different classes (GT3, Ferrari 458, Le Mans hypercar, stock Mini
+Cooper S, hot hatch, muscle coupe, V10 single-seater, electric saloon), six
+circuits (one original; Silverstone, Spa, Monza, the Nürburgring Nordschleife
+and Monaco from real survey / map data), engine audio played from real
+recordings, an interactive telemetry overlay, AI drivers that follow a computed
+racing line and trail-brake — and an AI driver trained with reinforcement
+learning on the same physics code the browser runs.
 
 ```bash
 npm install
 npm run dev        # http://127.0.0.1:5173
-npm test           # 16 tests: physics, determinism, car envelopes, tracks, audio
+npm test           # 24 tests: physics, determinism, car envelopes, tracks, audio
 npm run validate   # measure every car against real-world figures
 npm run train -- --car gt3 --seed 1 --steps 3000000
 npm run benchmark  # fixed-seed RL vs baseline, writes docs/benchmark-gt3.json
@@ -18,7 +22,8 @@ npm run plot       # docs/learning-curve-gt3.svg, docs/benchmark-gt3.svg
 Controls: **WASD / arrows** drive (gamepad supported) · **Q / E** shift ·
 **M** auto/manual · **R** recover · **Enter** restart · **C** camera ·
 **T** telemetry · **G** ghost (best / AI) · **I** AI autopilot · **Z** ABS ·
-**X** TC · **F** perf stats · **N** mute · **1–6** car · **Esc** menu.
+**X** TC · **L** racing-line guide · **F** perf stats · **N** mute ·
+**1–8** car · **Esc** menu.
 
 ## Architecture
 
@@ -26,13 +31,14 @@ Controls: **WASD / arrows** drive (gamepad supported) · **Q / E** shift ·
 src/sim/      deterministic core, no DOM — shared by browser, tests and RL
   track.js      circuits -> typed arrays (centreline, width, curvature, elevation, walls)
   vehicle.js    vehicle dynamics (300 Hz fixed step)
-  cars.js       six car specifications + real-world reference envelopes
+  cars.js       eight car specifications + real-world reference envelopes
+  racing-line.js minimum-curvature racing line for any circuit
   sim.js        car + track + lap/sector timing + track limits
-  drivers/      scripted baseline, RL observation/action interface, policy runner
+  drivers/      line-following driver, RL observation/action interface, policy runner
 src/game/     Three.js renderer, cameras, HUD, telemetry, effects, cannon-es props
-src/audio/    procedural audio synthesiser (AudioWorklet)
+src/audio/    AudioWorklet engine: recorded engine cycles + synthesised tyres, wind, turbo
 rl/           environment, PPO, training, benchmark, plots
-tools/        car validation, lap runner, headless screenshot helpers
+tools/        car validation, lap/line tools, audio and car-model build pipelines, screenshots
 tests/        node:test suites
 ```
 
@@ -70,6 +76,8 @@ checks the result against a published range for that class of car:
 |---|---|---|---|---|---|---|
 | Arrow GT3-R | 531 | 1320 | 2.93 [2.9,3.6] ok | 24.2 [22,29] ok | 1.54 [1.45,1.75] ok | 283 [270,295] ok |
 | Ferrari 458 Italia | 562 | 1565 | 3.40 [3.2,3.7] ok | 31.8 [30,35] ok | 1.07 [1,1.15] ok | 335 [315,335] ok |
+| Aurelia LMH | 671 | 1110 | 2.53 [2.4,3.1] ok | 22.0 [17,23] ok | 2.01 [1.9,2.8] ok | 329 [325,350] ok |
+| Mini Cooper S | 189 | 1310 | 7.22 [6.4,7.3] ok | 35.9 [33,38] ok | 0.90 [0.88,1.02] ok | 237 [225,240] ok |
 | Vanta RS | 315 | 1455 | 5.50 [5,6] ok | 31.8 [31,37] ok | 1.09 [0.98,1.12] ok | 273 [262,282] ok |
 | Brawler GT 5.0 | 480 | 1795 | 4.70 [4.2,5] ok | 32.5 [31.5,37] ok | 0.98 [0.93,1.05] ok | 300 [270,300] ok |
 | FX-10 | 883 | 655 | 2.34 [2.2,2.9] ok | 20.6 [15,21] ok | 2.35 [2.3,3.2] ok | 333 [320,350] ok |
@@ -77,24 +85,65 @@ checks the result against a published range for that class of car:
 
 Format: measured `[reference range]`. The muscle coupe's top speed is unrestricted (the real car is limited to 250 km/h).
 
-The lap-time hierarchy on the original circuit (same scripted driver):
-formula 57 s < GT3 72 s < EV 84 s < hot hatch 90 s ≈ muscle coupe 91 s.
+The Aurelia LMH is a 499P-class Le Mans Hypercar (twin-turbo V6, ~680 hp,
+1110 kg, high downforce, no ABS); the Mini is a stock F56 Cooper S (2.0 turbo, FWD,
+road tyres). Flying-lap times of the in-game AI (racing-line driver, shipped
+tuning, all laps inside track limits; `node tools/ai-laps.js`):
+
+| car | Ravenscar | Silverstone | Spa | Monza | Nordschleife | Monaco |
+|---|---|---|---|---|---|---|
+| FX-10 | 0:53.54 | 1:58.42 | 2:08.93 | 1:37.46 | 5:49.00 | 1:34.11 |
+| Aurelia LMH | 0:56.23 | 2:02.39 | 2:15.14 | 1:43.94 | 6:31.97 | 1:40.37 |
+| Arrow GT3-R | 1:04.49 | 2:19.78 | 2:34.87 | 1:57.27 | 7:27.74 | 1:46.91 |
+| Ferrari 458 | 1:15.95 | 2:43.20 | 2:59.27 | 2:11.55 | 8:47.63 | 2:03.42 |
+| Volt-R | 1:19.09 | 2:49.34 | 3:05.59 | 2:14.41 | 8:44.79 | 2:01.37 |
+| Vanta RS | 1:20.83 | 2:52.82 | 3:12.09 | 2:23.72 | 9:30.78 | 2:11.01 |
+| Brawler GT | 1:21.50 | 2:54.68 | 3:12.90 | 2:22.70 | 9:34.15 | 2:11.70 |
+| Mini Cooper S | 1:28.97 | 3:07.44 | 3:29.80 | 2:38.57 | 10:28.72 | 2:23.31 |
+
+The class order is what it should be everywhere. Absolute pace on the real
+circuits is 10-15 % off real-world lap records for the class (e.g. GT3 at Spa:
+2:34.9 here, about 2:17 in reality): the driver keeps a safety margin and the
+model has no suspension, so kerb-riding and crest behaviour are missing.
 
 ### Circuits
-| Circuit | Length | Source |
-|---|---|---|
-| Ravenscar Ridge | 2.91 km | Original design: 10 turns, 23 m relief, hairpin, esses, flat-out kink |
-| Silverstone GP | 5.89 km | Surveyed centreline + widths (TUMFTM racetrack-database, LGPL-3.0) |
-| Spa-Francorchamps | 7.00 km | same |
-| Monza | 5.79 km | same |
+| Circuit | Length | Layout source | Elevation |
+|---|---|---|---|
+| Ravenscar Ridge | 2.91 km | Original design: 10 turns, hairpin, esses, flat-out kink | designed, 23 m relief |
+| Silverstone GP | 5.89 km | Surveyed centreline + widths (TUMFTM racetrack-database, LGPL-3.0) | hand-approximated (nearly flat) |
+| Spa-Francorchamps | 7.00 km | same | EU-DEM 25 m terrain model, 106 m relief |
+| Monza | 5.79 km | same | EU-DEM 25 m |
+| Nürburgring Nordschleife | 20.75 km | OpenStreetMap centreline (ODbL) | EU-DEM 25 m, 288 m relief |
+| Monaco | 3.31 km | OpenStreetMap street centrelines (ODbL), official 3.337 km | SRTM 30 m, ~53 m relief, noisy between buildings so gradient is capped at 11 % |
 
-What "real" means here, precisely: the **plan-view layout and track width are
-real survey data** (lap lengths are within 0.5 % of the official figures —
-tested). The source has **no elevation**, so height on the real circuits is a
-hand-approximated profile (Spa's ~100 m of relief is roughly right in shape,
-not surveyed). **Kerbs, run-off, barriers, buildings and scenery are
-procedurally generated**, not replicas of the real venues. Laser-scan-grade
-recreations would need licensed scan data and hand-built art assets.
+What "real" means here, precisely: the **plan-view layout is real survey or
+map data** (lap lengths within 1 % of official figures — tested), and elevation
+on four of the five real circuits is sampled from public terrain models and
+smoothed. Track width is surveyed for the TUMFTM circuits and estimated for
+the Nordschleife and Monaco. **Kerbs, run-off, barriers, buildings and scenery
+are generated**, themed per circuit (forest and close armco at the
+Nordschleife, barriers at the kerb and apartment blocks at Monaco) but not
+replicas of the real venues: no Monaco tunnel or harbour, no Eau Rouge
+grandstands. Laser-scan-grade recreations need licensed scan data.
+
+### AI racing line
+`src/sim/racing-line.js` computes a minimum-curvature line inside the track
+limits for every circuit (projected Gauss-Seidel, coarse to fine). The AI
+driver follows it with pure pursuit and a curvature-limited speed profile, and
+**trail-brakes**: brake pressure is released as lateral load builds, by a
+per-car fraction. Measured with `tools/trail.js` on Ravenscar in the GT3: the
+line driver spends 42 % of its braking time above 70 % of cornering grip
+(centre-line driver 8 %, RL policy 60 %). Press **L** in the game to draw the
+line on the road, coloured by throttle (green), coast (amber) and brake (red).
+
+### Rendering
+Three.js r187 with image-based lighting from a photographed HDR sky (Poly
+Haven), scanned PBR asphalt, grass, gravel and concrete (Poly Haven,
+ambientCG), rubbered-in racing line, AgX tone mapping, GTAO, bloom and SMAA on
+high quality. Seven of the eight cars use detailed third-party glTF models
+(Draco-compressed, wheels cut out and re-rigged offline by
+`tools/models-build.mjs`); every asset, author and licence is listed in
+[ASSETS.md](ASSETS.md).
 
 ### Audio
 The engine voice is built the way the sound is physically made: each cylinder

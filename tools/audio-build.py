@@ -26,19 +26,24 @@ def load(path, t0=0, t1=None):
 
 def track_f0(x, fmin, fmax, H=8, nwin=2048, hop=256, nfft=16384, halfpen=1.0, jump=0.5, w1=2.5):
     """Firing-frequency track by harmonic-comb salience + Viterbi. Returns t, f, salience-confidence."""
-    F, T, Z = stft(x, SR, window='hann', nperseg=nwin, noverlap=nwin - hop, nfft=nfft, boundary=None, padded=False)
-    A = np.abs(Z) ** 0.5
-    A = A / (A.mean(axis=0, keepdims=True) + 1e-9)
-    df = F[1]
     cands = np.exp(np.arange(np.log(fmin), np.log(fmax), 0.006))
-    S = np.zeros((len(cands), A.shape[1]))
-    for i, f in enumerate(cands):
-        s = 0
-        for h in range(1, H + 1):
-            if h * f > SR / 2 - 200: break
-            w = h ** -0.4 * (w1 if h == 1 else 1.0)    # the firing order itself must carry energy (guards against octave-down locks)
-            s = s + w * (A[int(round(h * f / df))] - halfpen * A[int(round((h - 0.5) * f / df))])
-        S[i] = s
+    df = SR / nfft
+    # salience per chunk (keeps memory flat for recordings several minutes long)
+    step = (int(12 * SR) // hop) * hop; Ss = []; Ts = []
+    for o in range(0, max(1, len(x) - nwin), step):
+        seg = x[o:o + step + nwin - hop]
+        if len(seg) < nwin: break
+        F, T, Z = stft(seg, SR, window='hann', nperseg=nwin, noverlap=nwin - hop, nfft=nfft, boundary=None, padded=False)
+        A = (np.abs(Z) ** 0.5).astype(np.float32)
+        A = A / (A.mean(axis=0, keepdims=True) + 1e-9)
+        Sc = np.zeros((len(cands), A.shape[1]), dtype=np.float32)
+        for i, f in enumerate(cands):
+            for h in range(1, H + 1):
+                if h * f > SR / 2 - 200: break
+                w = h ** -0.4 * (w1 if h == 1 else 1.0)    # the firing order itself must carry energy (guards against octave-down locks)
+                Sc[i] += w * (A[int(round(h * f / df))] - halfpen * A[int(round((h - 0.5) * f / df))])
+        Ss.append(Sc); Ts.append(T + o / SR)
+    S = np.concatenate(Ss, axis=1); T = np.concatenate(Ts)
     # Viterbi
     nC, nT = S.shape
     lf = np.log(cands)
@@ -119,7 +124,9 @@ def cycles_from_source(src, refdir):
     t, f, conf = track_f0(x, src['fmin'], src['fmax'], halfpen=src.get('halfpen', 1.0), jump=src.get('jump', 0.5), w1=src.get('w1', 2.5))
     ph, h, env = refine_phase(x, t, f, harm=src.get('harm', 1))
     ph = np.maximum.accumulate(ph)
-    th = ph / cyl                                   # 720-degree cycles
+    # 720-degree cycles. firingMul = 2 for recordings whose strongest comb is HALF the firing frequency
+    # (V10/V8 with separate bank exhausts heard from one side: the per-bank order dominates)
+    th = ph / (cyl / src.get('firingMul', 1))
     ts = np.arange(len(x)) / SR
     k0 = int(np.ceil(th[0] + 0.01)); k1 = int(np.floor(th[-1] - 2.3))
     ks = np.arange(k0, max(k0, k1))
@@ -157,7 +164,7 @@ def best_shift(g, tpl):
     c = np.fft.irfft(np.fft.rfft(g[:L]) * np.conj(np.fft.rfft(tpl)), L)
     s = int(np.argmax(c)); return s, c[s] / (np.linalg.norm(g[:L]) * np.linalg.norm(tpl) + 1e-12)
 
-def build_bank(car, rc, refdir, outdir, refout, verbose=True):
+def build_bank(car, rc, refdir, outdir, refout, verbose=False):
     cyl = rc['cyl']; K = rc.get('K', 8); qmin = rc.get('qmin', 0.55)
     lo, hi, nb = rc['rpmLo'], rc['rpmHi'], rc['bands']
     centers = lo * (hi / lo) ** (np.arange(nb) / (nb - 1))
@@ -169,9 +176,12 @@ def build_bank(car, rc, refdir, outdir, refout, verbose=True):
     for ti, trk in enumerate(tracks):
         for c in trk['cycles']:
             if c['rpm'] < lo * 0.9 or c['rpm'] > hi * 1.1: continue
+            if c['rpm'] < c['src'].get('rpmMin', 0) or c['rpm'] > c['src'].get('rpmMax', 1e9): continue
             b = int(np.searchsorted(edges, c['rpm'])); L = Ls[b]
             g = extract(trk, c['k'], L)
             q = ncorr(g[:L], g[L:2 * L])
+            if q < c['src'].get('q', qmin): continue          # not periodic enough: noise, crowd, limiter, mistracking
+            g = g.astype(np.float32)
             force = c['src'].get('state')
             if force is not None: sts = [1] if force == 'on' else [0] if force == 'off' else [0, 1]
             elif c['slope'] > up: sts = [1]
@@ -184,7 +194,7 @@ def build_bank(car, rc, refdir, outdir, refout, verbose=True):
     for b in range(nb):
         L = Ls[b]; entry = dict(rpm=float(centers[b]), L=L, on=None, off=None)
         for st, key in ((1, 'on'), (0, 'off')):
-            good = sorted([c for c in pools[(b, st)] if c['q'] >= qmin], key=lambda c: -c['q'])
+            good = sorted([c for c in pools[(b, st)] if c['q'] >= c['src'].get('q', qmin)], key=lambda c: -c['q'])
             cand = []
             for c in good:      # spread the picks so they are different combustion events
                 if all(c['ti'] != s['ti'] or abs(c['k'] - s['k']) >= 2 for s in cand): cand.append(c)
@@ -241,14 +251,14 @@ def build_bank(car, rc, refdir, outdir, refout, verbose=True):
     with open(os.path.join(outdir, car + '.wav'), 'wb') as fh: fh.write(b'RIFF' + struct.pack('<I', len(body)) + body)
     os.makedirs(refout, exist_ok=True)
     json.dump(ref, open(os.path.join(refout, car + '.json'), 'w'))
-    if verbose:
-        print(f"{car}: {len(i16) / SR:.1f}s of grains, {len(data) / 1e6:.2f} MB")
-        print('\n'.join(summary))
+    print(f"{car}: {len(i16) / SR:.1f}s of grains, {len(data) / 1e6:.2f} MB; real bands on: "
+          + ' '.join(f"{e['rpm']:.0f}" for e in meta['bands'] if e['on']) + ' | off: ' + ' '.join(f"{e['rpm']:.0f}" for e in meta['bands'] if e['off']))
+    if verbose: print('\n'.join(summary))
 
 def cmd_bank(a):
     rc = json.load(open(a.recipes))
     for car in (a.cars or [k for k in rc if not k.startswith('_')]):
-        build_bank(car, rc[car], a.refdir, a.outdir, a.refout)
+        build_bank(car, rc[car], a.refdir, a.outdir, a.refout, verbose=a.verbose)
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser(); sub = p.add_subparsers(dest='cmd')
@@ -256,7 +266,7 @@ if __name__ == '__main__':
     s.add_argument('--fmin', type=float, default=20); s.add_argument('--fmax', type=float, default=500)
     s.add_argument('--t0', type=float, default=0); s.add_argument('--t1', type=float, default=None)
     s.add_argument('--every', type=float, default=0.1); s.add_argument('--halfpen', type=float, default=1.0)
-    s = sub.add_parser('bank'); s.add_argument('recipes'); s.add_argument('refdir'); s.add_argument('--outdir', default='public/audio'); s.add_argument('--refout', default='tools/audio-ref'); s.add_argument('cars', nargs='*')
+    s = sub.add_parser('bank'); s.add_argument('recipes'); s.add_argument('refdir'); s.add_argument('--outdir', default='public/audio'); s.add_argument('--refout', default='tools/audio-ref'); s.add_argument('cars', nargs='*'); s.add_argument('-v', '--verbose', action='store_true')
     a = p.parse_args()
     if a.cmd == 'track': cmd_track(a)
     elif a.cmd == 'bank': cmd_bank(a)

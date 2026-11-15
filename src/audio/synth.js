@@ -102,8 +102,10 @@ export class RaceAudioSynth {
     return true;
   }
 
-  set(o) { for (const k in o) if (k in this.t) this.t[k] = o[k]; }
+  // non-finite values are ignored: a single NaN would otherwise stick in the smoothed state for good
+  set(o) { for (const k in o) { const v = o[k]; if (k in this.t && typeof v === 'number' && v === v && v !== Infinity && v !== -Infinity) this.t[k] = v; } }
   trigger(name, amount) {
+    if (!(amount > 0)) return;
     if (name === 'impact') { this.thump = Math.max(this.thump, Math.min(1.5, amount)); this.crunch = Math.max(this.crunch, Math.min(1.5, amount)); }
     else if (name === 'shift') { this.clunk = Math.min(1, amount); this.clunkPh = 0; }
   }
@@ -398,10 +400,10 @@ export function audioConfigFor(spec) {
   const base = all[eng.layout] || (eng.electric ? all.EV : all[byCyl[eng.cylinders]] || all.I4);
   const id = (spec && spec.id) || '';
   const extra = {
-    hatch: { turbo: true, gearWhine: 0, squealGain: 1.0, bright: 0.7, bankName: 'hatch' },
-    mini: { turbo: true, gearWhine: 0, squealGain: 1.05, bright: 0.6, turboGain: 0.6, pops: 0.08, bankName: 'mini' },
+    hatch: { turbo: true, gearWhine: 0, squealGain: 1.0, bright: 0.7, bankGain: 0.9, bankName: 'hatch' },
+    mini: { turbo: true, gearWhine: 0, squealGain: 1.05, bright: 0.6, turboGain: 0.6, pops: 0.08, bankGain: 0.72, gain: 0.75, bankName: 'mini' },
     coupe: { gearWhine: 0, squealGain: 1.1, bankName: 'coupe' },
-    gt3: { gearWhine: 1.0, squealGain: 0.55, bankName: 'gt3' },
+    gt3: { gearWhine: 1.0, squealGain: 0.55, bankGain: 1.08, bankName: 'gt3' },
     f458: { gearWhine: 0.15, squealGain: 0.9, bankName: 'f458' },
     hypercar: { turbo: true, gearWhine: 1.0, squealGain: 0.45, whineTeeth: 37, turboGain: 1.3, bankName: 'hypercar' },
     formula: { gearWhine: 0.7, squealGain: 0.35, bankName: 'formula' },

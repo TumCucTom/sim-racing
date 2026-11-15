@@ -1,6 +1,7 @@
-// Procedural car models. Bodies are lofted from a handful of key cross-section
-// stations per body style, so each car has a recognisable silhouette without
-// any external assets. Model space: +X forward, +Y up, +Z right; origin at
+// Car models. Every car has a procedural body, lofted from a handful of key
+// cross-section stations per body style; it is what the ghost car uses, what is
+// shown while a detailed glTF model (GLB_MODELS below) is loading, and what
+// remains if that file cannot be loaded. Model space: +X forward, +Y up, +Z right; origin at
 // the CG's ground projection.
 import * as THREE from 'three';
 import { labelTexture } from './textures.js';
@@ -236,7 +237,7 @@ function buildWheel(R, width, rimColor, race) {
 function box(w, h, d, mat, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; return m; }
 
 export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}) {
-  const glb = spec.body.style === 'glb' && !ghost ? spec.body : null;
+  const glb = ghost ? null : glbConfig(spec);   // detailed model, swapped in when it has loaded
   const b = spec.body.style === 'glb' ? { ...spec.body, style: spec.body.fallback } : spec.body, R = spec.wheelRadius;
   const root = new THREE.Group();        // follows the sim pose
   const chassis = new THREE.Group();     // pitches / rolls on the suspension
@@ -254,6 +255,7 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
   const tyreW = b.style === 'formula' ? [0.30, 0.38] : b.style === 'gt' ? [0.30, 0.32] : [0.25, 0.27];
   const wheels = [];
   const wheelZ = [];
+  let shadow = null;
 
   const kind = spec.id === 'hypercar' ? 'proto' : spec.id === 'mini' ? 'mini' : b.style;
   if (b.style !== 'formula') {
@@ -360,12 +362,12 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
     }
     if (b.style === 'hatch') chassis.add(box(mini ? 0.2 : 0.28, 0.03, b.width * 0.72, mini ? roofMat : paintMat, rear + (mini ? 0.12 : 0.36), b.height * 0.985, 0));
     if (b.style === 'coupe') chassis.add(box(0.12, 0.04, b.width * 0.7, paintMat, rear + 0.12, rs.pts[5][1] + 0.04, 0));
-    if (!ghost) root.add(contactShadow(b.length, b.width));
+    if (!ghost) root.add(shadow = contactShadow(b.length, b.width));
     wheelZ.push(hw - tyreW[0] / 2 - 0.005, hw - tyreW[1] / 2 - 0.005);
   } else {
     buildFormula(chassis, spec, { paintMat, carbon, black, tailMat, a, bb });
     wheelZ.push(spec.trackF / 2, spec.trackR / 2);
-    if (!ghost) root.add(contactShadow(spec.wheelbase + 1.2, 1.5));
+    if (!ghost) root.add(shadow = contactShadow(spec.wheelbase + 1.2, 1.5));
   }
 
   const rimColor = b.style === 'formula' ? 0x202024 : b.style === 'gt' ? 0xc9a227 : b.style === 'coupe' ? 0x2a2a2c : 0xb8bcc4;
@@ -386,57 +388,136 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
     });
   }
   const model = {
-    root, chassis, wheels, tailMat,
+    root, chassis, wheels, tailMat, shadow,
     // steer angle (rad) for front wheels, spin increment (rad) for all
     setWheel(i, steer, dSpin) { const w = wheels[i]; if (i < 2) w.steer.rotation.y = steer; w.spin.rotation.z -= dSpin; },
     setBrake(on) { tailMat.emissiveIntensity = on ? 3.2 : 0.35; },
     dispose() { this.disposed = true; root.traverse(o => { if (o.isMesh && !o.userData.shared) { o.geometry.dispose(); } }); },
   };
-  if (glb) attachGLB(model, spec, glb, { a, bb });
+  if (glb) attachGLB(model, spec, glb, { a, bb, color: colorOverride });
   return model;
 }
 
-// Swap the procedural stand-in for a detailed glTF model once it has loaded.
-function attachGLB(model, spec, body, { a, bb }) {
-  loadGLB(body.model).then((gltf) => {
+// ---------------------------------------------------------------------------
+// Detailed glTF car models (sources and licences: ASSETS.md).
+//
+// One small config per car id. Files made by tools/models-build.mjs are already
+// in game space (+X forward, +Y up, metres, on the ground) with four nodes
+// `wheel_fl|fr|rl|rr`, so most entries only say which materials are paint,
+// glass, tyres and tail lights. Everything is optional except `url`:
+//   rotY        turn the model about Y so its nose points along +X
+//   wheels      names of the four wheel nodes (FL, FR, RL, RR); `null` = the model has no
+//               separable wheels, it is shown as-is and its wheels stay static
+//   paint, paint2, glass, tyre, rim, tail
+//               lists of material names or mesh / parent-node names ('abc*' = prefix)
+//               that are re-materialled: body colour, second colour (roof), dark glass,
+//               rubber, bright metal, and the lenses that light up under braking
+//   color       paint colour override (default: the car's `body.color`); color2 for paint2
+//   paintProps  overrides for the paint material (metalness, roughness, ...)
+//   lamps       extra brake lamps for models whose tail lights are only a texture:
+//               [x, y, z, width, height] in the model's own metres, facing backwards
+//   shadow      [length, width] of the soft contact shadow in metres (default: model bounds)
+//   ao          { url, w, l } baked ground-shadow texture laid under the model (model axes)
+const GLB_MODELS = {
+  f458: {
+    url: 'models/ferrari.glb', rotY: -Math.PI / 2, wheels: ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr'],
+    paint: ['body'], glass: ['glass'], rim: ['rim_fl', 'rim_fr', 'rim_rr', 'rim_rl', 'trim'], tyre: ['tire*'], tail: ['lights_red'],
+    paintProps: { metalness: 0.9, roughness: 0.45, clearcoatRoughness: 0.03 }, ao: { url: 'models/ferrari_ao.png', w: 0.655 * 4, l: 1.3 * 4 },
+  },
+  // Porsche 911 Carrera 4S (991) by Karol Miklas, CC BY-SA 4.0 — stands in for the GT3 car
+  gt3: { url: 'models/gt3.glb', paint: ['paint'], glass: ['window'], tyre: ['rubber'], color: 0xe9ecef, lamps: [[-2.15, 0.742, -0.56, 0.3, 0.03], [-2.15, 0.742, 0.56, 0.3, 0.03]] },
+  // Honda Civic Type R (FK8) by shindedhirendra780, CC BY 4.0
+  hatch: { url: 'models/hatch.glb', paint: ['Material.001'], glass: ['Material.002'], tyre: ['tyre_belt', 'tyre_side'], tail: ['Material.003'] },
+  // 1967 Mustang fastback restomod by Nick Broad, CC BY 4.0
+  coupe: { url: 'models/coupe.glb', paint: ['Paint'], glass: ['Glass'], tyre: ['Tread', 'SideWall'], tail: ['TailLightInside', 'TailLightInsideDark', 'Material.002'] },
+  // "RaceCar RC-09" V10-era grand-prix car by Dahie, CC BY 4.0 (own livery, not repainted)
+  formula: { url: 'models/formula.glb', lamps: [[-2.0, 0.375, 0, 0.11, 0.11]], shadow: [4.9, 1.75] },
+  // Audi R18 e-tron quattro (LMP1) by Godheim, CC BY 4.0 (own livery, not repainted)
+  hypercar: { url: 'models/hypercar.glb', lamps: [[-2.185, 0.5, -0.86, 0.05, 0.3], [-2.185, 0.5, 0.86, 0.05, 0.3]] },
+  // "Generic Electric sedan" by Antonis_zks, CC BY 4.0
+  ev: { url: 'models/ev.glb', paint: ['Material.018'], glass: ['Material.020'], tyre: ['Material.002'], tail: ['Material.067'] },
+};
+const WHEEL_NODES = ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr'];
+function glbConfig(spec) {
+  const c = GLB_MODELS[spec.id];
+  if (c) return c;
+  return spec.body.style === 'glb' && spec.body.model ? { url: spec.body.model } : null;   // unknown car: show the file as-is
+}
+
+// Swap the procedural stand-in for a detailed glTF model once it has loaded. If the
+// file cannot be fetched or parsed the stand-in simply stays.
+function attachGLB(model, spec, cfg, { a, bb, color }) {
+  loadGLB(cfg.url).then((gltf) => {
     if (model.disposed) return;
     const car = gltf.scene.clone(true);
-    const bodyMat = new THREE.MeshPhysicalMaterial({ color: body.color, metalness: 0.9, roughness: 0.45, clearcoat: 1, clearcoatRoughness: 0.03 });
-    const detail = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 1, roughness: 0.4 });
-    const glass = new THREE.MeshPhysicalMaterial({ color: 0x0c1014, metalness: 0.6, roughness: 0.02, transparent: true, opacity: 0.72 });
-    const set = (name, mat) => { const o = car.getObjectByName(name); if (o) o.material = mat; };
-    set('body', bodyMat); set('glass', glass); set('trim', detail);
-    for (const n of ['rim_fl', 'rim_fr', 'rim_rr', 'rim_rl']) set(n, detail);
-    car.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.userData.shared = true; } });
-    const rubber = new THREE.MeshStandardMaterial({ color: 0x0c0c0d, roughness: 0.9, metalness: 0 });
-    car.traverse(o => { if (o.isMesh && o.name.startsWith('tire')) o.material = rubber; });
-    // the model's own tail-light lenses double as brake lights
+    const roles = ['paint', 'paint2', 'glass', 'tyre', 'rim', 'tail'].filter(r => cfg[r]);
+    const hit = (list, name) => !!name && list.some(n => (n.endsWith('*') ? name.startsWith(n.slice(0, -1)) : n === name));
+    const roleOf = (o) => {
+      for (const r of roles) for (let p = o, d = 0; p && d < 3; p = p.parent, d++) if (hit(cfg[r], p.name) || (d === 0 && hit(cfg[r], o.material?.name))) return r;
+      return null;
+    };
+    const paint = (c) => new THREE.MeshPhysicalMaterial({ color: c, metalness: 0.35, roughness: 0.38, clearcoat: 1, clearcoatRoughness: 0.05, ...cfg.paintProps });
     const tail = new THREE.MeshStandardMaterial({ color: 0x5a0000, emissive: 0xff1408, emissiveIntensity: 0.25, roughness: 0.3 });
-    const lr = car.getObjectByName('lights_red'); if (lr) lr.traverse(o => { if (o.isMesh) o.material = tail; });
-    model.setBrake = (on) => { tail.emissiveIntensity = on ? 3.5 : 0.25; };
-    const names = ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr'];
-    const gw = names.map(n => car.getObjectByName(n));
-    if (gw.some(w => !w)) return;                 // unexpected model layout: keep the stand-in
-    // model faces -Z; ours faces +X. Align axles with the sim's wheelbase.
-    const holder = new THREE.Group(); holder.rotation.y = -Math.PI / 2; holder.add(car);
-    const zf = gw[0].position.z, zr = gw[2].position.z, k = spec.wheelbase / Math.abs(zf - zr);
-    car.scale.setScalar(k);
-    car.position.z = -((zf + zr) / 2) * k;
-    holder.position.x = (a - bb) / 2;
-    // remove procedural parts, keep groups
+    const mats = {
+      paint: paint(color ?? cfg.color ?? spec.body.color), paint2: paint(cfg.color2 ?? 0xf2f2ee),
+      glass: new THREE.MeshPhysicalMaterial({ color: 0x0c1014, metalness: 0.6, roughness: 0.02, transparent: true, opacity: 0.72 }),
+      tyre: new THREE.MeshStandardMaterial({ color: 0x0c0c0d, roughness: 0.9, metalness: 0 }),
+      rim: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 1, roughness: 0.4 }), tail,
+    };
+    car.traverse(o => {
+      if (!o.isMesh) return;
+      const r = roleOf(o); if (r) { mats[r].side = o.material.side; o.material = mats[r]; }
+      o.castShadow = true; o.receiveShadow = true; o.userData.shared = true;   // geometry is shared with the cache
+    });
+    // nose along +X, then measure in the car's root frame
+    const holder = new THREE.Group(); holder.rotation.y = cfg.rotY || 0; holder.add(car);
+    if (cfg.ao) new THREE.TextureLoader().load(globalThis.__INLINE_ASSETS?.[cfg.ao.url] || cfg.ao.url, (tex) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(cfg.ao.w, cfg.ao.l), new THREE.MeshBasicMaterial({ map: tex, blending: THREE.MultiplyBlending, toneMapped: false, transparent: true, premultipliedAlpha: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }));
+      m.rotation.x = -Math.PI / 2; m.position.y = 0.012; m.renderOrder = 2; car.add(m);
+    });
+    holder.updateMatrixWorld(true);
+    const names = cfg.wheels === null ? null : (cfg.wheels || WHEEL_NODES);
+    let gw = names && names.map(n => car.getObjectByName(n));
+    if (gw && gw.some(w => !w)) gw = null;        // no separable wheels: the model is shown whole, wheels static
+    const box = new THREE.Box3().setFromObject(holder), mid = (a - bb) / 2;
+    let k, x0;
+    if (gw) {
+      const wp = gw.map(w => new THREE.Vector3().setFromMatrixPosition(w.matrixWorld));
+      const xf = (wp[0].x + wp[1].x) / 2, xr = (wp[2].x + wp[3].x) / 2;
+      k = spec.wheelbase / Math.abs(xf - xr); x0 = (xf + xr) / 2;   // axles land on the sim's axles
+    } else { k = spec.body.length / (box.max.x - box.min.x); x0 = (box.max.x + box.min.x) / 2; }
+    holder.scale.setScalar(k); holder.position.set(mid - x0 * k, -Math.min(0, box.min.y) * k, 0);
+    holder.updateMatrixWorld(true);
+    // extra brake lamps
+    const lampMat = new THREE.MeshBasicMaterial({ color: 0xff2a14, toneMapped: false, side: THREE.DoubleSide });
+    const lamps = (cfg.lamps || []).map(([x, y, z, w, h]) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), lampMat); m.rotation.y = -Math.PI / 2; m.position.set(x, y, z); m.visible = false; car.add(m); return m;
+    });
+    model.setBrake = (on) => { tail.emissiveIntensity = on ? 3.5 : 0.25; for (const l of lamps) l.visible = on; };
+    // replace the procedural parts
     for (const w of model.wheels) w.steer.visible = false;
     while (model.chassis.children.length) model.chassis.remove(model.chassis.children[0]);
     model.chassis.add(holder);
-    // wheels live inside the chassis in this model; steer + spin them there
-    for (const w of gw) w.rotation.order = 'YXZ';
-    const spin = [0, 0, 0, 0];
-    model.setWheel = (i, steer, dSpin) => { const w = gw[i]; spin[i] -= dSpin; if (i < 2) w.rotation.y = steer; w.rotation.x = spin[i]; };
-    // baked contact shadow under the car
-    new THREE.TextureLoader().load(globalThis.__INLINE_ASSETS?.['models/ferrari_ao.png'] || 'models/ferrari_ao.png', (tex) => {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.655 * 4 * k, 1.3 * 4 * k), new THREE.MeshBasicMaterial({ map: tex, blending: THREE.MultiplyBlending, toneMapped: false, transparent: true, premultipliedAlpha: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }));
-      m.rotation.x = -Math.PI / 2; m.position.y = 0.012; m.renderOrder = 2; m.userData.shared = false; car.add(m);
-    });
-  }).catch(() => { /* offline or blocked: the procedural stand-in remains */ });
+    if (gw) {
+      // each wheel moves out of the body into a steer > spin pair on the root, so it stays on the
+      // road while the body pitches and rolls, and spins about the car's lateral axis whatever
+      // the file's own axes are
+      const inv = new THREE.Matrix4(), m = new THREE.Matrix4();
+      const rig = gw.map((w) => {
+        const steer = new THREE.Group(), spin = new THREE.Group();
+        steer.position.setFromMatrixPosition(w.matrixWorld); steer.add(spin); steer.updateMatrixWorld(true);
+        m.multiplyMatrices(inv.copy(steer.matrixWorld).invert(), w.matrixWorld).decompose(w.position, w.quaternion, w.scale);
+        spin.add(w); model.root.add(steer);
+        return { steer, spin };
+      });
+      model.setWheel = (i, steer, dSpin) => { const w = rig[i]; if (i < 2) w.steer.rotation.y = steer; w.spin.rotation.z -= dSpin; };
+    } else model.setWheel = () => {};
+    if (model.shadow) {
+      const L = cfg.shadow ? cfg.shadow[0] : (box.max.x - box.min.x) * k, W = cfg.shadow ? cfg.shadow[1] : (box.max.z - box.min.z) * k, g = model.shadow.geometry.parameters;
+      model.shadow.scale.set(L * 1.16 / g.width, W * 1.4 / g.height, 1); model.shadow.position.x = mid - x0 * k + (box.max.x + box.min.x) / 2 * k;
+    }
+    model.glb = { holder, scale: k };
+  }).catch((e) => { console.warn('car model not loaded, keeping the procedural body:', cfg.url, e?.message || e); });
 }
 
 function buildFormula(chassis, spec, { paintMat, carbon, black, tailMat, a, bb }) {

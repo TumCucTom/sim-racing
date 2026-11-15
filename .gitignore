@@ -6,3 +6,4 @@ rl/runs/test_*
 rl/runs/*/latest.json
 rl/runs/*/final.json
 artifact
+tools/__pycache__/

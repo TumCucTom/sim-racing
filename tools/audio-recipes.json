@@ -1,18 +1,18 @@
 {
- "_doc": "Input for tools/audio-build.py bank. One entry per bank (public/audio/<name>.wav). Sources are file names inside the reference directory (downloaded from Wikimedia Commons, see AUDIO.md). fmin/fmax bound the firing frequency search in Hz.",
+ "_doc": "Input for tools/audio-build.py bank. One entry per bank (public/audio/<name>.wav). Sources are file names inside the reference directory (downloaded from Wikimedia Commons, see AUDIO.md; '.opus.mp3' / '.wav.mp3' names are Commons' own MP3 transcodes of the listed file). fmin/fmax bound the firing-frequency search in Hz; rpmMin/rpmMax restrict a source to part of the range; state forces on/off-load (otherwise decided by the rpm slope); firingMul 2 = the strongest comb in the recording is half the firing frequency.",
  "gt3": {
   "cyl": 6,
-  "rpmLo": 1500,
+  "rpmLo": 1300,
   "rpmHi": 9200,
-  "bands": 11,
+  "bands": 12,
   "K": 8,
-  "qmin": 0.6,
+  "qmin": 0.7,
   "sources": [
    {
-    "file": "Porsche_997_GT3_RS.ogg",
-    "fmin": 60,
+    "file": "Porsche_911_GT3_(991)_with_Armytrix_exhaust_-_engine_and_exhaust_sound_(YouTube_aDPmym_3HB0).opus.mp3",
+    "fmin": 35,
     "fmax": 460,
-    "state": "on"
+    "floor": 30
    }
   ]
  },
@@ -53,8 +53,15 @@
   "rpmHi": 7500,
   "bands": 12,
   "K": 8,
-  "qmin": 0.6,
+  "qmin": 0.7,
   "sources": [
+   {
+    "file": "Ford_Mustang_GT_(S550)_-_engine_and_exhaust_sound_(YouTube_2ceiDjGgpI8).opus.mp3",
+    "fmin": 40,
+    "fmax": 500,
+    "halfpen": 0.5,
+    "floor": 30
+   },
    {
     "file": "Ford_Mustang_Mach_1_(2021)_-_engine_and_exhaust_sound_(YouTube_HydyGJGAOrw).opus",
     "t0": 9.5,
@@ -62,18 +69,6 @@
     "fmin": 50,
     "fmax": 200,
     "state": "both"
-   },
-   {
-    "file": "Chevrolet_Corvette_C6_ZR1_recorded2010.ogg",
-    "fmin": 80,
-    "fmax": 480,
-    "state": "on"
-   },
-   {
-    "file": "Vauxhall_VXR8_Bathurst_S.ogg",
-    "fmin": 80,
-    "fmax": 480,
-    "state": "on"
    }
   ]
  },
@@ -83,12 +78,13 @@
   "rpmHi": 7100,
   "bands": 11,
   "K": 8,
-  "qmin": 0.6,
+  "qmin": 0.7,
   "sources": [
    {
-    "file": "Ford_Focus_RS_WRC_(2010).ogg",
-    "fmin": 50,
-    "fmax": 260
+    "file": "Honda_Civic_Type_R_-_engine_and_exhaust_sound_(YouTube_qxhgUfPQ4Cc).opus.mp3",
+    "fmin": 25,
+    "fmax": 240,
+    "floor": 30
    }
   ]
  },
@@ -98,18 +94,20 @@
   "rpmHi": 6600,
   "bands": 10,
   "K": 8,
-  "qmin": 0.6,
+  "qmin": 0.7,
   "sources": [
    {
-    "file": "Honda_Civic_Type_R_(FL5)_-_engine_and_exhaust_sound_(YouTube_EVKAlCyqUkU).opus",
-    "fmin": 40,
-    "fmax": 240
+    "file": "Mini_Countryman_-_engine_and_exhaust_sound_(YouTube_xDeqeAkmRa8).opus.mp3",
+    "fmin": 25,
+    "fmax": 225,
+    "floor": 30
    },
    {
-    "file": "KTM_X-Bow.ogg",
-    "fmin": 40,
-    "fmax": 240,
-    "state": "on"
+    "file": "Mini_Clubman_-_engine_and_exhaust_sound_(YouTube_VoYMO0PugJk).opus.mp3",
+    "fmin": 25,
+    "fmax": 225,
+    "floor": 30,
+    "rpmMin": 5800
    }
   ]
  },
@@ -119,13 +117,20 @@
   "rpmHi": 8600,
   "bands": 10,
   "K": 8,
-  "qmin": 0.6,
+  "qmin": 0.7,
   "sources": [
+   {
+    "file": "Ferrari_296_-_engine_and_exhaust_sound_(YouTube_b9Qx9rpCsA0).opus.mp3",
+    "fmin": 35,
+    "fmax": 440,
+    "floor": 30
+   },
    {
     "file": "Nissan_GT-R_SpecV.ogg",
     "fmin": 60,
     "fmax": 380,
-    "state": "on"
+    "state": "on",
+    "rpmMin": 5000
    }
   ]
  },
@@ -135,31 +140,34 @@
   "rpmHi": 19000,
   "bands": 12,
   "K": 8,
-  "qmin": 0.6,
+  "qmin": 0.7,
+  "_note": "The per-bank order (2.5x crank) dominates the trackside F1 recordings; the STR1 burnout sits at 2x the tracked value = ~16,300 rpm, just under that car's 16,700 rpm limiter, which fixes the octave (firingMul 2).",
   "sources": [
+   {
+    "file": "Porsche_Carrera_GT_-_engine_and_exhaust_sound_(YouTube_ti9wpsDF4MI).opus.mp3",
+    "fmin": 70,
+    "fmax": 720,
+    "floor": 30,
+    "rpmMin": 3400,
+    "rpmMax": 5400
+   },
    {
     "file": "Red_Bull-Cosworth_RB1_(2005).ogg",
     "t0": 17.4,
     "t1": 22.6,
     "fmin": 330,
-    "fmax": 1650,
-    "state": "on"
+    "fmax": 1000,
+    "state": "on",
+    "firingMul": 2
    },
    {
     "file": "Red-Bull-Cosworth-STR1-2006-David-Coulthard.ogg",
     "t0": 17,
     "t1": 21.5,
     "fmin": 330,
-    "fmax": 1650,
-    "state": "on"
-   },
-   {
-    "file": "Williams-Renault_FW18_(1996).ogg",
-    "t0": 4.3,
-    "t1": 8,
-    "fmin": 330,
-    "fmax": 1650,
-    "state": "on"
+    "fmax": 1000,
+    "state": "on",
+    "firingMul": 2
    }
   ]
  }
