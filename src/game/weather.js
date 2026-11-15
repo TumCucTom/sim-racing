@@ -112,9 +112,15 @@ function makeGlows(n) {
   g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
   g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
   g.setAttribute('size', new THREE.BufferAttribute(new Float32Array(n), 1));
+  g.setAttribute('face', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));   // +1 shines forward, -1 backward
   const m = new THREE.ShaderMaterial({
     uniforms: { scale: { value: 600 } },
-    vertexShader: 'attribute float size; attribute vec3 color; varying vec3 vC; uniform float scale; void main(){ vC = color; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = min(240.0, size * scale / max(0.5, -mv.z)); gl_Position = projectionMatrix * mv; }',
+    vertexShader: `attribute float size, face; attribute vec3 color; varying vec3 vC; uniform float scale;
+      void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        // a lamp is only seen from the side it points to
+        float f = dot(normalize(mat3(modelViewMatrix) * vec3(face, 0.0, 0.0)), normalize(-mv.xyz));
+        vC = color * smoothstep(0.0, 0.3, f);
+        gl_PointSize = min(240.0, size * scale / max(0.5, -mv.z)); gl_Position = projectionMatrix * mv; }`,
     fragmentShader: `varying vec3 vC; void main(){ float d = length(gl_PointCoord - 0.5) * 2.0; float a = pow(max(0.0, 1.0 - d), 3.0) + 0.6 * smoothstep(0.22, 0.0, d);
       gl_FragColor = vec4(vC * a, 1.0);
       #include <tonemapping_fragment>
@@ -227,6 +233,7 @@ export class Weather {
     P.setXYZ(0, L / 2 - 0.12, fy, -fz); P.setXYZ(1, L / 2 - 0.12, fy, fz);            // headlights
     P.setXYZ(2, -L / 2 - 0.02, fy + 0.08, -fz); P.setXYZ(3, -L / 2 - 0.02, fy + 0.08, fz);   // brake lamps
     P.setXYZ(4, -L / 2 - 0.04, lowNose ? 0.36 : fy - 0.2, 0);                              // rain light
+    this.glows.geometry.attributes.face.array.set([1, 1, -1, -1, -1]);
     model.root.add(this.glows);
     this.head = new THREE.SpotLight(0xfff0d8, 0, 150, 0.5, 0.75, 1.6);
     this.head.position.set(L / 2 - 0.2, fy, 0); this.head.target.position.set(L / 2 + 30, -0.8, 0);

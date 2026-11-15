@@ -117,7 +117,8 @@ const WET_REFLECT = `
 // Rain ripples and the flattening of the surface texture under water.
 const WET_NORMAL = `
   normal = normalize(mix(normal, nonPerturbedNormal, clamp(0.35 * gWet + gPud, 0.0, 1.0)));
-  if (gPud * uRain > 0.01) { vec2 rp = rainRipple(vWPos.xz, uWxTime); normal = normalize(normal + mat3(viewMatrix) * vec3(rp.x, 0.0, rp.y) * 0.3 * gPud * uRain); }`;
+  float rpk = gPud * uRain * smoothstep(55.0, 12.0, vViewPosition.z);        // rings are too fine to resolve far away
+  if (rpk > 0.01) { vec2 rp = rainRipple(vWPos.xz, uWxTime); normal = normalize(normal + mat3(viewMatrix) * vec3(rp.x, 0.0, rp.y) * 0.3 * rpk); }`;
 
 // Along-track sample list: dense where the track curves or crests, sparse on straights.
 function sampleList(track, minM, maxM, sag) {

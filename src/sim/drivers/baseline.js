@@ -6,11 +6,14 @@ import { wetDriverGrip } from '../wet.js';
 const G = 9.81, RHO = 1.2;
 const SLIDE = 0.09;
 // in the wet the most aggressive dry tunes (grip > 0.95 of the limit) leave no room for puddles
-const WET_CAP = +(globalThis.process?.env?.WET_CAP || 0.95);
+const WET_CAP = 0.95, COLD = 0.87;
+// Racing slicks with a high working temperature never get there on a wet track and
+// lose a further slice of grip (the tyre model's temperature window): allow for it.
+const wetGripFor = (spec, wet) => wetDriverGrip(wet) * (spec.tire.tOpt >= 95 ? COLD : 1);
 
 export function speedProfile(track, spec, { grip = 0.9, brake = 0.8, line = null, trail = false, wet = null } = {}) {
   // wet track: scale the whole grip envelope (opts.wet is a state from src/sim/wet.js)
-  if (wet) { const k = wetDriverGrip(wet); grip = Math.min(grip, WET_CAP) * k; brake *= k; }
+  if (wet) { const k = wetGripFor(spec, wet); grip = Math.min(grip, WET_CAP) * k; brake *= k; }
   const n = track.n, v = new Float64Array(n);
   const curv = line ? line.curv : track.curv, dsA = line ? line.ds : null;
   // 0.86: nominal tyre mu -> usable axle grip after load transfer / sensitivity,
@@ -77,7 +80,7 @@ export class BaselineDriver {
     if (o.wet) {
       // wet track: feed the power in with what is left of the friction circle and
       // back off earlier when the car starts to slide (dry behaviour is untouched)
-      const sp = this.spec, kw = wetDriverGrip(o.wet);
+      const sp = this.spec, kw = wetGripFor(sp, o.wet);
       const aMax = sp.tire.muY * 0.86 * Math.min(o.grip, WET_CAP) * kw * (G + 0.5 * RHO * sp.ClA / sp.mass * v * v);
       const use = Math.min(1, Math.abs(car.r * v) / aMax);
       const cap = 0.12 + 0.88 * Math.pow(Math.max(0, 1 - use * use), 0.75);

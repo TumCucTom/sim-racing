@@ -3,6 +3,31 @@
 All notable changes, newest first. Numbers quoted here were measured by the
 tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
 
+## 0.8.0 — weather, time of day, engine audio round 2
+- **Six conditions**, in the menu, on **V** and as `?wx=`: clear, golden hour,
+  overcast (damp), rain, storm at low sun, dusk. Generated cloud skies with
+  matching sun, image-based lighting and sun-lit haze; wet asphalt with
+  puddles, rain rings, a drying line and the car mirrored in the road; rain
+  streaks that slant with speed, wheel spray, light shafts, water on the lens,
+  lightning and thunder, headlights and floodlights. No new asset files.
+- **Wet physics** (`src/sim/wet.js`, off by default and bit-identical when
+  off): grip 0.77 (rain) / 0.72 (storm) / 0.88 off-line (damp), worse in
+  standing water, on kerbs and grass. The racing-line driver scales its speed
+  profile: 160 of 162 car/circuit/condition combinations give a clean flying
+  lap (the single-seater's second lap on the damp Nordschleife breaks track
+  limits; the Mini's storm lap there is clean but its flying lap runs past the
+  tool's time limit). GT3 at Ravenscar 64.49 s dry, 77.79 rain, 80.74 storm.
+- Rain, spray and thunder in the audio bus (`src/audio/weather.js`).
+
+- **Engine audio, round 2** (after the first listening feedback: "not as
+  realistic as I'd like"). Recorded cycles now carry only the crank-locked part
+  of the sound; the rest is a never-repeating noise layer shaped to the
+  recording (the old voice repeated identical noise in 4–12 % of nearby
+  cycles; recordings: 0 %). Throttle contrast 5 -> 11 dB, real ignition cut on
+  upshifts, downshift blips, limiter stutter, fading overrun crackle, stereo
+  width, turbo whistle replaced by band-limited rush. The formula car's
+  steady-state match got worse (3.4 -> 5.5 dB); still unheard by its developers.
+
 ## 0.7.1 — both prototypes
 - The Audi R18 model is now its own car (**Audi R18 e-tron quattro**, 2012
   LMP1 turbodiesel, rear-drive only; passes its reference envelope, clean laps

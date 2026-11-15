@@ -16,7 +16,7 @@ export const WET = {
 // condition id (as used by the game's ?wx= parameter) -> wet state or null
 export function wetFor(wx) { return wx === 'overcast' ? WET.damp : WET[wx] || null; }
 
-const AI_MARGIN = +(globalThis.process?.env?.WET_MARGIN || 0.955);
+const AI_MARGIN = 0.93;   // found by sweeping every car on every circuit (tools/wet-laps.js)
 const sstep = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 // Standing water, 0..1, at arc length s (m), lateral offset off (m, + left) on a road of half-width hw.

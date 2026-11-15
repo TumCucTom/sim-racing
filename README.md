@@ -12,7 +12,7 @@ learning on the same physics code the browser runs.
 ```bash
 npm install
 npm run dev        # http://127.0.0.1:5173
-npm test           # 24 tests: physics, determinism, car envelopes, tracks, audio
+npm test           # physics, determinism, car envelopes, tracks, audio, wet-track model
 npm run validate   # measure every car against real-world figures
 npm run train -- --car gt3 --seed 1 --steps 3000000
 npm run benchmark  # fixed-seed RL vs baseline, writes docs/benchmark-gt3.json
@@ -22,7 +22,7 @@ npm run plot       # docs/learning-curve-gt3.svg, docs/benchmark-gt3.svg
 Controls: **WASD / arrows** drive (gamepad supported) · **Q / E** shift ·
 **M** auto/manual · **R** recover · **Enter** restart · **C** camera ·
 **T** telemetry · **G** ghost (best / AI) · **I** AI autopilot · **Z** ABS ·
-**X** TC · **L** racing-line guide · **F** perf stats · **N** mute ·
+**X** TC · **L** racing-line guide · **V** weather · **F** perf stats · **N** mute ·
 **1–9** car · **Esc** menu.
 
 ## Architecture
@@ -148,6 +148,42 @@ high quality. Seven of the nine cars use detailed third-party glTF models
 `tools/models-build.mjs`); every asset, author and licence is listed in
 [ASSETS.md](ASSETS.md).
 
+### Weather and time of day
+Six conditions, chosen in the menu, with **V** while driving, or by URL
+(`?wx=clear|golden|overcast|rain|storm|dusk`, alongside `?track=`, `?car=`,
+`?q=`): clear day (the photographed sky), golden hour, overcast with a damp
+track, rain, a storm at low sun, and dusk with lights on. They switch in place.
+
+- **One description drives everything** (`src/game/wx.js`): the sky, the sun
+  light, the environment map, the fog and its glow toward the sun are all
+  built from the same numbers, so they cannot disagree. Skies other than the
+  clear day are generated (`src/game/skygen.js`): fbm cloud decks with
+  self-shadowing and a sun gap, baked once per condition into an HDR panorama
+  that is also prefiltered (PMREM) for image-based lighting. Low suns sit ahead
+  of the grid on every circuit.
+- **Wet surfaces** (`src/game/world.js`): asphalt darkens and turns glossy
+  under a water film, standing water gathers along the edges and in low spots
+  with rain rings, the rubbered line dries first on the damp track; kerbs,
+  paint, grass, gravel, paving and barriers respond too. The car and its lamps
+  are mirrored in the road (a second, car-only render from the reflected
+  camera; medium and high quality).
+- **Rain, spray, light** (`src/game/weather.js`): streaks drawn along each
+  drop's motion relative to the camera, so they slant and stretch with speed;
+  wheel spray that grows with speed; screen-space light shafts from the open
+  sky, water beads on the lens, lightning that relights the scene (thunder
+  follows after the distance delay); headlights, brake and rain-light glows,
+  and floodlights along the start straight at dusk.
+- **Physics** (`src/sim/wet.js`): a wet state scales tyre grip — rain 0.77 and
+  storm 0.72 of dry on asphalt, less in the standing water at the edges (up to
+  -14 % / -20 %), on painted kerbs and on grass; the damp track is 0.88 off
+  line but nearly dry on it. `null` (the default) leaves the simulation
+  bit-identical, which the tests check. The racing-line driver scales its
+  speed profile and feeds the power in more gently (`tools/wet-laps.js`
+  measures it): GT3 at Spa 2:34.87 dry, 3:02.65 rain, 3:09.45 storm.
+- **Quality tiers**: low draws a quarter of the rain, no mirror and no lens
+  pass; medium adds a short post chain only when the weather needs it; high
+  keeps its full chain.
+
 ### Audio
 Every combustion car's engine is **played from a real recording** of that
 engine type (Wikimedia Commons, CC BY / CC BY-SA; sources and authors in
@@ -248,6 +284,11 @@ GPU has not been measured.
 - **AI pace** on the real circuits is 10–15 % off real lap records.
 - The RL policy is trained for one car (GT3) on one circuit (Ravenscar); every
   other combination uses the racing-line driver.
+- **Weather** is a fixed state per session, not a forecast: no transitions,
+  no drying or rubbering-in over a stint, no aquaplaning model and no wet
+  tyres (cars stay on their dry compound, slicks included). Wet-road
+  reflections show the sky and the car only, not trackside objects. The RL
+  policy was trained dry; in the wet the racing-line driver takes over.
 - No suspension or vertical dynamics, tyre wear, fuel load or damage; single
   car on track (ghosts don't collide).
 - Frame rates below were measured with software rendering; real-GPU

@@ -21,6 +21,13 @@ Everything else (armco, tyre walls, debris fence, facades, labels, kerb paint, r
 
 Total added download: about 11 MB (`public/env` 3.0 MB, `public/tex` 7.4 MB).
 
+## Weather and time of day
+
+No files were added for the weather conditions (golden hour, overcast, rain, storm, dusk). Their skies, clouds, light shafts,
+rain, puddles, spray, lens droplets and the rain / spray / thunder sounds are all generated in code: `src/game/skygen.js`
+(sky panorama and environment map), `src/game/wx.js` (the conditions), `src/game/weather.js`, `src/game/world.js`
+(wet-surface shading) and `src/audio/weather.js`. Only the clear day uses the photographed Poly Haven sky listed above.
+
 ## Car models
 
 Detailed car bodies loaded by `attachGLB` in `src/game/carmodel.js` (per-car settings in `GLB_MODELS` there). Each car keeps
