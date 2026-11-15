@@ -101,6 +101,7 @@ const LINE_TUNE = {
   coupe: { grip: 0.97, trail: 0.3 }, formula: { grip: 0.8, trail: 0.9 }, ev: { grip: 0.8, trail: 0.3 },
   hypercar: { grip: 1.02, trail: 0.9 }, lmp1: { grip: 1.02, trail: 0.9 }, mini: { grip: 1.02, trail: 0.6 },
   r8lms: { grip: 0.97, trail: 0.6 }, huracan: { grip: 0.97, trail: 0.6 }, amggt3: { grip: 0.97, trail: 0.6 }, f296gt3: { grip: 0.97, trail: 0.6 }, mc720s: { grip: 0.97, trail: 0.6 },
+  huracan610: { grip: 0.86, trail: 0.6 }, svj: { grip: 0.77, trail: 0.3 },
 };
 // The Nordschleife is narrow, bumpy in gradient and unforgiving: separate, more
 // conservative settings (also from a sweep; every car laps it cleanly).
@@ -109,6 +110,7 @@ const NORDSCHLEIFE_TUNE = {
   coupe: { grip: 0.8, trail: 0 }, formula: { grip: 0.92, trail: 0 }, ev: { grip: 0.86, trail: 0 },
   hypercar: { grip: 0.86, trail: 0.4 }, lmp1: { grip: 0.86, trail: 0.4 }, mini: { grip: 0.77, trail: 0 },
   r8lms: { grip: 0.86, trail: 0 }, huracan: { grip: 0.86, trail: 0 }, amggt3: { grip: 0.86, trail: 0 }, f296gt3: { grip: 0.86, trail: 0 }, mc720s: { grip: 0.86, trail: 0 },
+  huracan610: { grip: 0.8, trail: 0.4 }, svj: { grip: 0.8, trail: 0.4 },
 };
 export function lineDriverOptions(track, spec) {
   if (track.id === 'nordschleife') return { ...(NORDSCHLEIFE_TUNE[spec.id] || { grip: 0.8, trail: 0 }), line: track.line, brake: spec.abs ? 0.8 : 0.6 };

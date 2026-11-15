@@ -40,6 +40,12 @@ export class Input {
       if (edge(1)) this.handlers.KeyC?.();
       break;
     }
+    const tc = this.touch;
+    if (!analog && tc && tc.on && (tc.analog || tc.steer || tc.thr || tc.brk)) {
+      // touch screen: tilt is an analogue axis; on-screen buttons behave like keys (ramped below)
+      if (tc.analog) { analog = true; steerT = Math.sign(tc.steer) * Math.pow(Math.abs(tc.steer), 1.3); } else steerT = tc.steer;
+      fwd = tc.thr; back = tc.brk; this.device = 'touch';
+    } else
     if (!analog && (steerT || fwd || back)) this.device = 'keyboard';
     // steering: move the wheel toward the target, faster when returning to centre
     if (analog) this.steerPos += (steerT - this.steerPos) * Math.min(1, dt * 14);
@@ -56,7 +62,7 @@ export class Input {
       this.revHold = (this.revHold || 0) + dt;
       if (this.revHold > 0.25) { while (car.gear > -1 && car.gear !== -1) { const g = car.gear; car.shiftTimer = 0; car.requestShift(-1); if (car.gear === g) break; } this.revHold = 0; }
     } else this.revHold = 0;
-    if (analog) { this.thr = thrT; this.brk = brkT; }
+    if (analog && this.device !== 'touch') { this.thr = thrT; this.brk = brkT; }
     else {
       const tr = (thrT > this.thr ? 4.5 : 9) * dt, br = (brkT > this.brk ? 6 : 12) * dt;
       this.thr += Math.max(-tr, Math.min(tr, thrT - this.thr));

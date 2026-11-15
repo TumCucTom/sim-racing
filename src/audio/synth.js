@@ -67,6 +67,8 @@ export class RaceAudioSynth {
       // 120° twin-turbo V6: even firing, turbines soak up the pulse edges
       V6T: { off: [0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6], bank: [0, 1, 0, 1, 0, 1], sharp: 8, drive: 2.2, formants: [[130, 2.5, 1.0], [430, 3, 0.9], [1700, 2.5, 0.45]], pipe: [4.4, 4.7], bright: 1.0, pops: 0.3, gain: 1.1, merge: 0.3, jitter: 0.05, intake: 0.7, popHz: 420, intakeHz: 450, limHz: 20, width: 0.1 },
       V10: { off: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9], bank: [0, 1, 0, 1, 0, 1, 0, 1, 0, 1], sharp: 13, drive: 2.4, formants: [[310, 2.5, 0.7], [1150, 3.5, 1.0], [3600, 3, 0.75]], pipe: [1.7, 1.85], bright: 1.6, pops: 0.25, gain: 0.9, merge: 0.7, jitter: 0.04, intake: 1.0, popHz: 900, intakeHz: 900, limHz: 30, width: 0.1 },
+      // 60-degree V12: even firing every 60 degrees of crank, banks alternate; firing order = 6x crank
+      V12: { off: [0, 1 / 12, 2 / 12, 3 / 12, 4 / 12, 5 / 12, 6 / 12, 7 / 12, 8 / 12, 9 / 12, 10 / 12, 11 / 12], bank: [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], sharp: 12, drive: 2.5, formants: [[190, 2.5, 0.8], [680, 3.2, 1.0], [2600, 3, 0.65]], pipe: [3.0, 3.3], bright: 1.35, pops: 0.4, gain: 1.0, merge: 0.6, jitter: 0.04, intake: 1.0, popHz: 620, intakeHz: 600, limHz: 20, width: 0.1 },
       EV: { off: [], bank: [], sharp: 1, drive: 1, formants: [], pipe: [1, 1], bright: 1, pops: 0, gain: 0, jitter: 0, intake: 0, electric: true },
     };
   }
@@ -495,7 +497,7 @@ const V10_GT = { formants: [[170, 2.5, 0.8], [620, 3.2, 1.0], [2400, 3, 0.6]], p
 export function audioConfigFor(spec) {
   const eng = (spec && spec.engine) || {};
   const all = RaceAudioSynth.layouts();
-  const byCyl = { 3: 'I4', 4: 'I4', 5: 'I4', 6: 'F6', 8: 'V8X', 10: 'V10', 12: 'V10' };
+  const byCyl = { 3: 'I4', 4: 'I4', 5: 'I4', 6: 'F6', 8: 'V8X', 10: 'V10', 12: 'V12' };
   const base = all[eng.layout] || (eng.electric ? all.EV : all[byCyl[eng.cylinders]] || all.I4);
   const id = (spec && spec.id) || '';
   const extra = {
@@ -511,6 +513,9 @@ export function audioConfigFor(spec) {
     ev: { gearWhine: 0, squealGain: 1.0 },
     // GT3 class: straight-cut sequential gearbox whine, slicks. The V10 layout preset is voiced for a 19,000 rpm
     // grand-prix engine, so the 5.2 road-derived V10 gets its own (lower) formants, pipe length and limiter rate.
+    // road Lamborghinis: the LP 610-4 plays the Huracán Performante bank (its own engine); the SVJ's V12 is synthesised
+    huracan610: { gearWhine: 0.12, squealGain: 0.9, bankName: 'huracan', ...V10_GT },
+    svj: { gearWhine: 0.2, squealGain: 0.9, pops: 0.55 },
     r8lms: { gearWhine: 1.0, squealGain: 0.55, bankName: 'r8lms', ...V10_GT },
     huracan: { gearWhine: 1.0, squealGain: 0.55, bankName: 'huracan', ...V10_GT, bright: 1.45, pops: 0.4 },
     amggt3: { gearWhine: 1.0, squealGain: 0.55, bankName: 'amggt3', pops: 0.6, bright: 0.85 },

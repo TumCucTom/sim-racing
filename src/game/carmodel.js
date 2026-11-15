@@ -60,6 +60,7 @@ const GT_LIVERY = {
   huracan: { num: '63', stripe: 0x101012, accent: 0x101012, rim: 0x1c1c1e },
   amg: { num: '4', stripe: 0xe8d400, accent: 0xe8d400, rim: 0x1c1c1e },
   f296: { num: '51', stripe: 0xf2c200, accent: 0xf4f4f0, rim: 0xc9a227 },
+  svj: { road: true, stripe: null, accent: 0x101012, rim: 0x1c1c1e },   // road car: wing, splitter and diffuser but no race livery
   mc720: { num: '59', stripe: 0x0d2a5c, accent: 0x0d2a5c, rim: 0x1c1c1e },
 };
 
@@ -397,20 +398,20 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
       // splitter, wing, diffuser, roundels
       const lv = livery || { num: '27', stripe: 0xd4002a, accent: null };
       const accentM = lv.accent != null ? new THREE.MeshStandardMaterial({ color: lv.accent, roughness: 0.4 }) : carbon;
-      raceKit(chassis, { front, rear, width: b.width, wingY: gtShape ? b.height - 0.02 : b.height + 0.02, deckY: rs.pts[9][1] + (gtShape ? 0.06 : 0), carbon, accentM, legacy: !gtShape, tailMat });
-      for (const sgn of [1, -1]) {
+      raceKit(chassis, { front, rear, width: b.width, wingY: gtShape ? b.height - 0.02 : b.height + 0.02, deckY: rs.pts[9][1] + (gtShape ? 0.06 : 0), carbon, accentM, legacy: !gtShape, tailMat, canards: !lv.road });
+      if (!lv.road) for (const sgn of [1, -1]) {
         const dx = gtShape === 'gtfront' ? -0.45 : gtShape ? 0.25 : -0.1, ds = sectAt(shift + dx);
         const num = new THREE.Mesh(new THREE.CircleGeometry(0.24, 20), new THREE.MeshStandardMaterial({ map: labelTexture(lv.num, { w: 128, h: 128, bg: gtShape ? '#f4f4f0' : '#111', fg: gtShape ? '#111' : '#fff', font: 'bold 84px sans-serif' }), roughness: 0.5, polygonOffset: true, polygonOffsetFactor: -3 }));
         num.position.set(shift + dx, ds.pts[3][1], sgn * (ds.pts[3][0] + 0.004)); num.rotation.y = sgn > 0 ? 0 : Math.PI; chassis.add(num);
       }
-      const stripeM = new THREE.MeshStandardMaterial({ color: lv.stripe, roughness: 0.4 });
-      addPatch(loft.patchGeo(-0.5, 0.5, 8, 8, 0.003), stripeM);                          // centre stripe over the whole car
+      const stripeM = new THREE.MeshStandardMaterial({ color: lv.stripe ?? 0x101012, roughness: 0.4 });
+      if (!lv.road) addPatch(loft.patchGeo(-0.5, 0.5, 8, 8, 0.003), stripeM);            // centre stripe over the whole car
       if (gtShape) {
         addPatch(loft.patchGeo(-0.5, 0.5, 1, 1, 0.003), stripeM);                        // sill band
         if (gtShape === 'gtmid') addPatch(loft.patchGeo(-0.2, -0.08, 3, 4, 0.004), black);   // side intakes ahead of the rear wheels
         else addPatch(loft.patchGeo(0.1, 0.17, 3, 3, 0.004), black);                     // front-wing vents behind the wheels
         const sun = new THREE.MeshStandardMaterial({ color: lv.accent ?? 0x111111, roughness: 0.5 });
-        const w0 = gtShape === 'gtmid' ? 0.085 : -0.095; addPatch(loft.patchGeo(w0, w0 + 0.035, 7, 8, 0.004), sun);   // windscreen banner
+        const w0 = gtShape === 'gtmid' ? 0.085 : -0.095; if (!lv.road) addPatch(loft.patchGeo(w0, w0 + 0.035, 7, 8, 0.004), sun);   // windscreen banner
       }
     }
     if (b.style === 'hatch') chassis.add(box(0.28, 0.03, b.width * 0.72, paintMat, rear + 0.36, b.height * 0.985, 0));
@@ -486,6 +487,8 @@ const GLB_MODELS = {
   r8lms: { url: 'models/r8lms.glb', kit: { wingY: 1.2, deckY: 0.98, wingX: 0.02 }, lamps: [[-2.1, 0.8, -0.6, 0.34, 0.035], [-2.1, 0.8, 0.6, 0.34, 0.035]] },
   // Lamborghini Huracán (road car) by jkazulyblanco, CC BY 4.0 — carries the GT3 race kit
   huracan: { url: 'models/huracan.glb', kit: { wingY: 1.2, deckY: 0.93, wingX: 0.04 }, lamps: [[-2.1, 0.79, -0.56, 0.36, 0.03], [-2.1, 0.79, 0.56, 0.36, 0.03]] },
+  // the same Huracán model as it was made: the LP 610-4 road car, no race kit
+  huracan610: { url: 'models/huracan.glb', lamps: [[-2.1, 0.79, -0.56, 0.36, 0.03], [-2.1, 0.79, 0.56, 0.36, 0.03]] },
   // Mercedes-AMG GT (road car) by Yan Carvalho, CC BY 4.0 — carries the GT3 race kit
   amggt3: { url: 'models/amggt3.glb', paint: ['Material.001'], glass: ['Material'], tyre: ['Material.023'], tail: ['Material.014', 'Material.034'], paintProps: { metalness: 0.7, roughness: 0.42 }, kit: { wingY: 1.25, deckY: 0.95, wingX: 0.05 } },
   // Honda Civic Type R (FK8) by shindedhirendra780, CC BY 4.0

@@ -11,6 +11,7 @@
 //   __game.fastForward(seconds)      advance the whole race without rendering (deterministic with &ai)
 //   __game.setTimeScale(k)           slow motion / fast forward of the rendered race
 //   __game.raceInfo()                time, order, gaps and current battles
+//   __game.setTags(false)            hide the number boards over the cars (also ?tags=0)
 //
 // While a race runs, `game.sim`, `game.model` and `game.spec` point at the car being followed,
 // so the existing cameras, instrument cluster, engine audio and effects work for any car.
@@ -37,6 +38,18 @@ const store = {
 };
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
+// number board floating over an opponent, in its colour (also tells apart models that keep their own livery)
+function makeTag(number, color) {
+  const cv = document.createElement('canvas'); cv.width = 96; cv.height = 48;
+  const x = cv.getContext('2d'), c = new THREE.Color(color), dark = c.r * 0.3 + c.g * 0.59 + c.b * 0.11 > 0.55;
+  x.fillStyle = hex(color); x.beginPath(); x.roundRect(2, 2, 92, 44, 9); x.fill(); x.lineWidth = 3; x.strokeStyle = 'rgba(0,0,0,.8)'; x.stroke();
+  x.fillStyle = dark ? '#111' : '#fff'; x.font = 'bold 32px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(String(number), 48, 26);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: true, depthWrite: false, fog: false, toneMapped: false }));
+  sp.scale.set(0.95, 0.475, 1); sp.renderOrder = 3; sp.visible = false;
+  return sp;
+}
+
 // far-away stand-in: body, cabin and a tail-light strip (3 draw calls instead of a whole model)
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
 function makeLod(spec, color) {
@@ -56,6 +69,7 @@ export class RaceMode {
     this.g = game; this.params = params; this.CAMS = CAMS;
     this.active = false; this.race = null; this.models = []; this.colors = []; this.focus = 0; this.playerIdx = 0;
     this.extraCam = null; this.director = false; this.dirT = 0; this.dirN = 0; this.timeScale = 1; this.orbitA = 0;
+    this.cut = 0; this.tagsOn = params.get('tags') !== '0';
     this.camLast = new THREE.Vector3(); this.camVel = new THREE.Vector3(); this.tmp = new THREE.Vector3();
     this.wheelW = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
     this.prox = { left: 0, right: 0 };
@@ -75,6 +89,7 @@ export class RaceMode {
     // scripting API
     game.startRace = (o) => this.start(o); game.followCar = (i) => this.follow(i); game.setCamera = (n) => this.setCamera(n);
     game.raceInfo = () => this.info(); game.setTimeScale = (k) => { this.timeScale = clamp(+k || 1, 0.05, 8); };
+    game.setTags = (on) => { this.tagsOn = !!on; };
     Object.defineProperty(game, 'race', { get: () => this.race, configurable: true });
     if (params.has('race')) setTimeout(() => {
       this.start({ ai: params.has('ai') });
@@ -108,7 +123,7 @@ export class RaceMode {
     $('race-go').onclick = () => { save(); this.start({ ai: false }); };
     $('race-watch').onclick = () => { save(); this.start({ ai: true }); };
     const keys = document.getElementById('keys');
-    if (keys) keys.insertAdjacentHTML('beforeend', '<div>Race: <kbd>J</kbd><kbd>K</kbd> watch another car · <kbd>U</kbd> own car · <kbd>O</kbd> TV director · <kbd>B</kbd> more cameras · <kbd>P</kbd> timing tower</div>');
+    if (keys) keys.insertAdjacentHTML('beforeend', '<div>Race: <kbd>J</kbd><kbd>K</kbd> watch another car · <kbd>U</kbd> own car · <kbd>O</kbd> TV director · <kbd>B</kbd> more cameras · <kbd>P</kbd> timing tower · <kbd>Y</kbd> number boards</div>');
   }
 
   bindKeys() {
@@ -117,6 +132,7 @@ export class RaceMode {
     k.on('KeyJ', () => { if (this.active) this.follow('prev'); });
     k.on('KeyU', () => { if (this.active) { this.director = false; this.follow('player'); } });
     k.on('KeyO', () => { if (this.active) this.setCamera(this.director ? 'chase' : 'director'); });
+    k.on('KeyY', () => { if (this.active) { this.tagsOn = !this.tagsOn; hud.toast(`Number boards ${this.tagsOn ? 'on' : 'off'}`, 1); } });
     k.on('KeyP', () => { if (this.active) hud.toast(`Timing tower ${this.hud.toggleTower() ? 'on' : 'off'}`, 1); });
     k.on('KeyB', () => { if (this.active) this.setCamera(EXTRA_CAMS[(EXTRA_CAMS.indexOf(this.extraCam) + 1) % EXTRA_CAMS.length]); });
     // C (the ordinary camera cycle) leaves the extra cameras and the director
@@ -140,7 +156,7 @@ export class RaceMode {
     this.models = race.cars.map((q, i) => {
       if (q.player) { this.colors[i] = '#ffcc00'; g.model.lod = makeLod(q.spec, q.spec.body.color); g.scene.add(g.model.lod); return g.model; }
       const col = PALETTE[k++ % PALETTE.length]; this.colors[i] = hex(col);
-      const m = buildCarModel(q.spec, { colorOverride: col }); m.lod = makeLod(q.spec, col); g.scene.add(m.root, m.lod);
+      const m = buildCarModel(q.spec, { colorOverride: col }); m.lod = makeLod(q.spec, col); m.tag = makeTag(q.number, col); g.scene.add(m.root, m.lod, m.tag);
       return m;
     });
     this.fx = race.cars.map(() => ({ last: [null, null, null, null], sprayAcc: [0, 0, 0, 0] }));
@@ -164,7 +180,7 @@ export class RaceMode {
     if (!this.active) return;
     const g = this.g;
     if (this.focus !== this.playerIdx) this.follow(this.playerIdx);
-    this.models.forEach((m, i) => { if (i === this.playerIdx) return; g.scene.remove(m.root, m.lod); m.dispose(); m.lod.traverse(o => { if (o.isMesh) o.material.dispose(); }); });
+    this.models.forEach((m, i) => { if (i === this.playerIdx) return; g.scene.remove(m.root, m.lod, m.tag); m.dispose(); m.lod.traverse(o => { if (o.isMesh) o.material.dispose(); }); m.tag.material.map.dispose(); m.tag.material.dispose(); });
     g.scene.remove(this.playerModel.lod); this.playerModel.lod.traverse(o => { if (o.isMesh) o.material.dispose(); }); this.playerModel.lod = null;
     this.models = []; this.playerModel.root.visible = true;
     g.sim = this.saved.sim; g.model = this.playerModel; g.spec = this.playerSpec; g.ghostMode = this.saved.ghostMode;
@@ -228,7 +244,7 @@ export class RaceMode {
       race.step(human ? g.assist.apply(g.input.read(pc.car, SIM_DT), pc.car, SIM_DT) : null);
       if (own) { g.rec.sample(g.sim); if (i % 5 === 0) g.rec.sampleGG(g.sim.car); }
     }
-    g.camInit = false; this.camJump = true;
+    g.camInit = false; this.cut = 3;
     return this.info();
   }
 
@@ -267,8 +283,8 @@ export class RaceMode {
     this.focus = i;
     g.sim = c.sim; g.model = m; g.spec = c.spec;
     m.root.visible = true; m.lod.visible = false;
-    g.audio.setCar(c.spec); g.wx.attachCar(m, c.spec); g.hud.setCar(c.spec);
-    g.camInit = false; this.camJump = true;
+    g.audio.setCar(c.spec); g.wx.attachCar(m, c.spec); g.hud.setCar(c.spec); this.hud.tick = 0;
+    g.camInit = false; this.cut = 3;
     if (!this.director) g.hud.toast(`${c.name} — P${c.pos}`, 1.5);
     return i;
   }
@@ -280,7 +296,7 @@ export class RaceMode {
     if (i >= 0) { g.cam = i; this.extraCam = null; }
     else if (EXTRA_CAMS.includes(name)) { this.extraCam = name; g.cam = Math.max(0, this.CAMS.indexOf('tv')); }
     else return false;
-    g.camInit = false; this.camJump = true;
+    g.camInit = false; this.cut = 3;
     g.hud.toast(`Camera: ${name}`, 1.2);
     return true;
   }
@@ -309,7 +325,7 @@ export class RaceMode {
     const seq = start ? ['heli'] : ['tv', 'chase', 'tv', 'heli', 'tv', 'side', 'far', 'tv', 'front'];
     const name = seq[this.dirN++ % seq.length], i = this.CAMS.indexOf(name);
     if (i >= 0) { this.g.cam = i; this.extraCam = null; } else { this.extraCam = name; this.g.cam = Math.max(0, this.CAMS.indexOf('tv')); }
-    this.g.camInit = false; this.camJump = true;
+    this.g.camInit = false; this.cut = 3;
     this.dirT = start ? 3 : 6 + (this.dirN % 3) * 1.5;
   }
 
@@ -323,7 +339,7 @@ export class RaceMode {
     else if (mode === 'front') { T.set(pos.x + fx * 10 + rx * 1.8, pos.y + 1.1, pos.z + fz * 10 + rz * 1.8); fov = 36; }
     else if (mode === 'rear') { T.set(pos.x - fx * 4.2, pos.y + 0.75, pos.z - fz * 4.2 - rz * 0); fov = 62; k = 1; }
     else { this.orbitA += dt * 0.35; T.set(pos.x + Math.cos(this.orbitA) * 9, pos.y + 2.4, pos.z + Math.sin(this.orbitA) * 9); fov = 40; k = 1; }
-    if (this.camJump || !this.g.camInit) { cam.position.copy(T); this.g.camInit = true; } else cam.position.lerp(T, k);
+    if (this.cut > 0 || !this.g.camInit) { cam.position.copy(T); this.g.camInit = true; } else cam.position.lerp(T, k);
     if (mode === 'rear') cam.lookAt(pos.x + fx * 20, pos.y + 0.9, pos.z + fz * 20); else cam.lookAt(pos.x + fx * 0.8, pos.y + 0.55, pos.z + fz * 0.8);
     if (Math.abs(cam.fov - fov) > 0.05) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 6); cam.updateProjectionMatrix(); }
     return true;
@@ -344,11 +360,13 @@ export class RaceMode {
         let ds = car.s - focus.car.s; ds -= Math.round(ds / race.L) * race.L;
         if (!c.retired && Math.abs(ds) < c.hl + focus.hl + 1.5) { const dd = car.d - focus.car.d, cl = Math.abs(dd) - c.hw - focus.hw; if (cl < 3.2 && cl > -0.5) { if (dd > 0) pl = Math.max(0.01, cl); else pr = Math.max(0.01, cl); } }
       }
+      if (m.tag) m.tag.visible = false;
       if (i === this.focus) { m.lod.visible = false; m.root.visible = true; continue; }
       if (c.retired) { m.root.visible = false; m.lod.visible = false; continue; }
-      const h = trackHeight(t, car.idx, car._proj.frac), dx = car.x - cp.x, dz = -car.y - cp.z, d2 = dx * dx + dz * dz, far = d2 > lod2;
+      const h = trackHeight(t, car.idx, car._proj.frac), dx = car.x - cp.x, dz = -car.y - cp.z, d2 = dx * dx + dz * dz, far = d2 > lod2 && !(this.cut > 0);   // (the camera position is last frame's: after a cut draw everything in full)
       const gr = Math.atan(t.grade[car.idx]), che = Math.cos(car.headErr), she = Math.sin(car.headErr), o = far ? m.lod : m.root;
       m.root.visible = !far; m.lod.visible = far;
+      if (m.tag && this.tagsOn && d2 < 140 * 140 && d2 > 16) { m.tag.visible = true; m.tag.position.set(car.x, h + c.spec.body.height + 0.55, -car.y); }
       o.position.set(car.x, h, -car.y); o.rotation.set(-gr * she, car.yaw, gr * che, 'YXZ');
       const braking = car.brake > 0.05;
       if (far) { m.lod.userData.tail.emissiveIntensity = braking ? 3 : 0.3; continue; }
@@ -370,6 +388,7 @@ export class RaceMode {
       else if (this.resultsShown && race.over && !this.finalShown) { this.finalShown = true; this.showResults(); }
     }
     this.updateAudio(dt);
+    if (this.cut > 0) this.cut--;
   }
 
   showResults() {
@@ -384,8 +403,8 @@ export class RaceMode {
     if (!a.ctx) return;
     if (!this.oppAudio) { try { this.oppAudio = new OpponentAudio(a.ctx, a.comp || a.ctx.destination, g.qualityName === 'low' ? 2 : 3); } catch { this.oppAudio = { update() {}, silence() {} }; } }
     const cam = g.camera, cp = cam.position, V = this.camVel;
-    if (dt > 0 && !this.camJump) { V.copy(cp).sub(this.camLast).divideScalar(dt); if (V.lengthSq() > 130 * 130) V.set(0, 0, 0); } else V.set(0, 0, 0);
-    this.camLast.copy(cp); this.camJump = false;
+    if (dt > 0 && !(this.cut > 0)) { V.copy(cp).sub(this.camLast).divideScalar(dt); if (V.lengthSq() > 130 * 130) V.set(0, 0, 0); } else V.set(0, 0, 0);
+    this.camLast.copy(cp);
     const e = cam.matrixWorld.elements, src = [];
     for (let i = 0; i < this.race.cars.length; i++) {
       const c = this.race.cars[i]; if (i === this.focus || c.retired) continue;

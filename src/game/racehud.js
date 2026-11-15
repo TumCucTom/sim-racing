@@ -72,7 +72,7 @@ export class RaceHUD {
     // proximity
     const l = this.$('r-left'), r = this.$('r-right');
     l.className = prox.left ? (prox.left < 1.2 ? 'on close' : 'on') : ''; r.className = prox.right ? (prox.right < 1.2 ? 'on close' : 'on') : '';
-    if (this.tick++ % 6) return;
+    const slow = this.tick++ % 6;           // the tower is rebuilt a few times a second, not every frame
     const lead = race.cars[race.order[0]], n = race.cars.length;
     this.$('r-p').textContent = focus.pos; this.$('r-of').textContent = ` / ${n}`;
     const lap = Math.min(race.laps, Math.max(1, focus.sim.lap + 1));
@@ -83,7 +83,7 @@ export class RaceHUD {
     const flag = race.over ? ['RACE OVER', '#222', '#fff'] : focus.blue ? ['BLUE FLAG', '#1668ff', '#fff'] : focus.penalty ? [`PENALTY +${focus.penalty}s`, '#b3261e', '#fff'] : focus.strikes % 3 ? [`TRACK LIMITS ${focus.strikes % 3}/3`, '#a68413', '#fff'] : race.leaderFinished ? ['CHEQUERED FLAG', '#f2f2f2', '#111'] : null;
     if (flag) { f.style.display = 'inline-block'; f.textContent = flag[0]; f.style.background = flag[1]; f.style.color = flag[2]; } else f.style.display = 'none';
     // timing tower
-    if (!this.towerOn) return;
+    if (!this.towerOn || slow) return;
     const T = this.$('r-tower');
     if (this.rows.length !== n) {
       T.innerHTML = `<div class="h"><span>${race.track.name.toUpperCase()}</span><span>GAP</span></div>` + race.cars.map(() => '<div class="row"><span class="p"></span><span class="c"></span><span class="n"></span><span class="k"></span><span class="g"></span></div>').join('');

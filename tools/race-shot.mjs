@@ -15,8 +15,8 @@ const p = await b.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleF
 const errs = [];
 p.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') errs.push(`[${m.type()}] ${m.text()}`); });
 p.on('pageerror', e => errs.push('[pageerror] ' + e.message));
-await p.goto(`http://127.0.0.1:${process.env.PORT || 5173}/?${query}`);
-await p.waitForFunction(() => window.__game && window.__game.race, null, { timeout: 90000 });
+await p.goto(`http://127.0.0.1:${process.env.PORT || 5173}/?${query}`, { timeout: 240000, waitUntil: 'domcontentloaded' });
+await p.waitForFunction(() => window.__game && window.__game.race, null, { timeout: 240000 });
 await p.waitForTimeout(2500);
 for (const st of steps) {
   const [secs, cam, who, name] = st.split(':');

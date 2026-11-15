@@ -49,9 +49,8 @@ const carbonTex = () => canvasTex(32, 32, (g) => {
   for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) { g.fillStyle = (x + y) % 2 ? '#24262a' : '#101113'; g.fillRect(x * 8 + 1, y * 8 + 1, 6, 6); }
 }, 14);
 const netTex = () => canvasTex(128, 128, (g) => {
-  g.clearRect(0, 0, 128, 128); g.strokeStyle = '#0a0a0b'; g.lineWidth = 9;
-  for (let i = 0; i <= 128; i += 32) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, 128); g.moveTo(0, i); g.lineTo(128, i); g.stroke(); }
-  g.strokeStyle = '#b01a1a'; g.lineWidth = 2; for (let i = 0; i <= 128; i += 32) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, 128); g.stroke(); }
+  g.clearRect(0, 0, 128, 128); g.strokeStyle = '#0b0b0c'; g.lineWidth = 14;
+  g.beginPath(); g.moveTo(64, 0); g.lineTo(64, 128); g.moveTo(0, 64); g.lineTo(128, 64); g.stroke();
 });
 
 // ---------------------------------------------------------------------------------- geometry helpers
@@ -198,12 +197,12 @@ function buildWheel(kit, fit, spec, C, look) {
     for (const s of [-1, 1]) { const p = kit.mesh(new THREE.BoxGeometry(race ? 0.055 : 0.04, race ? 0.1 : 0.13, 0.005), race ? dark : metal, spin); p.position.set(s * (R - (race ? 0.025 : 0.05)), 0.012, -0.034); p.rotation.y = s * 0.25; out.paddles.push(p); }
   }
   // hands: rigid on the rim at nine and three; the arms follow through the wrists
-  const glove = kit.mat({ color: race ? 0x1a1b1f : 0x6a4a2e, roughness: race ? 0.8 : 0.55 }), trim = kit.mat({ color: race ? (spec.body?.color ?? 0xc8141c) : 0x4a321e, roughness: 0.7 });
+  const glove = kit.mat({ color: race ? 0xa81c26 : 0x6a4a2e, roughness: race ? 0.8 : 0.55 }), trim = kit.mat({ color: race ? 0x141416 : 0x4a321e, roughness: 0.7 });
   out.wrists = [];
   for (const s of [-1, 1]) {
     const hand = new THREE.Group(); spin.add(hand); hand.rotation.z = s > 0 ? 0 : Math.PI; hand.scale.y = s;       // left hand = right hand turned half a turn and mirrored
     const fa = 0.0195 / R;
-    for (let f = 0; f < 4; f++) kit.mesh(new THREE.TorusGeometry(R, rt + 0.0105 - (f === 3 ? 0.0015 : 0), 8, 4, fa * 0.9).rotateZ((1.3 - f) * fa * 1.08 - fa * 0.45), f % 2 ? glove : glove, hand);
+    for (let f = 0; f < 4; f++) kit.mesh(new THREE.TorusGeometry(R, rt + 0.0105 - (f === 3 ? 0.0015 : 0), 8, 5, fa * 0.94).rotateZ((1.3 - f) * fa - fa * 0.47), glove, hand);
     const back = kit.mesh(new THREE.SphereGeometry(1, 14, 10), glove, hand); back.scale.set(0.03, 0.047, 0.026); back.position.set(R + 0.012, -0.002, 0.03); back.rotation.y = 0.5;
     kit.mesh(new THREE.BoxGeometry(0.022, 0.05, 0.004), trim, hand).position.set(R + 0.03, -0.002, 0.048);
     const th = kit.mesh(new THREE.CapsuleGeometry(0.0115, 0.036, 4, 8), glove, hand); th.position.set(R - 0.006, 0.05, 0.022); th.rotation.z = 0.25;
@@ -214,7 +213,7 @@ function buildWheel(kit, fit, spec, C, look) {
 
 function buildArms(kit, fit, spec) {
   const race = fit.klass !== 'road', e = V(...fit.eye);
-  const sleeve = kit.mat({ color: race ? 0xe6e7ea : 0x2a323c, roughness: 0.9 }), cuffM = kit.mat({ color: race ? 0x1a1b1f : 0x6a4a2e, roughness: 0.7 });
+  const sleeve = kit.mat({ color: race ? 0xe6e7ea : 0x2a323c, roughness: 0.9 }), cuffM = kit.mat({ color: race ? 0xa81c26 : 0x6a4a2e, roughness: 0.7 });
   const narrow = fit.klass === 'formula' || fit.klass === 'proto';
   return [-1, 1].map((s) => ({
     s, shoulder: V(e.x - (narrow ? 0.05 : 0.1), e.y - (narrow ? 0.2 : 0.215), e.z + s * (narrow ? 0.17 : 0.2)),
@@ -227,7 +226,7 @@ function buildArms(kit, fit, spec) {
 function buildCockpit(model, spec, fit) {
   const kit = new Kit(), E = fit.E, k = fit.klass, race = k !== 'road', e = V(...fit.eye), s = fit.side;
   const C = V(e.x + E.reach, e.y - E.fall, e.z);
-  const dash = kit.mat({ color: race ? 0x111214 : 0x18191b, roughness: 0.9 }), trim = kit.mat({ color: race ? 0x141517 : 0x2a2b2e, roughness: 0.92 });
+  const dash = kit.mat({ color: race ? 0x0d0e10 : 0x151617, roughness: 0.9 }), trim = kit.mat({ color: race ? 0x0b0b0d : 0x1c1d20, roughness: 0.92 }), liner = race ? trim : kit.mat({ color: 0x4a4c50, roughness: 1 });
   const dark = kit.mat({ color: 0x08080a, roughness: 0.9 }), soft = kit.mat({ color: 0x1f2023, roughness: 0.95 });
   const rig = { kit, fit, C, t: 0, phi: 0, gear: null, flick: [0, 0], head: { yaw: 0, sway: 0, surge: 0, roll: 0 } };
 
@@ -283,23 +282,23 @@ function buildCockpit(model, spec, fit) {
     // A-pillars, header, roof lining and side rails
     const wP = k === 'proto' ? 0.13 : race ? 0.085 : 0.1, base = [], topP = [];
     for (const sd of [-1, 1]) {
-      const yb = yD - 0.03, xb = wsX(yb), b = V(xb, yb, sd * sideZ(xb, yb)), t = V(xH, yL, sd * sideZ(xH, yL));
+      const yb = yD - 0.03, xb = wsX(yb) - fit.sweep, xt = xH - fit.sweep * 0.45, b = V(xb, yb, sd * sideZ(xb, yb)), t = V(xt, yL, sd * sideZ(xt, yL));
       base.push(b); topP.push(t);
       kit.beam(trim, b, t, wP, 0.075, V(0, 0, -sd), [0.5, sd * 0.5]);
       if (!fit.openTop) kit.beam(trim, t, V(xR, yL, sd * sideZ(xR, yL)), 0.085, 0.06, V(0, 0, -sd), [0.5, sd * 0.5]);
     }
     kit.beam(trim, topP[0], topP[1], fit.openTop ? 0.06 : 0.12, 0.05, V(-1, 0, 0), [0.5, 0.5]);
-    if (!fit.openTop) { const zh = sideZ(xH, yL, 0), zr = sideZ(xR, yL, 0); kit.quad(trim, V(xH, yL, -zh), V(xH, yL, zh), V(xR, yL, zr), V(xR, yL, -zr)); }
+    if (!fit.openTop) { const zh = sideZ(xH, yL, 0), zr = sideZ(xR, yL, 0); kit.quad(liner, V(xH, yL, -zh), V(xH, yL, zh), V(xR, yL, zr), V(xR, yL, -zr)); }
     // tinted band along the top of the screen
-    { const y1 = yL - 0.085, x1 = wsX(y1, 0.012), x0 = wsX(yL, 0.012), z0 = sideZ(x0, yL), z1 = sideZ(x1, y1);
-      const sun = new THREE.MeshBasicMaterial({ color: race ? (spec.body?.color ?? 0x101010) : 0x05070a, transparent: true, opacity: race ? 0.9 : 0.6, side: THREE.DoubleSide, depthWrite: false }); kit.mats.push(sun);
+    { const y1 = yL - (race ? 0.05 : 0.035), x1 = wsX(y1, 0.012), x0 = wsX(yL, 0.012), z0 = sideZ(x0, yL), z1 = sideZ(x1, y1);
+      const sun = new THREE.MeshBasicMaterial({ color: race ? (spec.body?.color ?? 0x101010) : 0x05070a, transparent: true, opacity: race ? 0.92 : 0.55, side: THREE.DoubleSide, depthWrite: false }); kit.mats.push(sun);
       if (race) sun.color.multiplyScalar(0.35);
       kit.quad(sun, V(x0, yL, -z0), V(x0, yL, z0), V(x1, y1, z1), V(x1, y1, -z1)).renderOrder = 3; }
     // interior mirror
     if (k !== 'proto') {
-      const mp = V(xH - 0.03, yL - 0.085, 0), mm = kit.mat({ color: 0xffffff, roughness: 0.25, metalness: 0.2, envMapIntensity: 0.9, map: kit.tex(canvasTex(64, 16, (g) => { const gr = g.createLinearGradient(0, 0, 0, 16); gr.addColorStop(0, '#30363d'); gr.addColorStop(0.45, '#6f7780'); gr.addColorStop(0.55, '#1b1d20'); gr.addColorStop(1, '#0c0d0e'); g.fillStyle = gr; g.fillRect(0, 0, 64, 16); })) });
+      const mp = V(xH - 0.05 - fit.sweep * 0.3, yL - 0.07, 0), mm = kit.mat({ color: 0xffffff, roughness: 0.25, metalness: 0.2, envMapIntensity: 0.9, map: kit.tex(canvasTex(64, 16, (g) => { const gr = g.createLinearGradient(0, 0, 0, 16); gr.addColorStop(0, '#30363d'); gr.addColorStop(0.45, '#6f7780'); gr.addColorStop(0.55, '#1b1d20'); gr.addColorStop(1, '#0c0d0e'); g.fillStyle = gr; g.fillRect(0, 0, 64, 16); })) });
       const h = new THREE.Group(); kit.group.add(h); facing(h, mp, V(e.x, e.y - 0.02, e.z * 0.75));
-      kit.mesh(new THREE.BoxGeometry(race ? 0.3 : 0.23, 0.062, 0.02), dark, h); kit.mesh(new THREE.PlaneGeometry(race ? 0.285 : 0.215, 0.05), mm, h).position.z = 0.0105;
+      kit.mesh(new THREE.BoxGeometry(0.22, 0.058, 0.02), dark, h); kit.mesh(new THREE.PlaneGeometry(0.205, 0.046), mm, h).position.z = 0.0105;
       kit.tube(dark, V(xH + 0.03, yL - 0.01, 0), V(mp.x + 0.008, mp.y + 0.02, 0), 0.009);
     }
     // instruments
@@ -318,17 +317,18 @@ function buildCockpit(model, spec, fit) {
       for (const zz of [-1, 1]) { const v = kit.mesh(new THREE.BoxGeometry(0.012, 0.045, 0.11), soft); v.position.set(xD1 - 0.004, yDr - 0.05, zz * (sideZ(xD1, yDr) - 0.14)); }
     } else if (k === 'gt') {
       // dash logger on the column, switch panel in the middle
-      const cw = 0.235, ch = cw * 192 / 512, pc = V(C.x + 0.1, C.y + 0.112, e.z), pod = new THREE.Group(); kit.group.add(pod); facing(pod, pc, V(e.x, e.y - 0.02, e.z));
+      const cw = 0.225, ch = cw * 192 / 512, yb = E.wheelR * Math.sin(0.75) + 0.026, wt = V(C.x + Math.sin(E.rake) * yb, C.y + Math.cos(E.rake) * yb, e.z);
+      const px = C.x + 0.15, pc = V(px, e.y + (wt.y - e.y) / (wt.x - e.x) * (px - e.x) + ch / 2 + 0.004, e.z), pod = new THREE.Group(); kit.group.add(pod); facing(pod, pc, V(e.x, e.y - 0.02, e.z));
       kit.mesh(new THREE.BoxGeometry(cw + 0.02, ch + 0.02, 0.03), dark, pod).position.z = -0.016; screen(pod, cw, ch);
       kit.tube(dark, V(pc.x + 0.02, pc.y - 0.02, pc.z), V(xD1 + 0.05, yDr - 0.04, pc.z), 0.014);
-      const pp = V(xD1 - 0.01, yDr - 0.1, 0), pn = new THREE.Group(); kit.group.add(pn); facing(pn, pp, V(e.x, e.y, e.z * 0.6));
-      const carbon = kit.mat({ color: 0xffffff, map: kit.tex(carbonTex()), roughness: 0.5 }); kit.mesh(new THREE.BoxGeometry(0.24, 0.17, 0.02), carbon, pn);
-      const cols = [0xff3b30, 0xffcc00, 0x34c759, 0x0a84ff, 0xf2f2f2, 0xff9500, 0xf2f2f2, 0x34c759], bg = new THREE.CylinderGeometry(0.009, 0.009, 0.01, 10).rotateX(Math.PI / 2); kit.geos.push(bg);
-      for (let i = 0; i < 12; i++) { const b = new THREE.Mesh(bg, kit.mat({ color: cols[i % 8], roughness: 0.5 })); b.position.set(-0.088 + (i % 4) * 0.058, 0.05 - Math.floor(i / 4) * 0.05, 0.013); pn.add(b); }
+      const pp = V(xD1 - 0.01, yDr - 0.13, 0), pn = new THREE.Group(); kit.group.add(pn); facing(pn, pp, V(e.x, e.y, e.z * 0.6));
+      const carbon = kit.mat({ color: 0xffffff, map: kit.tex(carbonTex()), roughness: 0.5 }); kit.mesh(new THREE.BoxGeometry(0.2, 0.13, 0.02), carbon, pn);
+      const cols = [0xff3b30, 0xffcc00, 0x34c759, 0x0a84ff, 0xf2f2f2, 0xff9500, 0xf2f2f2, 0x34c759], bg = new THREE.CylinderGeometry(0.0065, 0.0065, 0.008, 10).rotateX(Math.PI / 2); kit.geos.push(bg);
+      for (let i = 0; i < 12; i++) { const b = new THREE.Mesh(bg, kit.mat({ color: cols[i % 8], roughness: 0.5 })); b.position.set(-0.07 + (i % 4) * 0.047, 0.04 - Math.floor(i / 4) * 0.04, 0.013); pn.add(b); }
     }
     // roll cage and window net
     if (k === 'gt') {
-      const cage = kit.mat({ color: 0xb9bcc2, roughness: 0.45, metalness: 0.35, envMapIntensity: 0.8 }), r = 0.021, tp = [];
+      const cage = kit.mat({ color: 0x4a4d53, roughness: 0.5, metalness: 0.3, envMapIntensity: 0.7 }), r = 0.021, tp = [];
       for (const sd of [-1, 1]) {
         const i = sd < 0 ? 0 : 1, b = base[i].clone().add(V(-0.12, 0.0, -sd * 0.1)), t = topP[i].clone().add(V(-0.1, -0.045, -sd * 0.085)), rr = V(xR, yL - 0.05, sd * (sideZ(xR, yL) - 0.085));
         tp.push(t); kit.tube(cage, V(b.x + 0.25, yF, b.z), b, r); kit.tube(cage, b, t, r); kit.tube(cage, t, rr, r);
@@ -337,8 +337,8 @@ function buildCockpit(model, spec, fit) {
       }
       kit.tube(cage, tp[0], tp[1], r);
       if (s) { const net = new THREE.MeshBasicMaterial({ map: kit.tex(netTex()), transparent: true, side: THREE.DoubleSide, depthWrite: false }); kit.mats.push(net);
-        const xa = e.x + 0.34, y0 = fit.belt + 0.02, y1 = yL - 0.04, q = kit.quad(net, V(xR, y0, s * sideZ(xR, y0, 0.06)), V(xa, y0, s * sideZ(xa, y0, 0.06)), V(xa, y1, s * sideZ(xa, y1, 0.06)), V(xR, y1, s * sideZ(xR, y1, 0.06)));
-        net.map.repeat.set(Math.round((xa - xR) / 0.07), Math.round((y1 - y0) / 0.07)); net.map.wrapS = net.map.wrapT = THREE.RepeatWrapping; q.renderOrder = 3; }
+        const xa = e.x + 0.22, y0 = fit.belt + 0.02, y1 = yL - 0.04, q = kit.quad(net, V(xR, y0, s * sideZ(xR, y0, 0.06)), V(xa, y0, s * sideZ(xa, y0, 0.06)), V(xa, y1, s * sideZ(xa, y1, 0.06)), V(xR, y1, s * sideZ(xR, y1, 0.06)));
+        net.map.repeat.set(Math.round((xa - xR) / 0.09), Math.round((y1 - y0) / 0.09)); net.map.wrapS = net.map.wrapT = THREE.RepeatWrapping; q.renderOrder = 3; }
     }
   }
   rig.wheel = buildWheel(kit, fit, spec, C);
@@ -429,7 +429,7 @@ class InCar {
     const ay = car.ayF || 0, ax = car.axF || 0, kH = 1 - Math.exp(-dt * 7);
     h.yaw += (yawRate - h.yaw) * kS; h.sway += (clamp(-ay * 0.0012, -0.028, 0.028) - h.sway) * kH; h.surge += (clamp(-ax * 0.0011, -0.025, 0.035) - h.surge) * kH; h.roll += (clamp(ay * 0.0011, -0.03, 0.03) - h.roll) * kH;
     camera.position.set(fit.eye[0] + h.surge, fit.eye[1], fit.eye[2] + h.sway).applyMatrix4(ch.matrixWorld);
-    camera.quaternion.copy(_qc).multiply(Q_FWD).multiply(_q.setFromEuler(_eul.set(fit.open ? -0.05 : -0.085, h.yaw, h.roll)));
+    camera.quaternion.copy(_qc).multiply(Q_FWD).multiply(_q.setFromEuler(_eul.set(fit.open ? -0.07 : -0.11, h.yaw, h.roll)));
     return fit.E.fov + Math.min(4, car.speed * 0.05);
   }
 

@@ -164,6 +164,8 @@ textures are generated at load time).
 | | the two Ford Mustang recordings of `coupe.wav` above (every other band) | Cestni dirkač; LSX632 Performance (YouTube) | CC BY 3.0 |
 | `mc720s.wav` (McLaren 720S GT3, 4.0 twin-turbo V8) | [McLaren 720S with Novitec exhaust - engine and exhaust sound (YouTube XfgP-gX7KNg).opus](https://commons.wikimedia.org/wiki/File:McLaren_720S_with_Novitec_exhaust_-_engine_and_exhaust_sound_(YouTube_XfgP-gX7KNg).opus) | Supercars67 (YouTube) | CC BY 3.0 |
 | Ferrari 296 GT3 | no file of its own: plays `hypercar.wav` (the Ferrari 296 recording is this car's own 3.0 120° twin-turbo V6) | see `hypercar.wav` | CC BY-SA 3.0 (bank) |
+| Lamborghini Huracán LP 610-4 | no file of its own: plays `huracan.wav` (a Huracán Performante: this car's own 5.2 V10) | see `huracan.wav` | CC BY 3.0 |
+| Lamborghini Aventador SVJ (6.5 V12) | none: synthesis only (even-firing `V12` layout) | | |
 | Volt-R Quad (electric) | none: synthesis only | | |
 | Audi R18 (`lmp1`, 3.7 V6 TDI) | none: synthesis only, balanced against the two R15 TDI recordings listed below | | |
 
@@ -372,6 +374,12 @@ stretches, the bank's the cleanest cycles; the truth is in between.
   with real full-throttle cycles to the redline. The Ferrari 296 GT3 shares the hypercar's thin 296
   bank (3,000-4,300 rpm real). All sources are road cars except the R8 LMS pull-away; none is a GT3
   car at racing speed, and none has the straight-cut gear whine, which stays synthesised.
+* **Aventador SVJ: synthesised.** Commons has SVJ recordings (the one examined:
+  [Lamborghini Aventador SVJ with Fi Exhaust (YouTube NCbywZoYDKE)](https://commons.wikimedia.org/wiki/File:Lamborghini_Aventador_SVJ_with_Fi_Exhaust_-_engine_and_exhaust_sound_(YouTube_NCbywZoYDKE).opus),
+  FiExhaust, CC BY 3.0). It is music for 110 s, then idle and very short rev blips: only the idle (940 rpm, firing
+  order at 94 Hz) tracks reliably, and in the blips the tracker cannot tell the firing order from the per-bank order
+  (113 / 227 / 338 / 451 Hz lines fit 1,130 or 2,270 rpm). No bank was built rather than ship cycles an octave out.
+  Nothing from that file is shipped. Other Aventador / SV files on Commons were not fetched (rate limits).
 * Pitch-shifting a cycle far from its recorded rpm moves its formants with it
   (dull when shifted down, thin when shifted up). Worst cases: hypercar idle
   and top end, formula mid range, coupe 4000-6000.

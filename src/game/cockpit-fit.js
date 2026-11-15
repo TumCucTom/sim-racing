@@ -11,10 +11,10 @@
 // centre ahead of / below the eye, `rake` = column angle above horizontal (rad), `ratio` = steering
 // ratio (wheel angle / road-wheel angle), `maxTurn` = most the wheel is shown turned (rad).
 export const COCKPIT_CLASS = {
-  road: { back: 0.33, lo: 0.36, hi: 0.50, drop: 0.215, seat: 0.40, reach: 0.50, fall: 0.265, rake: 0.40, wheelR: 0.185, ratio: 14, maxTurn: 2.2, fov: 58 },
-  gt: { back: 0.44, lo: 0.33, hi: 0.47, drop: 0.25, seat: 0.40, reach: 0.46, fall: 0.225, rake: 0.24, wheelR: 0.155, ratio: 11, maxTurn: 2.0, fov: 58 },
-  proto: { back: 0.45, lo: 0.36, hi: 0.56, drop: 0.20, seat: 0.22, reach: 0.44, fall: 0.20, rake: 0.20, wheelR: 0.145, ratio: 9, maxTurn: 1.9, fov: 58 },
-  formula: { reach: 0.40, fall: 0.17, rake: 0.16, wheelR: 0.13, ratio: 7, maxTurn: 1.8, fov: 58 },
+  road: { back: 0.33, lo: 0.36, hi: 0.50, drop: 0.21, seat: 0.40, reach: 0.55, fall: 0.25, rake: 0.40, wheelR: 0.185, ratio: 14, maxTurn: 2.2, fov: 58 },
+  gt: { back: 0.44, lo: 0.33, hi: 0.47, drop: 0.20, seat: 0.40, reach: 0.56, fall: 0.21, rake: 0.24, wheelR: 0.155, ratio: 11, maxTurn: 2.0, fov: 58 },
+  proto: { back: 0.45, lo: 0.36, hi: 0.56, drop: 0.20, seat: 0.22, reach: 0.50, fall: 0.20, rake: 0.20, wheelR: 0.145, ratio: 9, maxTurn: 1.9, fov: 58 },
+  formula: { reach: 0.46, fall: 0.17, rake: 0.16, wheelR: 0.13, ratio: 7, maxTurn: 1.8, fov: 58 },
 };
 // Per-car exceptions; a car spec may carry the same fields in `spec.cockpit`.
 //   klass, side (-1 left-hand drive, +1 right-hand drive, 0 central), eye: [dx, dy, dz] nudge in metres,
@@ -113,6 +113,11 @@ export function fitCabin(hm, spec) {
     const d = -(n[0] * A[0] + n[1] * A[1] + n[2] * A[2] + 0.02);
     fit.sideGlass = { n, d, wBelt: A[2], wRoof: B[2], yLo, yHi };
     hull.push([n[0], n[1], n[2], d], [n[0], n[1], -n[2], d]);
+  }
+  { // the screen is bowed in plan: how far behind the centre of its base the corners are (that is where the A-pillars stand)
+    const zp = fit.sideGlass.wBelt - 0.07; let xc = header.x;
+    for (let x = header.x; x <= cowl.x + 1e-6; x += cell) if (Math.max(top(x, zp), top(x, zp - 0.05)) >= belt + 0.07) xc = x;
+    fit.sweep = clamp(cowl.x - xc - 0.03, 0, 0.45);
   }
   fit.xFront = cowl.x + 0.03; fit.xRear = ex - 0.62;
   hull.push([1, 0, 0, -fit.xFront], [-1, 0, 0, fit.xRear]);

@@ -68,7 +68,7 @@ tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
 - **Models**: road-car models by jasonjliang (Audi R8), jkazulyblanco (Huracán) and Yan Carvalho (AMG GT),
   all CC BY 4.0, with a code-generated GT3 race kit (splitter, skirts, diffuser strakes, swan-neck wing)
   bolted on (`kit` in `GLB_MODELS`). The 296 and 720S have procedural mid-engined bodies (`gtmid`); a
-  front-engined loft (`gtfront`) is the AMG's stand-in while its model loads. 1.75 MB of new `.glb`.
+  front-engined loft (`gtfront`) is the AMG's stand-in while its model loads. 1.65 MB of new `.glb`.
   `tools/models-build.mjs` gained `yaw` (car parked at an angle in its file) and `tyre.cyl` (tyres that
   share a material with the trim). See ASSETS.md for what was rejected and why.
 - **Engine sound**: four new recorded-cycle banks (1.90 MB) from Wikimedia Commons recordings — the R8 LMS
@@ -76,8 +76,17 @@ tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
   and for the AMG one Mercedes SLS band inside a Mustang V8 bank; the 296 GT3 plays the existing Ferrari 296
   bank. The V10 banks have real cycles only up to 3,600 rpm. Sources, authors, licences and the weak
   spots are in AUDIO.md. Not listened to (no audio output here); all 16 audio tests pass for every car.
-- **Menu**: cars are grouped by class in a scrolling panel. Keys: **1–9, 0** select the first ten cars,
-  **[** and **]** step through all fourteen (the hint in the menu said 1–6).
+- **Two road Lamborghinis**: Huracán LP 610-4 (5.2 V10, 610 PS, AWD, 7-speed DCT, 1,630 kg with driver) and
+  Aventador SVJ (6.5 V12, 770 PS, AWD, single-clutch ISR with 90 ms shifts, 1,775 kg with driver, moderate fixed
+  downforce for ALA), from published figures, each with a reference envelope around the factory numbers. The
+  LP 610-4 uses the Huracán model as its author made it (the GT3 car is that model plus the race kit) and the
+  Huracán V10 bank; the SVJ has a procedural body and a new even-firing `V12` layout in the synthesiser
+  (an SVJ recording exists on Commons but its rev blips could not be cut into cycles with a trustworthy rpm, so the V12 is synthesis). Clean AI laps on every circuit dry, and at Ravenscar, Silverstone, Spa, Monza and Laguna Seca in
+  rain and storm; the SVJ's AI setting was lowered to 0.77 after it spun on its out-lap at a wet Spa.
+- **Menu**: cars are grouped by class (GT3 / prototypes / single-seater / road) in a scrolling panel. Keys:
+  **1–9, 0** select the first ten cars, **[** and **]** step through all sixteen (the hint in the menu said 1–6).
+- Hosted page: `node tools/make-artifact.js` after `SINGLE=1 npx vite build` gives a 14.6 MB page (14,575 kB as the tool prints it); the Huracán and AMG
+  models were simplified a second time to stay under 15 MB. There is no room left for another car model.
 
 ## 0.8.0 — weather, time of day, engine audio round 2
 - **Six conditions**, in the menu, on **V** and as `?wx=`: clear, golden hour,

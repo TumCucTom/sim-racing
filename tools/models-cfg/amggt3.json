@@ -1,1 +1,1 @@
-{"fwd":"-x","yaw":-12.65,"wheelbase":2.665,"tyre":{"mat":"^Material\\.023$"},"dropMats":"^Material\\.035$","bodyTris":90000,"wheelTris":24000,"protect":"^Material\\.001$","protectError":0.003}
+{"fwd":"-x","yaw":-12.65,"wheelbase":2.665,"tyre":{"mat":"^Material\\.023$"},"dropMats":"^Material\\.035$","bodyTris":58000,"wheelTris":16000,"protect":"^Material\\.001$","protectError":0.003}

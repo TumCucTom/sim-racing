@@ -11,7 +11,7 @@ const { chromium } = require('playwright');
 const [outDir = 'shots', carsArg = 'all', viewsArg = 'straight,left,right,bonnet', query = 'q=medium&track=spa&wx=clear'] = process.argv.slice(2);
 fs.mkdirSync(outDir, { recursive: true });
 const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
-const p = await b.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+const p = await b.newPage({ viewport: { width: +(process.env.W || 1280), height: +(process.env.H || 720) }, deviceScaleFactor: 1 });
 const errs = [];
 p.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') errs.push(`[${m.type()}] ${m.text()}`); });
 p.on('pageerror', e => errs.push('[pageerror] ' + e.message));
@@ -34,7 +34,7 @@ for (const id of cars) {
       return null;
     }, { view, first });
     first = false;
-    await p.waitForTimeout(2600); const t0 = Date.now();
+    const t0 = Date.now(); await p.evaluate(() => new Promise((res) => { let n = 0; const f = () => (++n >= 14 ? res() : requestAnimationFrame(f)); requestAnimationFrame(f); }));
     const info = await p.evaluate(async () => {
       const g = window.__game, car = g.sim.car, d = (await import('/src/game/cockpit.js')).inCar.debug();
       return { car: g.spec.id, glb: !!g.model.glb, kmh: +(car.speed * 3.6).toFixed(0), steer: +car.steer.toFixed(3), roadWheelDeg: +(car.steer * g.spec.steerLock * 57.3).toFixed(1), wheelDeg: d ? +(d.wheelAngle * 57.3).toFixed(1) : null, rawWheelDeg: d ? +(d.rawWheelAngle * 57.3).toFixed(1) : null, yawRate: +car.r.toFixed(3), kit: d?.meshes ?? 0, calls: g.perf.calls, tris: g.perf.tris };

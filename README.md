@@ -1,8 +1,9 @@
 # Racing Simulator
 
-A browser racing simulator with a deterministic vehicle-dynamics core, fourteen
+A browser racing simulator with a deterministic vehicle-dynamics core, sixteen
 cars from different classes (a six-car GT3 field: 911-style Arrow GT3-R, Audi R8 LMS,
-Lamborghini Huracán, Mercedes-AMG GT3, Ferrari 296 and McLaren 720S; Ferrari 458, Le Mans hypercar, Audi R18 LMP1, stock Mini
+Lamborghini Huracán, Mercedes-AMG GT3, Ferrari 296 and McLaren 720S; Ferrari 458,
+Lamborghini Huracán LP 610-4 and Aventador SVJ road cars, Le Mans hypercar, Audi R18 LMP1, stock Mini
 Cooper S, hot hatch, muscle coupe, V10 single-seater, electric saloon), seven
 circuits (one original; Silverstone, Spa, Monza, the Nürburgring Nordschleife,
 Monaco and Laguna Seca from real survey / map data, with gravel beds and barrier lines
@@ -25,7 +26,15 @@ Controls: **WASD / arrows** drive (gamepad supported) · **Q / E** shift ·
 **M** auto/manual · **R** recover · **Enter** restart · **C** camera ·
 **T** telemetry · **G** ghost (best / AI) · **I** AI autopilot · **Z** ABS ·
 **X** TC · **H** driving difficulty · **L** racing-line guide · **V** weather · **F** perf stats · **N** mute ·
-**1–9, 0** first ten cars · **[ ]** previous / next car (all fourteen) · **Esc** menu.
+**1–9, 0** first ten cars · **[ ]** previous / next car (all sixteen) · **Esc** menu.
+
+**Phones and tablets:** on a touch screen the game shows on-screen controls: brake and
+throttle pedals on the right, and either **left / right buttons** or **tilt steering** (hold
+the phone like a wheel; the angle is taken from gravity so it needs no calibration), switched
+with the Tilt / Buttons button at the top, next to Cam, Reset, Assist and Menu. Tilt needs the
+browser's motion-sensor permission (iOS asks on first use) and is not available inside some
+embedded frames; the game falls back to buttons if no sensor data arrives. Tested with emulated
+touch input only, not on a physical phone.
 
 **Driving difficulty** (menu or **H**; affects only the human driver, never the AI, tests or RL):
 *Simulation* is the car as specified. *Assisted* adds ABS, traction and stability control to
@@ -42,7 +51,7 @@ Mini ran out of test time).
 src/sim/      deterministic core, no DOM — shared by browser, tests and RL
   track.js      circuits -> typed arrays (centreline, width, curvature, elevation, walls)
   vehicle.js    vehicle dynamics (300 Hz fixed step)
-  cars.js       fourteen car specifications + real-world reference envelopes
+  cars.js       sixteen car specifications + real-world reference envelopes
   racing-line.js minimum-curvature racing line for any circuit
   sim.js        car + track + lap/sector timing + track limits
   drivers/      line-following driver, RL observation/action interface, policy runner
@@ -92,6 +101,8 @@ checks the result against a published range for that class of car:
 | Ferrari 296 GT3 | 525 | 1325 | 2.99 [2.9,3.6] ok | 24.1 [22,29] ok | 1.58 [1.45,1.75] ok | 290 [270,295] ok |
 | McLaren 720S GT3 | 521 | 1315 | 2.90 [2.9,3.6] ok | 24.1 [22,29] ok | 1.57 [1.45,1.75] ok | 288 [270,295] ok |
 | Ferrari 458 Italia | 562 | 1565 | 3.40 [3.2,3.7] ok | 31.8 [30,35] ok | 1.07 [1,1.15] ok | 335 [315,335] ok |
+| Lamborghini Huracán LP 610-4 | 602 | 1630 | 2.94 [2.9,3.4] ok | 31.7 [30,35] ok | 1.06 [1,1.15] ok | 326 [315,332] ok |
+| Lamborghini Aventador SVJ | 759 | 1775 | 2.88 [2.6,3.1] ok | 30.1 [29,34] ok | 1.13 [1.08,1.28] ok | 351 [340,362] ok |
 | Aurelia LMH | 671 | 1110 | 2.53 [2.4,3.1] ok | 22.0 [17,23] ok | 2.01 [1.9,2.8] ok | 329 [325,350] ok |
 | Audi R18 e-tron quattro | 503 | 1000 | 2.72 [2.6,3.4] ok | 21.7 [17,23] ok | 1.97 [1.9,2.8] ok | 318 [315,340] ok |
 | Mini Cooper S | 189 | 1310 | 7.22 [6.4,7.3] ok | 35.9 [33,38] ok | 0.90 [0.88,1.02] ok | 237 [225,240] ok |
@@ -120,6 +131,8 @@ tuning, all laps inside track limits; `node tools/ai-laps.js`):
 | Ferrari 296 GT3 | 1:04.22 | 2:18.97 | 2:33.33 | 1:56.29 | 7:24.95 | 1:46.56 | 1:31.70 |
 | McLaren 720S GT3 | 1:04.20 | 2:19.05 | 2:33.47 | 1:56.29 | 7:25.27 | 1:46.57 | 1:31.74 |
 | Ferrari 458 | 1:15.95 | 2:43.17 | 2:59.10 | 2:11.57 | 8:47.63 | 2:03.63 | 1:47.17 |
+| Huracán LP 610-4 | 1:16.77 | 2:45.89 | 3:01.52 | 2:12.82 | 8:48.83 | 2:02.43 |
+| Aventador SVJ | 1:17.14 | 2:45.75 | 3:01.00 | 2:11.09 | 8:27.01 | 1:58.10 |
 | Volt-R | 1:19.09 | 2:49.31 | 3:05.36 | 2:14.34 | 8:44.77 | 2:01.51 | 1:51.02 |
 | Vanta RS | 1:20.83 | 2:52.81 | 3:11.85 | 2:23.73 | 9:30.78 | 2:11.42 | 1:53.98 |
 | Brawler GT | 1:21.50 | 2:54.68 | 3:12.67 | 2:22.71 | 9:34.15 | 2:11.90 | 1:55.00 |
@@ -136,6 +149,13 @@ centres of gravity and the least drag. Track widths, CG heights and aero coeffic
 With the same AI driver settings the six cars cover 1.0 % at Ravenscar (1:04.17–1:04.82)
 and 0.9 % at Spa (2:33.33–2:34.69), every new car within 1 % of the Arrow GT3-R; in rain the five new cars lap Spa in 3:01.4–3:01.9 and Ravenscar in 1:17.2–1:17.4, all inside track limits
 (`node tools/wet-laps.js ravenscar,spa r8lms,huracan,amggt3,f296gt3,mc720s rain`).
+
+**Road Lamborghinis.** The Huracán LP 610-4 (610 PS V10, AWD, dual-clutch) and Aventador SVJ (770 PS V12, AWD,
+single-clutch ISR gearbox with a 90 ms torque gap, ALA modelled as fixed moderate downforce) are specified from
+Lamborghini's published figures and checked against them: 0–100 km/h 3.2 s / 2.8 s claimed, 2.94 / 2.88 s measured
+(the SVJ is traction-limited here); top speed 325 / >350 km/h claimed, 326 / 351 measured. The AI drives the SVJ with a
+cautious setting (it was the only car to spin on its out-lap at a wet Spa with a normal one), so its AI laps on short
+circuits are no quicker than the 458's; that is the driver, not the car.
 
 The class order is what it should be everywhere. Absolute pace on the real
 circuits is 10-15 % off real-world lap records for the class (e.g. GT3 at Spa:
@@ -229,7 +249,7 @@ line on the road, coloured by throttle (green), coast (amber) and brake (red).
 Three.js r187 with image-based lighting from a photographed HDR sky (Poly
 Haven), scanned PBR asphalt, grass, gravel and concrete (Poly Haven,
 ambientCG), rubbered-in racing line, AgX tone mapping, GTAO, bloom and SMAA on
-high quality. Ten of the fourteen cars use detailed third-party glTF models
+high quality. Eleven of the sixteen cars use detailed third-party glTF models
 (Draco-compressed, wheels cut out and re-rigged offline by
 `tools/models-build.mjs`); every asset, author and licence is listed in
 [ASSETS.md](ASSETS.md).
@@ -289,6 +309,8 @@ natural roughness.
 | Ferrari 296 GT3 | shares the Aurelia LMH bank (Ferrari 296, the same V6) | 3030–4290 and 6075 only |
 | McLaren 720S GT3 | McLaren 720S 4.0 twin-turbo V8 | 1810–8100, nearly all |
 | Ferrari 458 | 458 Speciale + 458 Italia | 740, 1840–9100 |
+| Huracán LP 610-4 | shares the Huracán GT3 bank (Huracán Performante, the same V10) | 1500–3600; rest pitch-shifted |
+| Aventador SVJ | none usable — synthesised even-firing V12 (see AUDIO.md) | — |
 | Brawler GT | Ford Mustang GT 5.0 + Mach 1 | 925–4000, 6080, 7500 |
 | Vanta RS | Honda Civic Type R | 1300, 2460–7100 |
 | Mini Cooper S | Mini Countryman / Clubman (same 2.0 turbo family) | 800–6600, all |
@@ -365,7 +387,8 @@ GPU has not been measured.
   models whose authorship looked genuine were used: the Arrow GT3-R is a road 911
   (no wing or race livery); the Audi R8, Huracán and AMG GT are road-car models wearing a
   code-generated race kit (splitter, skirts, diffuser, wing), not the GT3 bodies; the Ferrari 296 GT3
-  and McLaren 720S GT3 have simple code-generated bodies that only suggest the real shapes; the 499P-class hypercar and the Mini have
+  and McLaren 720S GT3 and the Aventador SVJ have simple code-generated bodies that only suggest the real shapes
+  (no openly licensed Aventador with a credible author was found, and the page-size budget is used up); the 499P-class hypercar and the Mini have
   code-generated bodies (visibly simpler than the rest), the muscle coupe is a 1967 fastback, the formula car and R18
   carry their authors' liveries with real sponsor logos. See ASSETS.md.
 - **GT3 class** differences in track width, CG height, aero and differential are informed estimates,
@@ -407,7 +430,7 @@ GPU has not been measured.
   banks derive from ShareAlike works and are redistributed under the same terms.
 - Rendering: three.js. Prop physics: cannon-es.
 
-Fictional car names are used except for the Ferrari 458, Mini Cooper S, Audi R18 and the five
-GT3 cars added in 0.9.0 (Audi, Lamborghini, Mercedes-AMG, Ferrari, McLaren).
+Fictional car names are used except for the Ferrari 458, Mini Cooper S, Audi R18, the five
+GT3 cars added in 0.9.0 (Audi, Lamborghini, Mercedes-AMG, Ferrari, McLaren) and the two road Lamborghinis.
 This is a non-commercial technical project, not affiliated with or endorsed
 by any car maker, sponsor or circuit owner whose name or logo appears.

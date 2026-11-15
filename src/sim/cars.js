@@ -312,10 +312,60 @@ CARS.mc720s = gt3Car({
   body: { style: 'gt', shape: 'mc720', length: 4.66, width: 2.04, height: 1.20, color: 0xff7a00 },
 });
 
-export const CAR_ORDER = ['gt3', 'r8lms', 'huracan', 'amggt3', 'f296gt3', 'mc720s', 'f458', 'hypercar', 'lmp1', 'mini', 'hatch', 'coupe', 'formula', 'ev'];
+// Lamborghini Huracan LP 610-4 (2014 road car) from published figures: 5,204 cc V10,
+// 610 PS at 8,250 rpm, 560 Nm at 6,500 rpm, all-wheel drive, 7-speed dual-clutch,
+// 1,422 kg dry (about 1,550 kg kerb; 1,630 kg here with driver), 2,620 mm wheelbase,
+// 42/58 weight distribution. Published: 0-100 in 3.2 s, 100-0 in 31.9 m, 325 km/h.
+CARS.huracan610 = {
+  id: 'huracan610', name: 'Lamborghini Huracán LP 610-4', klass: 'Supercar · AWD · 5.2 V10',
+  blurb: 'The road car: 610 PS V10 to 8,500 rpm, four driven wheels, dual-clutch. Safe understeer, huge traction.',
+  mass: 1630, wheelbase: 2.62, frontWeight: 0.42, cgHeight: 0.45, trackF: 1.67, trackR: 1.62,
+  yawK: 0.95, wheelRadius: 0.35, wheelInertia: 1.7,
+  drive: 'AWD', frontTorqueSplit: 0.30, diff: { lock: 90, preload: 70, ramp: 0.35 },
+  tireStagger: 0.9, tire: TIRES.sport, rollStiffFront: 0.53,
+  CdA: 0.80, ClA: 0.55, aeroBalance: 0.40,
+  brakeTorque: 11000, brakeBias: 0.66, abs: true, tc: true,
+  engine: {
+    layout: 'V10', cylinders: 10, turbo: false, inertia: 0.13,
+    idle: 1000, redline: 8500, limiter: 8600,
+    torque: [[1000, 380], [2000, 440], [3500, 500], [5000, 540], [6500, 560], [7500, 545], [8250, 520], [8500, 500], [8800, 420]],
+    friction: [26, 0.013],
+  },
+  gears: [3.13, 2.19, 1.63, 1.29, 1.03, 0.84, 0.69], finalDrive: 5.0, shiftTime: 0.06, efficiency: 0.90,
+  steerLock: 0.5, body: { style: 'coupe', length: 4.46, width: 1.92, height: 1.17, color: 0xd0451b },
+  reference: { zeroTo100: [2.9, 3.4], brake100: [30, 35], latG: [1.0, 1.15], topKmh: [315, 332] },
+};
+
+// Lamborghini Aventador SVJ (2018) from published figures: 6,498 cc 60-degree V12,
+// 770 PS at 8,500 rpm, 720 Nm at 6,750 rpm, all-wheel drive, 7-speed single-clutch
+// ISR gearbox (fast but with a real torque interruption), 1,525 kg dry (about 1,700 kg
+// kerb; 1,775 kg here with driver), 2,700 mm wheelbase, 43/57. Active aero (ALA) is
+// modelled as fixed moderate downforce. Published: 0-100 in 2.8 s, 100-0 in 30 m, >350 km/h.
+CARS.svj = {
+  id: 'svj', name: 'Lamborghini Aventador SVJ', klass: 'Supercar · AWD · 6.5 V12',
+  blurb: '770 PS naturally aspirated V12, all-wheel drive, real downforce. Heavy, brutal, and the gearbox punches on every shift.',
+  mass: 1775, wheelbase: 2.70, frontWeight: 0.43, cgHeight: 0.46, trackF: 1.72, trackR: 1.68,
+  yawK: 1.0, wheelRadius: 0.36, wheelInertia: 2.0,
+  drive: 'AWD', frontTorqueSplit: 0.35, diff: { lock: 100, preload: 80, ramp: 0.4 },
+  tireStagger: 0.9, tire: { muX: 1.38, muY: 1.26, loadSens: 0.10, peakAlpha: 0.135, peakKappa: 0.105, C: 1.47, tOpt: 85, tWin: 46, squeal: 0.85 }, rollStiffFront: 0.54,
+  CdA: 0.84, ClA: 1.15, aeroBalance: 0.41,
+  brakeTorque: 13000, brakeBias: 0.66, abs: true, tc: true,
+  engine: {
+    layout: 'V12', cylinders: 12, turbo: false, inertia: 0.16,
+    idle: 950, redline: 8700, limiter: 8800,
+    torque: [[1000, 430], [2000, 520], [3500, 610], [5000, 680], [6750, 720], [7500, 700], [8500, 636], [8700, 610], [9000, 480]],
+    friction: [30, 0.014],
+  },
+  gears: [3.91, 2.76, 2.05, 1.60, 1.30, 1.10, 0.97], finalDrive: 3.3, shiftTime: 0.09, efficiency: 0.89,
+  steerLock: 0.48, body: { style: 'gt', shape: 'svj', length: 4.94, width: 2.10, height: 1.13, color: 0x86c11c },
+  reference: { zeroTo100: [2.6, 3.1], brake100: [29, 34], latG: [1.08, 1.28], topKmh: [340, 362] },
+};
+
+export const CAR_ORDER = ['gt3', 'r8lms', 'huracan', 'amggt3', 'f296gt3', 'mc720s', 'f458', 'hypercar', 'lmp1', 'mini', 'hatch', 'coupe', 'formula', 'ev', 'huracan610', 'svj'];
 // Menu grouping (every car appears exactly once; CAR_ORDER stays the canonical order for tools and keys).
 export const CAR_GROUPS = [
   { title: 'GT3 race cars', ids: ['gt3', 'r8lms', 'huracan', 'amggt3', 'f296gt3', 'mc720s'] },
-  { title: 'Prototypes and single-seater', ids: ['hypercar', 'lmp1', 'formula'] },
-  { title: 'Road cars', ids: ['f458', 'mini', 'hatch', 'coupe', 'ev'] },
+  { title: 'Prototypes', ids: ['hypercar', 'lmp1'] },
+  { title: 'Single-seater', ids: ['formula'] },
+  { title: 'Road cars', ids: ['f458', 'huracan610', 'svj', 'coupe', 'ev', 'hatch', 'mini'] },
 ];

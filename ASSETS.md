@@ -47,7 +47,7 @@ redistributes them under the same licences.
 | `models/ev.glb` | Volt-R Quad | "Generic Electric sedan vector" — https://sketchfab.com/3d-models/generic-electric-sedan-95f32d0d23bf4db48b1b28843385685f | Antonis_zks | CC BY 4.0 | 0.44 MB, 144k |
 | `models/r8lms.glb` | Audi R8 LMS GT3 | "Audi R8" (second-generation road car) — https://sketchfab.com/3d-models/audi-r8-57c798d774004b38a1a08f62f9c76651 | jasonjliang | CC BY 4.0 | 0.43 MB, 48k |
 | `models/huracan.glb` | Lamborghini Huracán GT3 | "Lamborghini huracan" (road car) — https://sketchfab.com/3d-models/lamborghini-huracan-dc5d8c922ada44cc87d4bd4f7d147929 | jkazulyblanco | CC BY 4.0 | 0.71 MB, 96k |
-| `models/amggt3.glb` | Mercedes-AMG GT3 | "Mercedes Benz AMG GT" (road car) — https://sketchfab.com/3d-models/mercedes-benz-amg-gt-661dcab94455463784651a3ebc63cfb9 | Yan Carvalho (carvalhoyan) | CC BY 4.0 | 0.61 MB, 115k |
+| `models/amggt3.glb` | Mercedes-AMG GT3 | "Mercedes Benz AMG GT" (road car) — https://sketchfab.com/3d-models/mercedes-benz-amg-gt-661dcab94455463784651a3ebc63cfb9 | Yan Carvalho (carvalhoyan) | CC BY 4.0 | 0.50 MB, 87k |
 
 Changes made to every file (`tools/models-build.mjs`; `tools/models-preview.mjs` renders a quick check): node transforms baked
 and the car re-oriented to the game's axes (+X forward, +Y up, metres, on the ground, origin at mid-wheelbase); the four wheels
@@ -79,12 +79,21 @@ with a real team's sponsor livery whose low-poly, texture-mapped style looks lik
 either way), and an "AMG GT Black Series" that its own description calls an edit of an existing free model. Other GT3-titled
 uploads in the search results were not examined further once a credible road-car model had been found.
 
+**Road Lamborghinis (0.9.0).** The Huracán LP 610-4 shows `models/huracan.glb` exactly as built, without the race kit:
+jkazulyblanco's model is that road car. The Aventador SVJ is procedural (the mid-engined loft with a fixed wing, splitter and
+diffuser, green). Candidates looked at for it and for other Lamborghinis, none used: "Lamborghini Aventador SVJ SDC (FREE)"
+and the Centenario / Sián / Countach / Urus / Terzo Millennio uploads of the same account (Lambo_SC04: dozens of
+500k-1M-face cars with full interiors within a year, descriptions that point to a second "all is free" account, nothing
+that shows the uploader modelled them) — rejected as not credibly original; "Lamborghini Gallardo" by savelliy07 (82k faces,
+tagged as a Blender model, description copied from an encyclopedia) and the other Huracán uploads — plausible but not
+downloaded or vetted, because the page-size budget was already spent.
+
 The Mini Cooper S is still procedural, with its own body builder (`src/game/minibody.js`, original code, no third-party
 asset). No openly licensed F56 model with a credible origin was found: the candidates on Sketchfab are game rips or
 NonCommercial, the Mini files indexed by Objaverse-XL sit in GitHub repositories with no licence or are a CGTrader purchase,
 and BlenderKit has none.
 
-Car models add about 5.6 MB (`public/models/*.glb` is 7.3 MB including the existing Ferrari; the three GT3 files are 1.75 MB).
+Car models add about 5.5 MB (`public/models/*.glb` is 7.2 MB including the existing Ferrari; the three files added in 0.9.0 are 1.65 MB). The hosted single-file page embeds every `.glb` as base64 and is 14.6 MB with these; there is no room under the 15 MB target for another car model.
 
 ## Trackside data (kerbs, run-off, gravel, barriers) and Laguna Seca
 No image or model files were added for the trackside work: kerb paint, astro-turf, paved run-off,

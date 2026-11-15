@@ -33,6 +33,7 @@ import { inCar } from './cockpit.js';
 import { buildCarModel } from './carmodel.js';
 import { getSky } from './sky.js';
 import { Input } from './input.js';
+import { TouchControls } from './touch.js';
 import { DriveAssist, DIFFICULTY, DIFFICULTY_ORDER } from './assist.js';
 import { Effects } from './effects.js';
 import { HUD, fmtTime } from './hud.js';
@@ -70,7 +71,7 @@ class Game {
   constructor() {
     this.trackId = TRACKS[params.get('track')] ? params.get('track') : (TRACKS[store.get('rr-track')] ? store.get('rr-track') : 'ravenscar');
     this.track = buildTrack(this.trackId);
-    this.qualityName = params.get('q') || store.get('rr-quality') || 'high';
+    this.qualityName = params.get('q') || store.get('rr-quality') || (window.matchMedia?.('(pointer: coarse)').matches ? 'medium' : 'high');
     this.quality = QUALITY[this.qualityName] || QUALITY.high;
     const canvas = document.getElementById('gl');
     const r = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -103,6 +104,7 @@ class Game {
     this.tel = new TelemetryPanel(this.ui, this.rec, this.track, (s) => { this.cursorS = s; });
     this.audio = new AudioEngine();
     this.input = new Input();
+    this.touch = new TouchControls(this.input, { onKey: (k) => this.input.handlers[k]?.(), store, toast: (m, t) => this.hud?.toast(m, t) });
     this.wx = new Weather(this, { env: this.scene.environment });
     this.cam = 0; this.camPos = new THREE.Vector3(); this.camLook = new THREE.Vector3(); this.camInit = false;
     this.diffId = DIFFICULTY[params.get('diff')] ? params.get('diff') : (DIFFICULTY[store.get('rr-diff')] ? store.get('rr-diff') : 'assist');
@@ -394,6 +396,7 @@ class Game {
   // ------------------------------------------------------------------ frame
   frame(now) {
     requestAnimationFrame((t) => this.frame(t));
+    this.touch?.update(this.paused);
     let dt = (now - this.last) / 1000; this.last = now;
     if (dt > 0.1) dt = 0.1;
     const f0 = performance.now();
