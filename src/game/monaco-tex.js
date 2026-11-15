@@ -97,21 +97,21 @@ function drawLayer(id, S) {
       break;
     }
     case L.BANDS: {
-      P.fill('#12171c', -0.5, 0.2, 0, 0);
+      P.fill('#2b3640', -0.5, 0.2, 0, 0);
       for (let f = 0; f < 2; f++) {
         const y0 = f * FH;
-        for (let k = 0; k < 8; k++) { const x = k * 1.6, lit = q.next() < 0.33; pane(P, x + 0.05, y0 + 0.3, 1.5, 2.5, lit, -0.5, true); P.box(x, y0 + 0.3, 0.06, 2.5, '#8d9196', -0.46, 0.4, 0, 0); }
-        P.box(0, y0 + 2.75, W, 0.35, ['#0b0d10', '#191d22'], -0.3, 0.9, 0, 0);                                           // soffit shadow
-        P.box(0, y0 - 0.02, W, 0.3, '#f1ede4', 0.5, 0.9, 0.6, 0); P.box(0, y0 + 0.26, W, 0.03, '#cfcabf', 0.5, 0.9, 0.5, 0);    // slab edge
+        for (let k = 0; k < 8; k++) { const x = k * 1.6, lit = q.next() < 0.33, cur = q.next(); P.box(x + 0.05, y0 + 0.3, 1.5, 2.5, cur < 0.5 ? ['#2a3540', '#4e6272'] : ['#34414c', '#5d7282'], -0.5, 0.08, 0, lit ? 0.5 + 0.5 * q.next() : 0); if (cur > 0.55) P.box(x + 0.05, y0 + 0.3, 1.5 * (cur > 0.8 ? 1 : 0.45), 2.5, 'rgba(232,226,210,0.62)', null, 0.6, 0, lit ? 0.9 : 0); P.box(x, y0 + 0.3, 0.06, 2.5, '#a9adb1', -0.46, 0.4, 0, 0); }
+        P.box(0, y0 + 2.86, W, 0.24, ['#161b21', '#2a333c'], -0.3, 0.9, 0, 0);                                          // soffit shadow
+        P.box(0, y0 - 0.04, W, 0.36, '#f4f0e8', 0.5, 0.9, 0.6, 0); P.box(0, y0 + 0.3, W, 0.03, '#cfcabf', 0.5, 0.9, 0.5, 0);    // slab edge
         for (let k = 0; k < 4; k++) {
-          const x = k * BW, solid = (k + f) % 4 === 3;
-          if (solid) P.box(x + 0.03, y0 + 0.28, BW - 0.06, 0.95, '#ebe7dd', 0.48, 0.9, 0.7, 0);
-          else { P.box(x + 0.03, y0 + 0.28, BW - 0.06, 0.95, 'rgba(120,170,175,0.5)', 0.46, 0.06, 0, 0); P.box(x + 0.03, y0 + 0.28, BW - 0.06, 0.95, ['rgba(255,255,255,0.0)', 'rgba(255,255,255,0.16)'], null, null); }
-          P.box(x, y0 + 1.2, BW, 0.05, '#d4d7d9', 0.5, 0.3, 0, 0); P.box(x, y0 + 0.28, 0.05, 0.95, '#c3c6c8', 0.5, 0.3, 0, 0);
-          if (q.next() < 0.4) plants(P, x + 0.2, y0 + 1.1, BW - 0.4);
+          const x = k * BW, solid = (k + f) % 2 === 1;
+          if (solid) P.box(x + 0.03, y0 + 0.32, BW - 0.06, 0.98, '#efebe2', 0.48, 0.9, 0.7, 0);
+          else { P.box(x + 0.03, y0 + 0.32, BW - 0.06, 0.98, 'rgba(176,208,210,0.78)', 0.46, 0.06, 0, 0); P.box(x + 0.03, y0 + 0.32, BW - 0.06, 0.98, ['rgba(255,255,255,0.0)', 'rgba(255,255,255,0.2)'], null, null); }
+          P.box(x, y0 + 1.28, BW, 0.06, '#e2e5e6', 0.5, 0.3, 0, 0); P.box(x, y0 + 0.32, 0.05, 0.98, '#d0d3d5', 0.5, 0.3, 0, 0);
+          if (q.next() < 0.4) plants(P, x + 0.2, y0 + 1.15, BW - 0.4);
           if (q.next() < 0.3) { const c = AWN[q.int(AWN.length)]; awning(P, x + 0.1, y0 + 2.2, BW - 0.2, 0.6, c[0], c[1]); }
         }
-        for (const x of [0, 6.4]) P.box(x - 0.14, y0, 0.28, FH, '#ece8de', 0.52, 0.9, 0.7, 0);
+        for (const x of [0, 6.4]) P.box(x - 0.14, y0, 0.28, FH, '#efebe2', 0.52, 0.9, 0.7, 0);
       }
       break;
     }
@@ -119,10 +119,10 @@ function drawLayer(id, S) {
       stucco();
       for (let f = 0; f < 2; f++) for (let b = 0; b < 4; b++) {
         const x0 = b * BW, y0 = f * FH, lit = q.next() < 0.36;
-        P.box(x0 + 0.22, y0 + 0.3, BW - 0.44, FH - 0.55, ['#1a1f25', '#0d1013'], -0.5, 0.5, 0, 0);
+        P.box(x0 + 0.22, y0 + 0.3, BW - 0.44, FH - 0.55, ['#2a323a', '#161b20'], -0.5, 0.5, 0, 0);
         pane(P, x0 + 0.5, y0 + 0.34, BW - 1.0, FH - 0.9, lit, -0.5, true);
         P.box(x0 + BW / 2 - 0.03, y0 + 0.34, 0.06, FH - 0.9, '#9a9da1', -0.46, 0.4, 0, 0);
-        if ((b + f) % 3 === 0) P.box(x0 + 0.22, y0 + 0.3, BW - 0.44, 1.0, '#e2ddd2', 0.02, 0.9, 0.8, 0); else railing(P, x0 + 0.22, y0 + 0.3, BW - 0.44, 1.0, 0.0, '#34373c');
+        if ((b + f) % 3 !== 0) P.box(x0 + 0.22, y0 + 0.3, BW - 0.44, 1.0, '#e9e4d9', 0.02, 0.9, 0.8, 0); else railing(P, x0 + 0.22, y0 + 0.3, BW - 0.44, 1.0, 0.0, '#34373c');
         if (q.next() < 0.35) plants(P, x0 + 0.4, y0 + 1.2, BW - 0.8);
         if (q.next() < 0.25) { const c = AWN[q.int(AWN.length)]; awning(P, x0 + 0.22, y0 + FH - 0.85, BW - 0.44, 0.6, c[0], c[1]); }
       }

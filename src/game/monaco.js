@@ -214,7 +214,9 @@ function buildMonaco(M, ctx) {
   const quad = (A, a, b, c, d, layer, tint, nrm) => {
     let nx, ny, nz;
     if (nrm) [nx, ny, nz] = nrm; else { const ux = b[0] - a[0], uy = b[1] - a[1], uz = -(b[2] - a[2]), vx = d[0] - a[0], vy = d[1] - a[1], vz = -(d[2] - a[2]); nx = uy * vz - uz * vy; ny = uz * vx - ux * vz; nz = ux * vy - uy * vx; const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l; }
-    for (const p of [a, b, c, a, c, d]) { A.pos.push(p[0], p[1], -p[2]); A.nor.push(nx, ny, nz); A.fac.push(p[3], p[4], layer); A.tint.push(tint[0], tint[1], tint[2]); }
+    let V = [a, b, c, a, c, d];
+    if (nrm) { const ux = b[0] - a[0], uy = b[1] - a[1], uz = -(b[2] - a[2]), vx = d[0] - a[0], vy = d[1] - a[1], vz = -(d[2] - a[2]); if ((uy * vz - uz * vy) * nx + (uz * vx - ux * vz) * ny + (ux * vy - uy * vx) * nz < 0) V = [a, c, b, a, d, c]; }
+    for (const p of V) { A.pos.push(p[0], p[1], -p[2]); A.nor.push(nx, ny, nz); A.fac.push(p[3], p[4], layer); A.tint.push(tint[0], tint[1], tint[2]); }
   };
   // vertical wall from (ax, ay) to (bx, by), front on the right-hand side of a->b... i.e. outward for a counter-clockwise ring
   const wall = (A, ax, ay, bx, by, z0, z1, layer, tint, u0, u1, v0, v1) => {
@@ -324,9 +326,9 @@ function buildMonaco(M, ctx) {
       const x = x0 + i * C, y = y0 + j * C, k = j * (NX + 1) + i, h = H[k];
       const gx = (H[k + (i < NX ? 1 : 0)] - H[k - (i > 0 ? 1 : 0)]) / (2 * C), gy = (H[k + (j < NY ? NX + 1 : 0)] - H[k - (j > 0 ? NX + 1 : 0)]) / (2 * C), sl = Math.hypot(gx, gy);
       pos.push(x, h - (inWin(x, y) ? 14 : 0), -y);
-      const rock = smooth(0.45, 0.85, sl + 0.25 * hash2(i, j)), town = (1 - smooth(120, 330, h)) * (1 - rock), v = 0.8 + 0.4 * hash2(i * 3, j * 7);
-      const sc0 = [0.105 * v, 0.14 * v, 0.07 * v], rk = [0.5 * v, 0.47 * v, 0.42 * v], tw = [0.3, 0.27, 0.22];
-      col.push(sc0[0] + (rk[0] - sc0[0]) * rock + (tw[0] - sc0[0]) * town * 0.6, sc0[1] + (rk[1] - sc0[1]) * rock + (tw[1] - sc0[1]) * town * 0.6, sc0[2] + (rk[2] - sc0[2]) * rock + (tw[2] - sc0[2]) * town * 0.6);
+      const rock = smooth(0.75, 1.25, sl + 0.3 * hash2(i, j)) * smooth(60, 200, h), town = (1 - smooth(140, 330, h)) * (1 - rock), v = 0.8 + 0.4 * hash2(i * 3, j * 7);
+      const sc0 = [0.085 * v, 0.115 * v, 0.055 * v], rk = [0.36 * v, 0.33 * v, 0.28 * v], tw = [0.2, 0.19, 0.15];
+      col.push(sc0[0] + (rk[0] - sc0[0]) * rock + (tw[0] - sc0[0]) * town * 0.5, sc0[1] + (rk[1] - sc0[1]) * rock + (tw[1] - sc0[1]) * town * 0.5, sc0[2] + (rk[2] - sc0[2]) * rock + (tw[2] - sc0[2]) * town * 0.5);
     }
     for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
       const a = j * (NX + 1) + i, b = a + 1, d = a + NX + 1, e = d + 1;
@@ -376,6 +378,7 @@ function buildMonaco(M, ctx) {
   buildCity(K);
   dressMonaco(K);
   K.flushCity();
+  M.stats = K.cityStats();
   return {
     // per frame: where the car is (drives the tunnel's lighting state)
     update(target) {
@@ -389,7 +392,7 @@ function buildMonaco(M, ctx) {
 // =============================================================================================================
 // Buildings: OSM footprints extruded in bands (plinth, ground floor, storeys, cornice) with styles chosen per block.
 const OLD = ['#e6bd78', '#e3a283', '#f0dfb8', '#e9b9a4', '#ecd08c', '#efc49e', '#dc9672', '#f1e9d8', '#d9d6bf', '#e8c9a0'];
-const MOD = ['#f4f1ea', '#efe5cf', '#eed6c8', '#e4d2b2', '#e6e3dc', '#f2e8d4'];
+const MOD = ['#f6f1e6', '#f1e4c9', '#f0d5c3', '#e9d3ad', '#efe8da', '#f5e7cc'];
 function buildCity(K) {
   const { M, track, sc, terrain, group, detail, cast, facMat, mkAcc, accGeo, quad, wall, srgb, ctx } = K;
   const FH = 3.1, BW = 3.2;
@@ -397,6 +400,7 @@ function buildCity(K) {
   const corridorHit = (x, y, pad) => { const t = terrain(x, y); return !M.inTun(t.idx) && t.dist < (t.side > 0 ? track.wallL[t.idx] : track.wallR[t.idx]) + pad ? t : null; };
   const overTunnel = (x, y) => { const i = nearestIndexGlobal(track, x, y); return M.inTun(i) && Math.hypot(x - track.x[i], y - track.y[i]) < Math.max(track.wallL[i], track.wallR[i]) + 2.2 ? track.z[i] + 7.3 : 0; };
   const foot = [];           // footprints kept, for the infill and props to avoid
+  K.droppedList = [];
   let dropped = 0;
 
   const styleOf = (b) => {
@@ -404,6 +408,7 @@ function buildCity(K) {
     const s = { tint: [1, 1, 1], ground: L.SHOPS, body: L.PLAIN, top: L.PARAPET, topH: 1.2, roof: 'flat', roofCol: [0.5, 0.48, 0.45] };
     const pal = (list) => srgb(list[Math.floor((h1 < 0.65 ? cellH : h2) * list.length) % list.length]);
     if (b.style) Object.assign(s, b.style);
+    else if (b.oldTown && b.kind !== 2) { s.body = h2 < 0.5 ? L.PLAIN : L.BELLE; s.ground = h1 < 0.5 ? L.RUSTIC : L.SHOPS; s.top = L.PARAPET; s.topH = 0.5; s.roof = 'hip'; s.tint = pal(OLD); s.roofCol = [0.5, 0.25, 0.16]; }
     else if (b.kind === 2) { s.body = L.BLANK; s.ground = L.RUSTIC; s.top = L.CORNICE; s.topH = 1.6; s.roof = 'hip'; s.tint = srgb('#e9dcc0'); }
     else if (b.h >= 31 || (b.kind === 1 && b.h >= 23) || (b.a > 1400 && b.h > 19)) {
       s.body = b.kind === 4 && h2 < 0.6 ? L.GLASS : b.kind === 3 ? L.HOTEL : h2 < 0.55 ? L.BANDS : L.LOGGIA; s.ground = h1 < 0.5 ? L.SHOPS : L.CONCRETE; s.tint = pal(MOD); s.roof = 'flat'; s.pent = h1 > 0.45;
@@ -419,8 +424,14 @@ function buildCity(K) {
     let P = b.P.map(p => p.slice());
     // footprints that reach into the road corridor (the modelled road is wider than some streets) are pushed back
     if (!b.free) {
-      for (const p of P) { const t = corridorHit(p[0], p[1], 1.5); if (t) { const i = t.idx, hd = track.heading[i], o = (t.side > 0 ? track.wallL[i] : track.wallR[i]) + 1.8, lat = -(p[0] - track.x[i]) * Math.sin(hd) + (p[1] - track.y[i]) * Math.cos(hd), along = (p[0] - track.x[i]) * Math.cos(hd) + (p[1] - track.y[i]) * Math.sin(hd), s = lat >= 0 ? 1 : -1; p[0] = track.x[i] + Math.cos(hd) * along - Math.sin(hd) * s * o; p[1] = track.y[i] + Math.sin(hd) * along + Math.cos(hd) * s * o; } }
-      for (let k = 0; k < P.length; k++) { const a = P[k], c = P[(k + 1) % P.length], Ln = Math.hypot(c[0] - a[0], c[1] - a[1]), st = Math.max(1, Math.ceil(Ln / 2)); for (let q = 0; q <= st; q++) if (corridorHit(a[0] + (c[0] - a[0]) * q / st, a[1] + (c[1] - a[1]) * q / st, 0.9)) { dropped++; return false; } }
+      // densify the edges that run into the corridor, then move every point inside it back to the building's own side
+      const D = [];
+      for (let k = 0; k < P.length; k++) { const a = P[k], c = P[(k + 1) % P.length], Ln = Math.hypot(c[0] - a[0], c[1] - a[1]), st = Math.max(1, Math.ceil(Ln / 2.5)); D.push(a); let any = false; const mid = []; for (let q = 1; q < st; q++) { const p = [a[0] + (c[0] - a[0]) * q / st, a[1] + (c[1] - a[1]) * q / st]; mid.push(p); if (corridorHit(p[0], p[1], 2.2)) any = true; } if (any) D.push(...mid); }
+      const cx = D.reduce((v, p) => v + p[0], 0) / D.length, cy = D.reduce((v, p) => v + p[1], 0) / D.length;
+      let moved = 0;
+      for (const p of D) { const t = corridorHit(p[0], p[1], 1.7); if (!t) continue; const i = t.idx, hd = track.heading[i], latC = -(cx - track.x[i]) * Math.sin(hd) + (cy - track.y[i]) * Math.cos(hd), s = latC >= 0 ? 1 : -1, o = (s > 0 ? track.wallL[i] : track.wallR[i]) + 1.9, along = (p[0] - track.x[i]) * Math.cos(hd) + (p[1] - track.y[i]) * Math.sin(hd); p[0] = track.x[i] + Math.cos(hd) * along - Math.sin(hd) * s * o; p[1] = track.y[i] + Math.sin(hd) * along + Math.cos(hd) * s * o; moved++; }
+      if (moved) { P = D.filter((p, k) => { const q = D[(k + 1) % D.length]; return Math.hypot(p[0] - q[0], p[1] - q[1]) > 0.3; }); if (P.length < 3) { dropped++; return false; } }
+      for (let k = 0; k < P.length; k++) { const a = P[k], c = P[(k + 1) % P.length], Ln = Math.hypot(c[0] - a[0], c[1] - a[1]), st = Math.max(1, Math.ceil(Ln / 2)); for (let q = 0; q <= st; q++) if (corridorHit(a[0] + (c[0] - a[0]) * q / st, a[1] + (c[1] - a[1]) * q / st, 0.9)) { dropped++; K.droppedList.push([Math.round(cx), Math.round(cy), b.mark || '']); return false; } }
       if (polyArea(P) < 18) { dropped++; return false; }
     }
     const c = [0, 0]; for (const p of P) { c[0] += p[0] / P.length; c[1] += p[1] / P.length; }
@@ -429,7 +440,7 @@ function buildCity(K) {
     let lo = Infinity, hi = -Infinity; for (const g of G) { lo = Math.min(lo, g); hi = Math.max(hi, g); }
     const landG = G.filter(g => g > M.SEA); if (landG.length) hi = Math.max(...landG);
     const gmid = b.z0 !== undefined ? b.z0 : Math.min(hi, lo + 9 > hi ? (lo + hi) / 2 + 1 : lo + 6);
-    const s = styleOf(b), top = gmid + b.h, bodyTop = top - s.topH, base = lo - 2.5;
+    const s = styleOf(b), top = b.topAbs ?? gmid + b.h, bodyTop = top - s.topH, base = lo - 2.5;
     const ti = terrain(c[0], c[1]).idx, A = chunks[Math.min(CH - 1, Math.floor(ti / track.n * CH))], Rf = roofChunks[Math.min(CH - 1, Math.floor(ti / track.n * CH))];
     const stone = srgb('#cdbfa6');
     let seed = Math.floor(hash2(P[0][0] * 7, P[0][1] * 7) * 4);
@@ -481,15 +492,16 @@ function buildCity(K) {
       if (pin) { for (let k = 0; k < pin.length; k++) { const a = pin[k], e = pin[(k + 1) % pin.length], Ln = Math.hypot(e[0] - a[0], e[1] - a[1]), nb = Math.max(1, Math.round(Ln / BW)); wall(A, a[0], a[1], e[0], e[1], top - 0.7, top + 3.0, s.body === L.GLASS ? L.GLASS : L.BANDS, s.tint, 0, nb / 4, 0, 0.5); wall(A, a[0], a[1], e[0], e[1], top + 3.0, top + 3.4, L.PARAPET, s.tint, 0, nb / 4, 0.7, 1); } tri(pin, top + 3.35, [0.52, 0.5, 0.47]); }
       else if (b.a > 140 && detail > 0) { const hx = hash2(P[0][0], 5), bx = c[0] + (hx - 0.5) * 3, by = c[1] + (hash2(P[0][1], 7) - 0.5) * 3; if (inPoly(P, bx - 2, by - 2) && inPoly(P, bx + 2, by + 2)) K.box(A, bx, by, 1.8 + hx, 1.6, hx * 3, top - 0.7, top + 1.6 + hx, L.CONCRETE, srgb('#cfcabf')); }
     }
-    foot.push({ P, c, r: Math.sqrt(b.a) * 0.9 + 4, top, x0: Math.min(...P.map(p => p[0])), x1: Math.max(...P.map(p => p[0])), y0: Math.min(...P.map(p => p[1])), y1: Math.max(...P.map(p => p[1])) });
+    foot.push({ P, c, r: Math.sqrt(b.a) * 0.9 + 4, top, mark: b.mark, x0: Math.min(...P.map(p => p[0])), x1: Math.max(...P.map(p => p[0])), y0: Math.min(...P.map(p => p[1])), y1: Math.max(...P.map(p => p[1])) });
     return true;
   }
   K.addBuilding = addBuilding; K.foot = foot;
 
+  const names = new Map(sc.marks.map(([nm, k]) => [k, nm])); let bi = 0;
   for (const raw of sc.buildings) {
     const P = []; for (let k = 2; k < raw.length; k += 2) P.push([raw[k] / 10, raw[k + 1] / 10]);
     const c = [0, 0]; for (const p of P) { c[0] += p[0] / P.length; c[1] += p[1] / P.length; }
-    const b = { P, h: raw[0] / 10, kind: raw[1] >> 1, c, a: Math.abs(polyArea(P)) };
+    const b = { P, h: raw[0] / 10, kind: raw[1] >> 1, c, a: Math.abs(polyArea(P)), name: names.get(bi) || '' }; bi++;
     K.landmark?.(b);
     if (!b.skip) addBuilding(b);
   }
@@ -498,7 +510,7 @@ function buildCity(K) {
     const roofMat = ctx.wettable(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 }), 0.5);
     roofChunks.forEach((R) => { if (!R.idx.length) return; const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(R.pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(R.col, 3)); g.setIndex(R.idx); g.computeVertexNormals(); group.add(cast(new THREE.Mesh(g, roofMat))); });
   };
-  K.cityStats = () => ({ kept: foot.length, dropped });
+  K.cityStats = () => ({ kept: foot.length, dropped, list: K.droppedList });
 
   // ---- the town beyond 330 m: OSM footprints as boxes, then generated blocks up the hill ----
   {

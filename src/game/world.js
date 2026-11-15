@@ -286,10 +286,11 @@ export function buildWorld(track, renderer, qualityIn) {
   const aspFallback = TX.asphaltTile(aniso);
   const oldU = { value: aspFallback.map }, avgU = { value: 0.068 };
   const asphaltMat = patch(new THREE.MeshStandardMaterial({ map: aspFallback.map, normalMap: aspFallback.normalMap, normalScale: new THREE.Vector2(0.5, 0.5), roughness: 0.86, metalness: 0 }), 'road', {
-    ...ROAD_V, uniforms: { uOld: oldU, uAvg: avgU, uUrban: { value: urban ? 1 : 0 } },
-    fpars: 'uniform sampler2D uOld; uniform float uAvg; uniform float uUrban; varying vec4 vRoad; varying float vRub; varying vec3 vWPos; float gRub; float gPaint;',
+    ...ROAD_V, uniforms: { uOld: oldU, uAvg: avgU, uUrban: { value: urban ? 1 : 0 }, uTun: { value: new THREE.Vector2(...(mc?.tun[0] ? [mc.tun[0][0] * track.ds, mc.tun[0][1] * track.ds] : [-9, -9])) } },
+    fpars: 'uniform sampler2D uOld; uniform float uAvg; uniform float uUrban; uniform vec2 uTun; varying vec4 vRoad; varying float vRub; varying vec3 vWPos; float gRub; float gPaint; float gTun;',
     color: `{
       vec2 m = vRoad.xy;                                   // metres across (+left) / along
+      gTun = smoothstep(uTun.x, uTun.x + 16.0, m.y) * (1.0 - smoothstep(uTun.y - 16.0, uTun.y, m.y));   // under cover: dry, lamp-lit
       vec3 a1 = diffuseColor.rgb;
       vec3 a2 = texture2D(map, m.yx / 23.0 + 0.37).rgb;    // same tile, large and rotated: breaks up repetition
       vec3 alb = a1 * mix(1.0, lum(a2) / uAvg, 0.55);
@@ -337,10 +338,11 @@ export function buildWorld(track, renderer, qualityIn) {
       }
       // rain: a water film darkens the surface (the rubbered line dries first on a damp
       // track), water stands along the edges (same function as the sim) and in low spots
-      if (uWet > 0.001) {
+      float wetK = uWet * (1.0 - gTun);
+      if (wetK > 0.001) {
         float dryL = clamp(g * 1.25, 0.0, 1.0) * uLineDry;
         float blot = vnoise(m * vec2(0.9, 0.11) + 7.0);
-        float film = clamp(uWet * 1.35 - dryL * 0.9 - (1.0 - uWet) * blot * 0.9, 0.0, 1.0);
+        float film = clamp(wetK * 1.35 - dryL * 0.9 - (1.0 - wetK) * blot * 0.9, 0.0, 1.0);
         float low = vnoise(m * vec2(0.33, 0.055) + 3.0) * 0.62 + vnoise(m * vec2(1.3, 0.35)) * 0.38;
         float pd = max(puddleDepth(m.y, m.x, vRoad.w), 0.8 * smoothstep(0.63, 0.78, low) * film) * uPuddle;
         gWet = film; gPud = clamp(pd, 0.0, 1.0);
@@ -352,7 +354,7 @@ export function buildWorld(track, renderer, qualityIn) {
     rough: `roughnessFactor = clamp(roughnessFactor - 0.3 * gRub - 0.22 * gPaint, 0.28, 1.0);
       roughnessFactor = mix(mix(roughnessFactor, 0.2 + 0.1 * roughnessFactor, gWet), 0.03, gPud);`,
     normal: 'normal = normalize(mix(normal, nonPerturbedNormal, clamp(0.55 * gRub + 0.7 * gPaint, 0.0, 1.0)));' + WET_NORMAL,
-    out: WET_REFLECT,
+    out: 'if (gTun > 0.001) outgoingLight = mix(outgoingLight, diffuseColor.rgb * vec3(2.6, 2.3, 1.8) * (0.72 + 0.28 * cos(vRoad.y * 0.698)), gTun);' + WET_REFLECT,
   });
   photo(asphaltMat, { map: [ASSETS.asphaltDiff, { aniso }], normalMap: [ASSETS.asphaltNor, { aniso, srgb: false }], roughnessMap: [ASSETS.asphaltRough, { aniso, srgb: false }] });
   loadTexture(ASSETS.asphaltOld, { aniso }).then((t) => { if (t) oldU.value = t; });
@@ -539,7 +541,7 @@ export function buildWorld(track, renderer, qualityIn) {
       const z = track.z[i], a = inner(i), b = Math.max(a + 0.2, wallAt(side, i)), mid = a + Math.min(1.2, (b - a) * 0.5);
       if (urban) o.push(side * a, z - 0.004, 0, side * (a + 0.03), z + 0.11, 0, side * b, z + 0.11, 0);      // raised pavement
       else o.push(side * a, z - 0.004, 0, side * mid, z - 0.018, 0, side * b, z - 0.05, 0);
-    }, { uMetric: 2.3, vScale: 2.3, flip: side < 0, rub }), vergeMat);
+    }, { uMetric: 2.3, vScale: 2.3, flip: side < 0, rub, mask: mc ? (i) => !mc.inTun(i) : null }), vergeMat);
     // paved run-off from roA to the barrier (level with the pavement on street circuits)
     const up = urban ? 0.125 : 0;
     add(strip(track, ksEdge, (i, o) => { const z = track.z[i] + up, a = A.roA[i], b = Math.max(a + 0.1, wallAt(side, i)); o.push(side * a, z - 0.008, 0, side * (a + b) / 2, z - 0.016, 0, side * b, z - 0.03, 0); },
@@ -601,7 +603,7 @@ export function buildWorld(track, renderer, qualityIn) {
           o.push(side * w, y, u0 + 0.02 * du, side * (w - 0.075), y + 0.085, u0 + 0.28 * du, side * (w - 0.075), y + bh - 0.085, u0 + 0.72 * du, side * w, y + bh, u0 + 0.98 * du);
         }
         o.push(side * (w + 0.11), z + top, 1, side * (w + 0.11), z, 1);     // posts side: closes the section from behind
-      }, { mask: i => barAt(side, i) === BAR.ARMCO, vScale: 4, flip: side > 0 }));
+      }, { mask: i => barAt(side, i) === BAR.ARMCO && !mc?.inTun(i), vScale: 4, flip: side > 0 }));
       // belting: the face of the tyre wall up to just below the top tyres, folded back over them
       beltGeo.push(strip(track, ksEdge, (i, o) => { const w = wallAt(side, i), z = track.z[i] - 0.05; o.push(side * (w - 0.74), z, 0, side * (w - 0.74), z + TH * 0.82, 0.9, side * (w - 0.7), z + TH * 0.86, 1); },
         { mask: i => tyresOn(side, i), vScale: 1, flip: side > 0 }));
@@ -905,7 +907,7 @@ export function buildWorld(track, renderer, qualityIn) {
 
   // ---- night: floodlights along the start straight (built the first time they are needed) ----
   const nightMats = [];
-  const mcWorld = mc ? mc.build({ group, quality, patch, wettable, photo, aniso, nightMats, strip, concreteMap: concreteFallback, asphaltMap: aspFallback.map, grassMap: grassFallback, TX }) : null;
+  const mcWorld = mc ? mc.build({ group, quality, patch, wettable, photo, aniso, nightMats, strip, skipOverride, wxUniforms, concreteMap: concreteFallback, asphaltMap: aspFallback.map, grassMap: grassFallback, TX }) : null;
   let night = null;
   function setNight(k) {
     for (const [m, e] of nightMats) m.emissiveIntensity = e * k;

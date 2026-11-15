@@ -20,7 +20,7 @@ export const GRID_GAP = 8;            // metres between consecutive grid slots (
 const GRID_FIRST = 4;                 // pole position: car centre this far behind the line
 const BIN = 25, BIN0 = 400;           // gap timing: time stamps every 25 m of race distance
 const RESTITUTION = 0.18, FRICTION = 0.35, SLOP = 0.01, CORRECT = 0.6;
-const WAKE_LEN = 90, WAKE_DRAG = 0.40, WAKE_DOWN = 0.12;
+const WAKE_LEN = 120, WAKE_DRAG = 0.50, WAKE_DOWN = 0.12;
 const HOLD = { steer: 0, throttle: 0, brake: 1 };
 const COAST = { steer: 0, throttle: 0, brake: 0 };
 
@@ -252,7 +252,7 @@ export class Race {
         const cy = Math.cos(l.yaw), sy = Math.sin(l.yaw);
         const back = -(dx * cy + dy * sy); if (back < 1.5 || back > WAKE_LEN) continue;
         const lat = -dx * sy + dy * cy, sg = 1.2 + 0.045 * back, q = 1 - back / WAKE_LEN;
-        let w = q * Math.pow(q, 0.25) * Math.exp(-(lat * lat) / (sg * sg)) * Math.min(1, (v - 15) / 25);
+        let w = Math.pow(q, 0.8) * Math.exp(-(lat * lat) / (sg * sg)) * Math.min(1, (v - 15) / 25);
         w *= Math.min(1, Math.sqrt(Ld.spec.CdA / F.spec.CdA));
         if (w > k) k = w;
       }

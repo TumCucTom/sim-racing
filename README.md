@@ -300,9 +300,11 @@ manual cars. While you are inside, everything the exterior model has within the 
 static interior and steering wheel, opaque or tinted glass, the roof) is clipped away per
 fragment, so no model shows a second wheel, and what you see through the openings is the real
 model: bonnet, wings and door mirrors. The wheel turns the road-wheel angle times a steering ratio
-(14:1 road, 11:1 GT, 9:1 prototype, 7:1 formula), eased towards about 115–125° so the hands can
-stay on the rim; the camera rides on the sprung body (the cabin stays put, the horizon pitches and
-rolls), looks a little into the corner and moves a couple of centimetres with the g-forces.
+(14:1 road, 11:1 GT, 9:1 prototype, 7:1 formula), eased towards 126° / 115° / 109° / 103° so the
+hands can stay on the rim; the camera rides on the sprung body (the cabin stays put, the horizon pitches and
+rolls), looks a little into the corner and moves a couple of centimetres with the g-forces. The
+cockpit is drawn in the near half of the depth range, so rain streaks and wheel spray appear
+through the windows and never inside the cabin.
 Per-car exceptions go in `spec.cockpit` (`side`, `eye` nudge, any ergonomic field); see
 `tools/cockpit-shots.mjs` for the check that photographs every car.
 
@@ -575,6 +577,14 @@ GPU has not been measured.
   Assetto Corsa Competizione level. Lighting, surfaces and ten car models
   are photographic or authored assets; trackside scenery is generated, trees
   are photo cards, and no venue is a replica.
+- **The cockpit is one procedural kit in four styles** (road, GT, prototype, single-seater), fitted
+  to each car by measurement. It is not that car's real dashboard: every GT3 car has the same
+  wheel and logger, every road car the same binnacle; the pillars are straight beams on the
+  measured screen corners, not the model's own; no model's authored interior is used, even where
+  it has one. The interior mirror shows a painted gradient, not a reflection; there are no wipers
+  and the rain beads are on the camera lens, not the glass; the driver has arms but no body or
+  legs; hands stay at nine and three (no hand-over-hand), so the wheel stops turning visibly
+  beyond roughly a third of full lock in road cars.
 - **Car models do not all match the car simulated.** Only openly licensed
   models whose authorship looked genuine were used: the Arrow GT3-R is a road 911
   (no wing or race livery); the Audi R8, Huracán and AMG GT are road-car models wearing a

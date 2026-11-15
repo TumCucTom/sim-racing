@@ -62,7 +62,9 @@ tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
   cannot black out the view. What you see through the openings is the real model: bonnet, wings, door
   mirrors, front tyres on the formula car. The ambient-occlusion pass is skipped in this view (it cannot
   see the clipping). The kit sits beside the car in the scene graph, casts no shadow and is not seen by
-  the wet-road reflection camera.
+  the wet-road reflection camera. It is drawn in the near half of the depth range, so rain streaks and the
+  car's own spray show through the windows and never inside the cabin (before that, the cockpit greyed out
+  in the wet).
 - **Steering wheel**: road-wheel angle × ratio (14 road, 11 GT, 9 prototype, 7 formula), eased with a tanh
   towards 126° / 115° / 109° / 103° so the hands never leave nine and three, 40 ms lag. Positive steer is
   left and turns the wheel anticlockwise as the driver sees it; `tools/cockpit-shots.mjs` prints steer,

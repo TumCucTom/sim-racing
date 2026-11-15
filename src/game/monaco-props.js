@@ -19,8 +19,8 @@ const ZONES = [
   [1215, 1420, 1, 'garden'], [1215, 1420, -1, 'garden'],        // Fairmont hairpin
   [1420, 1545, 1, 'open'], [1420, 1545, -1, 'garden'],          // Portier
   [1900, 2090, 1, 'open'], [2090, 2200, -1, 'open'],            // tunnel exit, chicane escape road
-  [2180, 2400, 1, 'stand'], [2400, 2540, -1, 'stand'], [2400, 2990, 1, 'stand'],
-  [2560, 2700, -1, 'pool'], [2700, 2900, -1, 'stand'],
+  [2180, 2400, 1, 'stand'], [2400, 2625, -1, 'stand'], [2400, 2990, 1, 'stand'],
+  [2625, 2700, -1, 'pool'], [2700, 2900, -1, 'stand'],
   [2900, 3050, -1, 'open'], [2900, 3060, 1, 'garden'],          // Rascasse, Anthony Noghès
 ];
 // Landmark footprints, found by a point inside them: looks and heights OpenStreetMap does not carry.
@@ -44,6 +44,7 @@ export function prepMonaco(K) {
       if (m.h) b.h = m.h; if (m.top) b.topAbs = m.top;
       b.style = { ...m.style, tint: srgb(m.style.tint) }; b.mark = m.name; K.marks[m.name] = b;
     }
+    if (/Palais princier/.test(b.name)) { b.mark = 'palace'; b.h = 17; b.style = { body: L.PALACE, ground: L.RUSTIC, top: L.CORNICE, topH: 1.6, roof: 'flat', tint: srgb('#f0e2c2') }; }
     if ((b.kind === 0 && b.c[0] > -260 && b.c[0] < 420 && b.c[1] < -560) || b.c[1] < -640) b.oldTown = true;      // on the Rock
   };
 }
@@ -184,8 +185,7 @@ export function dressMonaco(K) {
     const hp = K.marks.paris, fp = hp && K.foot.find(f => inPoly(f.P, 465, 270));
     if (fp) { let b = null; for (const p of fp.P) { const d = Math.hypot(p[0] - 480, p[1] - 320); if (!b || d < b.d) b = { d, p }; } const dx = fp.c[0] - b.p[0], dy = fp.c[1] - b.p[1], l = Math.hypot(dx, dy); tower(A, b.p[0] + dx / l * 5, b.p[1] + dy / l * 5, 4.2, fp.top - 3, fp.top + 6, L.BELLE2, srgb('#f6efdc'), 6, L.ZINC, Math.atan2(dy, dx)); }
     // the Prince's palace on the Rock: crenellated towers over the square
-    const pal = K.foot.find(f => f.name === 'palace');
-    for (const f of K.foot) if (f.palace) { const xs = f.P.map(p => p[0]), ys = f.P.map(p => p[1]); for (const [x, y] of [[Math.min(...xs) + 6, Math.max(...ys) - 6], [Math.max(...xs) - 6, Math.max(...ys) - 8], [(Math.min(...xs) + Math.max(...xs)) / 2, Math.max(...ys) - 4]]) if (inPoly(f.P, x, y)) { box(accs[7], x, y, 4.2, 4.2, 0.3, f.top - 4, f.top + 9, L.STONE, srgb('#e8dcc0')); box(accs[7], x, y, 4.8, 4.8, 0.3, f.top + 9, f.top + 10.4, L.STONE, srgb('#efe4ca')); } }
+    for (const f of K.foot) if (f.mark === 'palace') { const xs = f.P.map(p => p[0]), ys = f.P.map(p => p[1]); for (const [x, y] of [[Math.min(...xs) + 6, Math.max(...ys) - 6], [Math.max(...xs) - 6, Math.max(...ys) - 8], [(Math.min(...xs) + Math.max(...xs)) / 2, Math.max(...ys) - 4]]) if (inPoly(f.P, x, y)) { box(accs[7], x, y, 4.2, 4.2, 0.3, f.top - 4, f.top + 9, L.STONE, srgb('#e8dcc0')); box(accs[7], x, y, 4.8, 4.8, 0.3, f.top + 9, f.top + 10.4, L.STONE, srgb('#efe4ca')); } }
   }
 
   // ---- the pit building, grandstands and street-wall infill, walking the lap on both sides ----
@@ -214,7 +214,7 @@ export function dressMonaco(K) {
     };
     // pit building: garages towards the straight, hospitality above
     const pit = (i0, i1, side) => {
-      const I = range(i0, i1), w = wl(side), A = accOf(i0), f0 = (i) => w[i] + 7.5, zb = (i) => track.z[i] + 0.05, D = 11, grey = srgb('#e9e7e2'), red = srgb('#c9202c');
+      const I = range(i0, i1), w = wl(side), A = accOf(i0), f0 = (i) => w[i] + 5.4, zb = (i) => track.z[i] + 0.05, D = 9, grey = srgb('#e9e7e2'), red = srgb('#c9202c');
       // pit lane apron in front
       sweep(A, I, side, (i) => [[f0(i), zb(i), 0], [f0(i), zb(i) + 3.6, 0.8]], L.LOGGIA, grey, { uw: 12.8 });
       sweep(A, I, side, (i) => [[f0(i), zb(i) + 3.6, 0], [f0(i), zb(i) + 4.2, 0.1], [f0(i) - 1.6, zb(i) + 4.2, 0.4], [f0(i) - 1.6, zb(i) + 4.6, 0.5]], L.CONCRETE, red);
@@ -222,15 +222,14 @@ export function dressMonaco(K) {
       sweep(A, I, side, (i) => [[f0(i) + 0.4, zb(i) + 4.6, 0], [f0(i) + 0.4, zb(i) + 7.7, 0.5]], L.GLASS, WHITE);
       sweep(A, I, side, (i) => [[f0(i) + 0.4, zb(i) + 7.7, 0], [f0(i) + 0.4, zb(i) + 8.5, 0.5]], L.PARAPET, grey);
       sweep(A, I, side, (i) => [[f0(i) + 0.4, zb(i) + 8.3, 0], [f0(i) + D, zb(i) + 8.3, 1.5]], L.CONCRETE, grey);
-      sweep(A, I, side, (i) => [[f0(i) + D, zb(i) + 8.5, 2.74], [f0(i) + D, zb(i) + 3.6, 1.16], [f0(i) + D, zb(i) - 2, 0]], L.BANDS, grey, { back: true });
-      for (const [i, s] of [[i0, -1], [i1, 1]]) { const a = at(i, side * f0(i)), b = at(i, side * (f0(i) + D)), z = zb(i), P = [[a[0], z - 1, a[1], 0, 0], [b[0], z - 1, b[1], 1, 0], [b[0], z + 8.5, b[1], 1, 1.5], [a[0], z + 8.5, a[1], 0, 1.5]]; if ((s * side) < 0) quad(A, P[0], P[1], P[2], P[3], L.BLANK, grey); else quad(A, P[1], P[0], P[3], P[2], L.BLANK, grey); }
+      sweep(A, I, side, (i) => [[f0(i) + D, zb(i) + 8.5, 2.74], [f0(i) + D, zb(i) + 2.3, 0.74], [f0(i) + D, zb(i) - 10.1, -1.26]], L.BANDS, grey, { back: true });
+      for (const [i, s] of [[i0, -1], [i1, 1]]) { const a = at(i, side * f0(i)), b = at(i, side * (f0(i) + D)), z = zb(i), P = [[a[0], z - 10, a[1], 0, -1.5], [b[0], z - 10, b[1], 1, -1.5], [b[0], z + 8.5, b[1], 1, 1.5], [a[0], z + 8.5, a[1], 0, 1.5]]; if ((s * side) < 0) quad(A, P[0], P[1], P[2], P[3], L.BLANK, grey); else quad(A, P[1], P[0], P[3], P[2], L.BLANK, grey); }
       for (const i of I) used[side][i] = 2;
-      K.foot.push({ P: [at(i0, side * f0(i0)), at(i1, side * f0(i1)), at(i1, side * (f0(i1) + D)), at(i0, side * (f0(i0) + D))], c: at(i0, side * f0(i0)), top: 0, x0: 0, x1: 0, y0: 0, y1: 0, pit: true });
     };
     for (const side of [1, -1]) {
       // pit runs first
       let i = 0;
-      while (i < n) { if (zoneMap[side][i] !== 'pit') { i++; continue; } let j = i; while (j < n - 1 && zoneMap[side][j + 1] === 'pit' && free(j + 1, side) > 20 && j - i < 400) j++; if (j - i > 30) pit(i + 2, j - 2, side); i = j + 1; while (i < n && zoneMap[side][i] === 'pit' && free(i, side) <= 20) i++; }
+      while (i < n) { if (zoneMap[side][i] !== 'pit') { i++; continue; } let j = i; while (j < n - 1 && zoneMap[side][j + 1] === 'pit' && free(j + 1, side) > 13.5 && j - i < 400) j++; if (j - i > 30) pit(i + 2, j - 2, side); i = j + 1; while (i < n && zoneMap[side][i] === 'pit' && free(i, side) <= 13.5) i++; }
       i = 0;
       while (i < n) {
         const z = zoneMap[side][i], d = M.inTun(i) || used[side][i] ? 0 : free(i, side);
@@ -318,34 +317,33 @@ export function dressMonaco(K) {
       for (let k = 0, tries = 0; k < cnt && tries < cnt * 6; tries++) {
         const x = r2.uniform(x0, x1), y = r2.uniform(y0, y1); if (!inPoly(P, x, y)) continue; const t = terrain(x, y); if (t.strip || t.dist < t.corr + 3 || t.dist > 330 || M.isSea(x, y) || footAt(x, y)) continue;
         k++; const o = { x, y, z: t.h - 0.2, s: 0.75 + 0.7 * r2.next(), rot: r2.next() * 6.28, k: 4 + r2.int(4), tall: r2.next() < 0.3 };
-        (r2.next() < 0.38 ? palms : cards).push(o);
+        (r2.next() < 0.24 ? palms : cards).push(o);
       }
     }
     // palm geometry
-    const pc = document.createElement('canvas'); pc.width = 256; pc.height = 128; const x = pc.getContext('2d');
-    x.clearRect(0, 0, 256, 128);
-    // frond: rib along x, leaflets angled back
-    x.strokeStyle = '#3f5a23'; x.lineWidth = 2.2; x.beginPath(); x.moveTo(0, 48); x.lineTo(190, 48); x.stroke();
-    for (let u = 6; u < 190; u += 3.1) { const len = 44 * Math.sin(Math.PI * Math.min(1, (u + 26) / 215)) * (0.8 + 0.2 * Math.sin(u * 7.3)); x.strokeStyle = `hsl(${88 + 14 * Math.sin(u)},${40 + 10 * Math.sin(u * 3.1)}%,${17 + 7 * Math.sin(u * 1.7)}%)`; x.lineWidth = 2.0; for (const s of [-1, 1]) { x.beginPath(); x.moveTo(u, 48); x.lineTo(u + len * 0.42, 48 + s * len); x.stroke(); } }
-    // bark
-    for (let v = 96; v < 128; v++) for (let u = 0; u < 256; u += 4) { x.fillStyle = `hsl(${28 + (u * 7 + v * 3) % 9},${22}%,${20 + ((u * 13 + v * 29) % 17)}%)`; x.fillRect(u, v, 4, 1); }
-    for (let u = 0; u < 256; u += 9) { x.fillStyle = 'rgba(20,14,8,0.55)'; x.fillRect(u, 96, 2, 32); }
-    x.fillStyle = '#4f6a2a'; x.fillRect(196, 0, 60, 96);
+    const pc = document.createElement('canvas'); pc.width = 1024; pc.height = 256; const x = pc.getContext('2d');
+    x.clearRect(0, 0, 1024, 256); x.lineCap = 'round';
+    // frond: rib along x, long narrow leaflets swept back, shorter towards the tip
+    x.strokeStyle = '#4a6427'; x.lineWidth = 5; x.beginPath(); x.moveTo(0, 96); x.lineTo(760, 96); x.stroke();
+    for (let u = 16; u < 760; u += 5.2) { const len = 92 * Math.pow(Math.sin(Math.PI * Math.min(1, (u + 110) / 880)), 0.8) * (0.85 + 0.15 * Math.sin(u * 7.3)); for (const s2 of [-1, 1]) { x.strokeStyle = `hsl(${84 + 12 * Math.sin(u + s2)},${42 + 10 * Math.sin(u * 3.1)}%,${19 + 8 * Math.sin(u * 1.7 + s2)}%)`; x.lineWidth = 3.4; x.beginPath(); x.moveTo(u, 96); x.quadraticCurveTo(u + len * 0.25, 96 + s2 * len * 0.5, u + len * 0.62, 96 + s2 * len); x.stroke(); } }
+    // bark: ringed, with old frond bases
+    for (let v = 192; v < 256; v += 2) for (let u = 0; u < 1024; u += 8) { x.fillStyle = `hsl(${26 + (u * 7 + v * 3) % 9},22%,${19 + ((u * 13 + v * 29) % 15)}%)`; x.fillRect(u, v, 8, 2); }
+    for (let u = 0; u < 1024; u += 26) { x.fillStyle = 'rgba(18,12,7,0.6)'; x.fillRect(u, 192, 5, 64); }
     const pt = new THREE.CanvasTexture(pc); pt.colorSpace = THREE.SRGBColorSpace; pt.anisotropy = 4;
     const parts = [];
-    { // trunk: 6 rings, gentle lean; uv into the bark strip
-      const R = 6, S = 6, pos = [], uv = [], idx2 = [];
-      for (let r = 0; r <= R; r++) { const t = r / R, y = t * 7.2, rad = 0.26 - 0.1 * t + (r === 0 ? 0.12 : 0), lean = 0.5 * t * t; for (let s = 0; s <= S; s++) { const a = s / S * 6.283; pos.push(Math.cos(a) * rad + lean, y, Math.sin(a) * rad); uv.push(t * 5, 0.02 + 0.2 * s / S); } }
-      for (let r = 0; r < R; r++) for (let s = 0; s < S; s++) { const a = r * (S + 1) + s, b = a + S + 1; idx2.push(a, b, a + 1, a + 1, b, b + 1); }
+    { // trunk: a few rings, gentle lean; uv into the bark strip
+      const R = 4, S = 5, pos = [], uv = [], idx2 = [];
+      for (let r = 0; r <= R; r++) { const t = r / R, y = t * 7.2, rad = 0.25 - 0.09 * t + (r === 0 ? 0.12 : 0), lean = 0.5 * t * t; for (let s2 = 0; s2 <= S; s2++) { const a = s2 / S * 6.283; pos.push(Math.cos(a) * rad + lean, y, Math.sin(a) * rad); uv.push(t * 3, 0.03 + 0.19 * s2 / S); } }
+      for (let r = 0; r < R; r++) for (let s2 = 0; s2 < S; s2++) { const a = r * (S + 1) + s2, b = a + S + 1; idx2.push(a, b, a + 1, a + 1, b, b + 1); }
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx2); g.computeVertexNormals(); parts.push(g.toNonIndexed());
     }
-    { // fronds
-      const NF = detail > 0 ? 15 : 9, pos = [], uv = [], nor = [], q = new RNG(77);
+    { // fronds: three tiers (upright, spreading, hanging), each an arching strip folded along its rib
+      const NF = detail > 0 ? 13 : 8, pos = [], uv = [], nor = [], q = new RNG(77);
       for (let f = 0; f < NF; f++) {
-        const az = f / NF * 6.283 + q.next() * 0.5, el0 = f % 3 === 0 ? 1.0 : f % 3 === 1 ? 0.45 : -0.1, len = 3.4 + q.next() * 1.0, SEG = 4, hw = 0.85;
-        let px = 0.5, py = 7.25, ang = el0; const ca = Math.cos(az), sa = Math.sin(az); const P = [];
-        for (let s = 0; s <= SEG; s++) { P.push([px, py, s / SEG]); const st = len / SEG; px += Math.cos(ang) * st; py += Math.sin(ang) * st; ang -= 0.42 + 0.1 * q.next(); }
-        for (let s = 0; s < SEG; s++) { const a = P[s], b = P[s + 1]; const V = (p, w) => [0.5 + (p[0] - 0.5) * ca - w * sa, p[1] - Math.abs(w) * 0.25, (p[0] - 0.5) * sa + w * ca, p[2] * 0.742, 0.625 + (w / hw) * 0.37]; const A0 = V(a, -hw), A1 = V(a, hw), B0 = V(b, -hw), B1 = V(b, hw);
+        const az = f * 2.399 + q.next() * 0.3, tier = f % 3, el0 = tier === 0 ? 1.15 : tier === 1 ? 0.6 : 0.15, len = 3.3 + q.next() * 0.9, SEG = 3, hw = 0.62;
+        let px = 0.5, py = 7.2, ang = el0; const ca = Math.cos(az), sa = Math.sin(az); const P = [];
+        for (let s2 = 0; s2 <= SEG; s2++) { P.push([px, py, s2 / SEG]); const st = len / SEG; px += Math.cos(ang) * st; py += Math.sin(ang) * st; ang -= 0.5 + 0.12 * tier; }
+        for (let s2 = 0; s2 < SEG; s2++) { const a = P[s2], b = P[s2 + 1]; const V = (p, w) => [0.5 + (p[0] - 0.5) * ca - w * sa, p[1] - Math.abs(w) * 0.45, (p[0] - 0.5) * sa + w * ca, p[2] * 0.742, 0.625 + (w / hw) * 0.37]; const A0 = V(a, -hw), A1 = V(a, hw), B0 = V(b, -hw), B1 = V(b, hw);
           for (const v of [A0, B0, B1, A0, B1, A1]) { pos.push(v[0], v[1], v[2]); uv.push(v[3], v[4]); nor.push(ca * 0.3, 0.9, sa * 0.3); } }
       }
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); parts.push(g);
@@ -354,7 +352,8 @@ export function dressMonaco(K) {
     const pm = new THREE.MeshStandardMaterial({ map: pt, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.9 });
     const dm = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: pt, alphaTest: 0.4, side: THREE.DoubleSide });
     for (const o of palms) { o.sy = o.s * (o.tall ? 1.7 : 1.05); o.sx = o.sz = o.s * (o.tall ? 0.85 : 1.1); o.col = [0.85 + 0.3 * hash2(o.x, o.y), 0.9 + 0.2 * hash2(o.y, o.x), 0.8]; }
-    const im = instance(pg, pm, palms, { colour: true }); if (im) { im.customDepthMaterial = dm; ctx.skipOverride?.(im); }
+    const byCh = Array.from({ length: 6 }, () => []); for (const o of palms) byCh[Math.min(5, Math.floor(nearestIndexGlobal(track, o.x, o.y) / n * 6))].push(o);
+    for (const l of byCh) { const im = instance(pg, pm, l, { colour: true }); if (im) { im.customDepthMaterial = dm; ctx.skipOverride?.(im); } }
   }
   // garden trees: the shared impostor atlas (broadleaves and stone-pine clumps)
   if (cards.length) {
@@ -426,13 +425,18 @@ export function dressMonaco(K) {
       else { tier(-0.2, 0.12, B * 0.5, zd(0), zd(0) + 0.028, 0.08); const mz = zd(0), mr = 0.0045; for (const [x0, x1, z0, z1] of [[0.05 - mr, 0.05 + mr, mz, mz + 1.15], [-0.36, 0.05, mz + 0.1, mz + 0.112]]) { const w = mr; Q([x0, z0, w], [x1, z0, w], [x1, z1, w], [x0, z1, w], grey); Q([x1, z0, -w], [x0, z0, -w], [x0, z1, -w], [x1, z1, -w], grey); Q([x0, z0, -w], [x0, z0, w], [x0, z1, w], [x0, z1, -w], grey); Q([x1, z0, w], [x1, z0, -w], [x1, z1, -w], [x1, z1, w], grey); } Q([-0.34, mz + 0.115, 0.004], [0.04, mz + 0.115, 0.004], [0.04, mz + 0.13, 0.004], [-0.34, mz + 0.13, 0.004], [0.85, 0.85, 0.8]); }
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.computeVertexNormals(); return g;
     };
-    const lists = [[], [], []], placed = [], q = new RNG(606), cap = detail > 1 ? 330 : detail > 0 ? 230 : 70;
+    const lists = [[], [], []], placed = [], q = new RNG(606), cap = detail > 1 ? 520 : detail > 0 ? 380 : 90;
     const ok = (x, y, nx, ny, len, beam) => {
-      for (const t of [0.04, 0.3, 0.55, 0.8, 1.02]) for (const w of [-0.5, 0.5]) { const px = x + nx * len * t - ny * beam * w, py = y + ny * len * t + nx * beam * w; if (!M.isSea(px, py) || M.seaDist(px, py) < 0.3) return false; }
+      const T = [0.03, 0.27, 0.52, 0.77, 1.02], Wd = [-0.5, 0, 0.5];
+      for (const t of T) for (const w of Wd) { const px = x + nx * len * t - ny * beam * w, py = y + ny * len * t + nx * beam * w; if (!M.isSea(px, py) || M.seaDist(px, py) < 0.3) return false; }
       const cx = x + nx * len * 0.5, cy = y + ny * len * 0.5;
-      for (const o of placed) { const d = Math.hypot(o.cx - cx, o.cy - cy); if (d < (o.len + len) * 0.5 && d < Math.abs((o.cx - cx) * nx + (o.cy - cy) * ny) + (o.beam + beam) * 0.55 + Math.abs((o.cx - cx) * -ny + (o.cy - cy) * nx) * 0 + 0 && Math.abs((o.cx - cx) * -ny + (o.cy - cy) * nx) < (o.beam + beam) * 0.56 + Math.abs(o.nx * ny - o.ny * nx) * (o.len + len) * 0.5) return false; }
+      for (const o of placed) {
+        if (Math.hypot(o.cx - cx, o.cy - cy) > (o.len + len) * 0.5 + 2) continue;
+        for (const t of T) for (const w of Wd) { const px = x + nx * len * t - ny * beam * w - o.cx, py = y + ny * len * t + nx * beam * w - o.cy; if (Math.abs(px * o.nx + py * o.ny) < o.len / 2 + 0.6 && Math.abs(-px * o.ny + py * o.nx) < o.beam / 2 + 0.5) return false; }
+      }
       return true;
     };
+    berths.sort((p, q2) => q2[4] - p[4]);
     let skip = 0;
     for (let k = 0; k < berths.length && placed.length < cap; k++) {
       if (skip > 0) { skip -= 1; continue; }
@@ -449,7 +453,7 @@ export function dressMonaco(K) {
       lists[kind].push({ x: x + nx * len / 2, y: y + ny * len / 2, z: SEA - 0.05, s: len, rot: Math.atan2(ny, nx), col: cl });
       skip = Math.ceil(beam + 0.8 + q.next() * 0.8);
     }
-    const ym = ctx.wettable(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.28, metalness: 0.0 }), 0.15);
+    const ym = ctx.wettable(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.28, metalness: 0.0, side: THREE.DoubleSide }), 0.15);
     lists.forEach((l, kind) => instance(yacht(kind), ym, l, { colour: true }));
 
     // pools
@@ -473,7 +477,7 @@ function buildTunnel(K, { at, sweep, range, accs, flat }) {
   for (const [a, b] of M.tun) {
     const I = range(a, b), H = 5.6, pos = [], col = [], idx = [];
     // inside: self-lit (the lamps are on day and night), brightness painted per vertex
-    const ring = (i) => { const z = track.z[i], l = track.wallL[i] + 0.35, r = track.wallR[i] + 0.35; return [[l, z - 0.1, 0.5], [l, z + 1.3, 0.62], [l, z + 1.32, 0.34], [l, z + 4.2, 0.3], [l - 1.2, z + H, 0.24], [-(r - 1.2), z + H, 0.24], [-r, z + 4.2, 0.3], [-r, z + 1.32, 0.34], [-r, z + 1.3, 0.62], [-r, z - 0.1, 0.5]]; };
+    const ring = (i) => { const z = track.z[i], l = track.wallL[i] + 0.35, r = track.wallR[i] + 0.35, e = track.hw[i] + 0.03; return [[e, z - 0.04, 0.3], [e, z + 0.2, 0.5], [l, z + 0.2, 0.36], [l, z + 0.45, 0.5], [l, z + 0.46, 0.75], [l, z + 0.95, 0.75], [l, z + 0.96, 0.62], [l, z + 1.3, 0.62], [l, z + 1.32, 0.34], [l, z + 4.2, 0.3], [l - 1.2, z + H, 0.24], [-(r - 1.2), z + H, 0.24], [-r, z + 4.2, 0.3], [-r, z + 1.32, 0.34], [-r, z + 1.3, 0.62], [-r, z + 0.96, 0.62], [-r, z + 0.95, 0.75], [-r, z + 0.46, 0.75], [-r, z + 0.45, 0.5], [-r, z + 0.2, 0.36], [-e, z + 0.2, 0.5], [-e, z - 0.04, 0.3]]; };
     let prev = -1;
     for (const i of I) {
       const P = ring(i), base = pos.length / 3, s = i * track.ds, pool = 0.75 + 0.25 * Math.cos(s / 9 * 6.283);
@@ -485,7 +489,7 @@ function buildTunnel(K, { at, sweep, range, accs, flat }) {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx);
     const lining = new THREE.Mesh(g, ctx.patch(new THREE.MeshBasicMaterial({ vertexColors: true, map: ctx.concreteMap, side: THREE.DoubleSide }), 'mctun', {
       vpars: 'varying vec3 vWPos;', vmain: 'vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;', fpars: 'varying vec3 vWPos;',
-      color: 'diffuseColor.rgb = vColor * (0.8 + 0.4 * vnoise(vec2(vWPos.x + vWPos.z, vWPos.y * 2.0) * 0.8)) * (0.92 + 0.08 * step(0.04, fract((vWPos.x + vWPos.z) / 2.4)));' }));
+      color: 'diffuseColor.rgb *= (0.8 + 0.4 * vnoise(vec2(vWPos.x + vWPos.z, vWPos.y * 2.0) * 0.8)) * (0.92 + 0.08 * step(0.04, fract((vWPos.x + vWPos.z) / 2.4)));' }));
     { const uvs = new Float32Array(pos.length / 3 * 2); for (let k = 0; k < uvs.length / 2; k++) { uvs[k * 2] = (pos[k * 3] + pos[k * 3 + 2]) / 3; uvs[k * 2 + 1] = pos[k * 3 + 1] / 3; } g.setAttribute('uv', new THREE.BufferAttribute(uvs, 2)); }
     group.add(lining);
     // lamps: two rows of bright fittings on the soffit
@@ -502,7 +506,7 @@ function buildTunnel(K, { at, sweep, range, accs, flat }) {
       // portal: wing walls and a deep lintel with a parapet, facing the approaching (or departing) driver
       const z = track.z[i], l = track.wallL[i] + 0.35, r = track.wallR[i] + 0.35, top = z + 8.4, wing = 13;
       const P = (off, h, u, v) => { const p = at(i, off); return [p[0], h, p[1], u, v]; };
-      const F = (p0, p1, p2, p3) => { if (dir < 0) quad(A, p1, p0, p3, p2, L_CONC, conc); else quad(A, p0, p1, p2, p3, L_CONC, conc); };
+      const F = (p0, p1, p2, p3) => { if (dir < 0) quad(A, p0, p1, p2, p3, L_CONC, conc); else quad(A, p1, p0, p3, p2, L_CONC, conc); };
       F(P(l + wing, z - 2, 0, 0), P(l, z - 2, wing / 6.4, 0), P(l, top, wing / 6.4, 1.6), P(l + wing, top, 0, 1.6));
       F(P(-r, z - 2, 0, 0), P(-(r + wing), z - 2, wing / 6.4, 0), P(-(r + wing), top, wing / 6.4, 1.6), P(-r, top, 0, 1.6));
       F(P(l, z + 4.2, 0, 0.6), P(-r, z + 4.2, 2, 0.6), P(-r, top, 2, 1.2), P(l, top, 0, 1.2));

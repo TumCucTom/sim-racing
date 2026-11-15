@@ -511,7 +511,7 @@ class Game {
     // in-car cameras (src/game/cockpit.js): sets the pose for 'cockpit' / 'bonnet', shows or hides the cockpit kit
     const inFov = inCar.update({ renderer: this.renderer, scene: this.scene, composer: this.composer, camera: cam, model: this.model, spec: this.spec, car, mode: this.paused ? 'menu' : mode, dt,
       info: { lapTime: this.sim.lapStart === null ? null : this.sim.lapTime, lastLap: this.sim.lastLap, delta: this.rec.delta(this.sim, this.tel.ref()) } });
-    if (this.hudCockpit !== (inFov !== null && mode === 'cockpit')) { this.hudCockpit = !this.hudCockpit; const cl = this.hud.cl.style; cl.transformOrigin = '100% 100%'; cl.transform = this.hudCockpit ? 'scale(0.62)' : ''; cl.opacity = this.hudCockpit ? 0.85 : 1; }
+    const hudIn = inFov !== null && mode === 'cockpit'; if (this.hudCockpit !== hudIn) { this.hudCockpit = hudIn; const cl = this.hud.cl.style; cl.transformOrigin = '100% 100%'; cl.transform = this.hudCockpit ? 'scale(0.62)' : ''; cl.opacity = this.hudCockpit ? 0.85 : 1; }
     if (this.paused) {
       // showroom orbit behind the menu
       const a = performance.now() * 0.00012;

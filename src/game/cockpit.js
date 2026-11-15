@@ -38,6 +38,14 @@ function cabinMat(p) {
   m.customProgramCacheKey = () => 'cabin';
   return m;
 }
+// Everything in the cockpit is drawn into the near half of the depth range (the first-person "view model"
+// trick): the order within the cockpit is unchanged, but nothing in the world further than about twice the
+// near plane can draw over it. Rain streaks and wheel spray therefore show through the windows only.
+function nearHalf(m) {
+  const prev = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => { prev?.call(m, sh, r); sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n\tgl_Position.z = 0.5 * ( gl_Position.z - gl_Position.w );'); };
+  m.customProgramCacheKey = () => 'cabin-near'; m.needsUpdate = true;
+}
 function canvasTex(w, h, draw, repeat) {
   const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
@@ -350,6 +358,7 @@ function buildCockpit(model, spec, fit) {
   const w0 = rig.wheel.wrists[1], wp = wristPos(rig, w0, V()), d0 = wp.distanceTo(rig.arms[1].shoulder);
   rig.L = d0 * 0.56; rig.vmax = Math.ceil((spec.reference?.topKmh?.[1] ?? 300) / 40) * 40 + 20;
   rig.info = { vmax: Math.max(200, rig.vmax), onWheel: !!rig.wheel.screenAt };
+  for (const m of new Set(kit.mats)) nearHalf(m);
   return rig;
 }
 
