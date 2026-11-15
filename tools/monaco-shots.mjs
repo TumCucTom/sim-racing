@@ -38,7 +38,7 @@ for (const sh of shots) {
     g.updateCamera = () => { g.camera.position.set(...pos); if (view === 'top') g.camera.up.set(Math.cos(t.heading[i0]), 0, -Math.sin(t.heading[i0])); g.camera.lookAt(...look); };
     return { i: i0 };
   }, [station, view]);
-  await p.waitForTimeout(info.game ? 9000 : 6000);
+  await p.waitForTimeout(info.game ? 6000 : 4000);
   await p.screenshot({ path: `${dir}/${name}.png`, timeout: 240000 });
   const st = await p.evaluate(() => { const g = window.__game; return { calls: g.perf.calls, tris: g.perf.tris, fps: +g.perf.fps.toFixed(1) }; });
   console.log(name, JSON.stringify(info), JSON.stringify(st));

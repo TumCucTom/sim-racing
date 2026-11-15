@@ -30,7 +30,22 @@ import monacoScene from './tracks/monaco.scene.json' with { type: 'json' };
 import { buildTrackside, finishTrackside, SX, SX_CLASS } from './trackside.js';
 export { SX, SX_CLASS, SX_NAME, SX_MU, SX_ROLL, SX_WET, SX_RUMBLE, GRAVEL, BAR, KERB_COLOURS } from './trackside.js';
 
+import { GP } from './tracks/gp/index.js';
 export const SURF = { ASPHALT: 0, KERB: 1, GRASS: 2, GRAVEL: 3 };
+
+// Compact circuit files (src/sim/tracks/gp/*.json, written by tools/add-circuit.mjs): the centreline is
+// `q`, base64 of [dx, dy (int8, decimetres), right width, left width (uint8, decimetres)] per point from
+// `q0`; terrain-model heights are `eq`, base64 uint16 decimetres at equal fractions of the lap.
+function unpack(def) {
+  if (!def.q || def.pts) return def;
+  const b = Uint8Array.from(atob(def.q), c => c.charCodeAt(0)), pts = [];
+  let x = def.q0[0], y = def.q0[1];
+  for (let k = 0; k < b.length; k += 4) { x += (b[k] << 24) >> 24; y += (b[k + 1] << 24) >> 24; pts.push([x / 10, y / 10, b[k + 2] / 10, b[k + 3] / 10]); }
+  def.pts = pts;
+  if (def.eq) { const e = Uint8Array.from(atob(def.eq), c => c.charCodeAt(0)), m = e.length / 2; def.elevation = Array.from({ length: m }, (_, j) => [j / m, (e[2 * j] | (e[2 * j + 1] << 8)) / 10]); }
+  else def.elevation = [[0, 0], [0.5, 0]];
+  return def;
+}
 
 // [x, y] in metres. Driven counter-clockwise. Start/finish is on the long
 // bottom straight heading +x.
@@ -60,7 +75,10 @@ export const TRACKS = {
   monaco: { ...monaco, real: true, scene: monacoScene, trackside: { ...monaco.trackside, ...monacoSide } },
   laguna: { ...laguna, real: true, trackside: { ...laguna.trackside, ...lagunaSide } },
 };
-export const TRACK_ORDER = ['ravenscar', 'silverstone', 'spa', 'monza', 'nordschleife', 'monaco', 'laguna'];
+for (const id of Object.keys(GP)) TRACKS[id] = { ...GP[id], real: true };
+export const TRACK_ORDER = ['ravenscar', 'silverstone', 'spa', 'monza', 'nordschleife', 'monaco', 'laguna', ...Object.keys(GP)];
+// menu grouping
+export const TRACK_GROUPS = [['Original', ['ravenscar']], ['Grand Prix circuits', ['silverstone', 'spa', 'monza', 'monaco', ...Object.keys(GP)].sort((a, b) => TRACKS[a].name.localeCompare(TRACKS[b].name))], ['Other', ['nordschleife', 'laguna']]];
 
 function catmullRomClosed(pts, perSeg = 40) {
   const n = pts.length;
@@ -203,6 +221,7 @@ export function buildTrack(id = 'ravenscar') {
   if (cache.has(id)) return cache.get(id);
   const def = TRACKS[id];
   if (!def) throw new Error(`unknown track ${id}`);
+  unpack(def);
   const real = !!def.pts;
   // dense polyline [x, y, halfWidth]
   let dense;
@@ -277,7 +296,7 @@ export function buildTrack(id = 'ravenscar') {
     let lo = Infinity, hi = -Infinity; for (let i = 0; i < n; i++) { lo = Math.min(lo, z[i]); hi = Math.max(hi, z[i]); }
     // surveyed profiles on hilly circuits keep their detail; on near-flat ones the
     // terrain model's noise (trees, buildings) is larger than the real gradients
-    z = def.elevSmooth ? smoothClosed(z, 3, def.elevSmooth) : def.elevation.length > 100 && hi - lo > 40 ? smoothClosed(z, 3, 22) : smoothClosed(z, 3, 45);
+    z = def.elevation.length < 3 ? z : def.elevSmooth ? smoothClosed(z, 3, def.elevSmooth) : def.elevation.length > 100 && hi - lo > 40 ? smoothClosed(z, 3, 22) : smoothClosed(z, 3, 45);
   }
   // terrain models pick up buildings and cuttings: keep smoothing until no
   // gradient exceeds what a circuit road can have (~20 %)

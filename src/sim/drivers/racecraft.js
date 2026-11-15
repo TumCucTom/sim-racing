@@ -177,7 +177,7 @@ export class RaceDriver {
     // (never more than the line's own speed there)
     if (this.atk > 0) {
       // brake `atk` metres later than the profile of my lane, fading to nothing as the speed comes down to the apex speed
-      const f = (v - 1.25 * this.vApexAtk) / (0.5 * v + 1), sh = this.atk * (f < 0 ? 0 : f > 1 ? 1 : f);
+      const f = (v - 1.2 * this.vApexAtk) / (0.4 * v + 1), sh = this.atk * (f < 0 ? 0 : f > 1 ? 1 : f);
       const v2 = this.vAt(((k - Math.round(sh / t.ds)) % n + n) % n, this.o); if (v2 > vt) vt = v2;
     }
     const kk = this.speedK * this.paceK * (this.mistakeT > 0 ? this.slipK : 1);
@@ -380,7 +380,7 @@ export class RaceDriver {
               : this.side === inside && !this.switched && dApex < 30 && ds > sepL - 0.7 ? 'late' : '';
         // the door was shut on the inside: go for the outside instead (the defender is now off line)
         const limO = this.lim[tc.idx], roomO = limO - this.side * -1 * tc.d - sepW - 0.5;
-        if (why === 'room' && !this.switched && !this.slowPass && roomO > 0 && ds < 30 && p.aggression > 0.3) { this.side = -this.side; this.switched = true; this.lateM *= 0.6; this.why.swap = (this.why.swap || 0) + 1; }
+        if (why === 'room' && !this.switched && !this.slowPass && roomO > 0 && ds < 30 && p.aggression > 0.3 && T.driver && T.driver.mode === 'defend') { this.side = -this.side; this.switched = true; this.lateM *= 0.6; this.why.swap = (this.why.swap || 0) + 1; }
         else if (why) {
           this.mode = 'line'; this.cool = 2 + 2 * (1 - p.aggression); this.aborts++; this.why[why] = (this.why[why] || 0) + 1;
           this.yieldTo = overlap ? T : null; this.target = null;
@@ -433,7 +433,7 @@ export class RaceDriver {
           // than them and any closing speed on the way in add to it.
           let vApex = v; for (let q = 0; q < (dBrake + 170) / t.ds; q += 5) { const u = this.vLine[(idx + q) % n]; if (u < vApex) vApex = u; }
           // (how much later: a share of the braking distance, from the braking the tune keeps in reserve)
-          const late = (v * v - vApex * vApex) / 28 * (0.06 + 0.08 * p.aggression) * this.atkK;
+          const late = (v * v - vApex * vApex) / 28 * (0.08 + 0.10 * p.aggression) * this.atkK;
           const tGap = (gapA + sepL) / v - late / v - 0.4 * Math.max(0, closing) * (dBrake / v) / v;
           const overlapAtApex = sepL - tGap * vApex;
           const setup = twoWide && dBrake > 40 && dBrake < 50 + 1.6 * v && closing > -1.5 && overlapAtApex > 1.3 - 0.9 * p.aggression;

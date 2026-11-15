@@ -161,7 +161,7 @@ export function monacoSetup(track) {
     const i = nearestIndexGlobal(track, x, y), hd = track.heading[i], lat = -(x - track.x[i]) * Math.sin(hd) + (y - track.y[i]) * Math.cos(hd), dist = Math.hypot(x - track.x[i], y - track.y[i]);
     const side = lat >= 0 ? 1 : -1, wall = side > 0 ? track.wallL[i] : track.wallR[i], corr = wall + 1.5;
     let h, strip = 0;
-    if (inTun(i) && dist < wall + 3) { h = track.z[i]; strip = podium(i) ? 2 : 1; }
+    if (inTun(i) && dist < wall + 3) { h = track.z[i] + (podium(i) ? 7.2 : 0); strip = podium(i) ? 2 : 1; }
     else if (!inTun(i) && dist <= apron[side][i]) { h = track.z[i]; strip = 1; }
     else if (!inTun(i) && dist <= terr[side][i]) { h = track.z[i] + step[side][i]; strip = 1; }
     else h = raw(x, y, out);
