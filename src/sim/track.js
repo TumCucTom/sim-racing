@@ -169,7 +169,12 @@ export function buildTrack(id = 'ravenscar') {
       : 14 + 9.0 * Math.sin(u - 1.9) + 4.0 * Math.sin(2 * u + 0.6) + 1.5 * Math.sin(5 * u + 2.0);
   }
   // hand-approximated profiles need heavy smoothing; surveyed ones only a little
-  if (real) z = def.elevation.length > 100 ? smoothClosed(z, 3, 22) : smoothClosed(z, 3, 40);
+  if (real) {
+    let lo = Infinity, hi = -Infinity; for (let i = 0; i < n; i++) { lo = Math.min(lo, z[i]); hi = Math.max(hi, z[i]); }
+    // surveyed profiles on hilly circuits keep their detail; on near-flat ones the
+    // terrain model's noise (trees, buildings) is larger than the real gradients
+    z = def.elevation.length > 100 && hi - lo > 40 ? smoothClosed(z, 3, 22) : smoothClosed(z, 3, 45);
+  }
   for (let i = 0; i < n; i++) {
     grade[i] = (z[(i + 1) % n] - z[(i - 1 + n) % n]) / (segLen[i] + segLen[(i - 1 + n) % n]);
   }
