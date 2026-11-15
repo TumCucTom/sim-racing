@@ -22,8 +22,17 @@ npm run plot       # docs/learning-curve-gt3.svg, docs/benchmark-gt3.svg
 Controls: **WASD / arrows** drive (gamepad supported) · **Q / E** shift ·
 **M** auto/manual · **R** recover · **Enter** restart · **C** camera ·
 **T** telemetry · **G** ghost (best / AI) · **I** AI autopilot · **Z** ABS ·
-**X** TC · **L** racing-line guide · **V** weather · **F** perf stats · **N** mute ·
+**X** TC · **H** driving difficulty · **L** racing-line guide · **V** weather · **F** perf stats · **N** mute ·
 **1–9** car · **Esc** menu.
+
+**Driving difficulty** (menu or **H**; affects only the human driver, never the AI, tests or RL):
+*Simulation* is the car as specified. *Assisted* adds ABS, traction and stability control to
+every car and 8 % grip. *Easy* is deliberately unrealistic and meant for keyboards: 30 % more
+grip, the car steers itself along the racing line when no steering key is held (a held key adds
+to it), and it brakes for corners by itself. Measured: with the throttle simply held down and
+no other input, Easy laps Ravenscar, Silverstone, Spa, Monza and Monaco cleanly in the GT3,
+Mini, formula car and hypercar, and completes a Nordschleife lap in three of the four (the
+Mini ran out of test time).
 
 ## Architecture
 

@@ -20,8 +20,10 @@
 //
 // Config keys (all optional except fwd):
 //   fwd: '+z' | '-z' | '+x' | '-x'   model's forward axis (after its node transforms), up: '+y' | '+z'
+//   yaw: degrees                      extra turn about the vertical for a car parked at an angle in its file
 //   wheelbase: metres                 scale the model so its wheelbase is this
 //   tyre: { mat: 'regex', node: 'regex' }   what identifies tyre triangles
+//   tyre.cyl: [[x, y, z, r, halfWidth] x4]  tyres share a material with other parts: only vertices inside these count
 //   wheelMats: 'regex'                only these materials may be cut into wheels (default: any)
 //   wheelExclude: 'regex'             materials/nodes that stay on the body (calipers)
 //   dropMats / dropNodes: 'regex'     removed entirely
@@ -52,7 +54,7 @@ await doc.transform(dedup());
 
 // model axes -> game axes (a proper rotation), then a uniform scale chosen below
 const up = cfg.up || '+y';
-const toGame = (() => {
+const toGame0 = (() => {
   const f = cfg.fwd, m = (x, y, z) => [x, y, z];
   if (up === '+y') {
     if (f === '+z') return (p) => m(p[2], p[1], -p[0]);
@@ -67,6 +69,8 @@ const toGame = (() => {
   }
   throw new Error('bad fwd/up');
 })();
+// a car that sits at an angle in its file: cfg.yaw (degrees about +Y, applied after the axis change)
+const toGame = cfg.yaw ? ((cy, sy) => (p) => { const q = toGame0(p); return [q[0] * cy + q[2] * sy, q[1], -q[0] * sy + q[2] * cy]; })(Math.cos(cfg.yaw * Math.PI / 180), Math.sin(cfg.yaw * Math.PI / 180)) : toGame0;
 
 // 1. gather triangles soup per (node, material), in game axes
 const parts = [];                                 // { mat, name, node, pos[], nrm[], uv[] | null }
@@ -107,7 +111,14 @@ for (const node of root.listNodes()) {
 // 2. wheels: bounds of the tyre triangles in each corner
 const isTyre = (p) => (R.tyreMat && R.tyreMat.test(p.mname)) || (R.tyreNode && R.tyreNode.test(p.path));
 let wheels = null;
-const tyreParts = parts.filter(isTyre);
+let tyreParts = parts.filter(isTyre);
+// tyres that share a material with other parts: only the vertices inside the given cylinders count
+// (tyre.cyl = [[x, y, z, radius, halfWidth], ...] in source units, game axes; print them with a first run without it)
+if (cfg.tyre?.cyl) tyreParts = tyreParts.map((p) => {
+  const pos = [];
+  for (let i = 0; i < p.pos.length; i += 3) if (cfg.tyre.cyl.some(([x, y, z, r, hw]) => Math.abs(p.pos[i + 2] - z) <= hw && Math.hypot(p.pos[i] - x, p.pos[i + 1] - y) <= r)) pos.push(p.pos[i], p.pos[i + 1], p.pos[i + 2]);
+  return { pos };
+}).filter(p => p.pos.length);
 if (tyreParts.length) {
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
   for (const p of tyreParts) for (let i = 0; i < p.pos.length; i += 3) { x0 = Math.min(x0, p.pos[i]); x1 = Math.max(x1, p.pos[i]); z0 = Math.min(z0, p.pos[i + 2]); z1 = Math.max(z1, p.pos[i + 2]); }

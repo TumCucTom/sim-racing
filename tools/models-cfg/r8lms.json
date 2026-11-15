@@ -1,0 +1,1 @@
+{"fwd":"+z","wheelbase":2.65,"tyre":{"mat":"^TrimAndWheels$","cyl":[[5.16,1.40,-3.33,1.42,0.6],[5.16,1.40,3.33,1.42,0.6],[-5.75,1.41,-3.33,1.43,0.6],[-5.75,1.41,3.33,1.43,0.6]]},"wheelMats":"^TrimAndWheels$","dropMats":"^Ground$","bodyTris":40000,"wheelTris":14000,"texSize":1024,"texQuality":78,"alpha":{"Body1":"OPAQUE","TrimAndWheels":"OPAQUE"}}

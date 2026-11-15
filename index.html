@@ -29,7 +29,9 @@
   #menu .inner { width:min(1080px, 100%); box-sizing:border-box; padding-block:18px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); margin:auto; }
   #menu h1 { margin:0; font-size:34px; letter-spacing:.02em; } #menu h1 small { font-size:14px; font-weight:400; opacity:.7; margin-left:10px; }
   #menu p.sub { margin:6px 0 14px; opacity:.78; font-size:14px; }
-  #cars { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:10px; }
+  #cars { max-height:min(58vh, 620px); overflow-y:auto; padding-right:6px; scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.35) transparent; }
+  #cars h4 { margin:10px 0 6px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; opacity:.7; font-weight:600; } #cars h4:first-child { margin-top:0; }
+  #cars .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:10px; padding-top:2px; }
   .card { background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.14); border-radius:8px; padding:11px 12px; cursor:pointer; transition:background .15s, border-color .15s, transform .15s; }
   .card:hover { background:rgba(255,255,255,.14); transform:translateY(-2px); } .card.sel { border-color:#ffd166; background:rgba(255,209,102,.13); }
   .card h3 { margin:0 0 2px; font-size:17px; } .card .k { font-size:11px; opacity:.72; min-height:28px; } .card .b { font-size:12px; opacity:.85; margin:6px 0; min-height:48px; }
@@ -56,6 +58,7 @@
     <button class="go" id="go">Drive</button>
     <label>Circuit <select id="track"></select></label>
     <label>Conditions <select id="weather"></select></label>
+    <label>Driving <select id="difficulty"></select></label>
     <label>Graphics <select id="quality"><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
     <button class="alt" id="watch">Watch the AI drive</button>
     <span id="aiinfo" style="font-size:12px;opacity:.75"></span>
@@ -63,13 +66,14 @@
   <div id="keys">
     <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows — drive (gamepad supported)</div>
     <div><kbd>Q</kbd><kbd>E</kbd> shift down / up · <kbd>M</kbd> auto / manual box</div>
+    <div><kbd>H</kbd> driving difficulty: easy (arcade) / assisted / simulation</div>
     <div><kbd>R</kbd> recover to track · <kbd>Enter</kbd> restart on grid</div>
     <div><kbd>C</kbd> camera · <kbd>T</kbd> telemetry · <kbd>F</kbd> performance stats</div>
     <div><kbd>G</kbd> ghost: off / best lap / AI lap</div>
     <div><kbd>L</kbd> racing-line guide (green power, red brake)</div>
     <div><kbd>I</kbd> AI autopilot · <kbd>Z</kbd> ABS · <kbd>X</kbd> traction control</div>
     <div><kbd>V</kbd> weather / time of day</div>
-    <div><kbd>N</kbd> mute · <kbd>1</kbd>–<kbd>6</kbd> switch car · <kbd>Esc</kbd> menu</div>
+    <div><kbd>N</kbd> mute · <kbd>1</kbd>–<kbd>9</kbd> <kbd>0</kbd> or <kbd>[</kbd> <kbd>]</kbd> switch car · <kbd>Esc</kbd> menu</div>
     <div>Hold <kbd>S</kbd> at a standstill to select reverse</div>
   </div>
 </div></div>

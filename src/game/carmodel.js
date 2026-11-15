@@ -45,7 +45,23 @@ const STYLES = {
 STYLES.proto = [[-0.50, 0.95, 0.22, 0.60, 0.50, 0.50, 0.30], [-0.465, 1.00, 0.11, 0.80, 0.56, 0.56, 0.30], [-0.34, 1.00, 0.07, 0.86, 0.62, 0.64, 0.30], [-0.21, 1.00, 0.06, 0.70, 0.64, 0.88, 0.31],
   [-0.08, 0.98, 0.06, 0.58, 0.60, 1.06, 0.35], [0.02, 0.97, 0.06, 0.56, 0.57, 1.08, 0.36], [0.11, 0.97, 0.06, 0.60, 0.53, 0.98, 0.35], [0.21, 0.98, 0.06, 0.74, 0.47, 0.50, 0.33],
   [0.31, 1.00, 0.06, 0.84, 0.40, 0.41, 0.30], [0.42, 0.99, 0.07, 0.70, 0.31, 0.32, 0.30], [0.485, 0.94, 0.09, 0.40, 0.24, 0.25, 0.30], [0.50, 0.88, 0.11, 0.30, 0.22, 0.23, 0.30]];
-const REF_H = { gt: 1.25, hatch: 1.41, proto: 1.08 };
+// GT3 race cars. Mid-engined wedge: cab forward, low nose, long engine deck.
+STYLES.gtmid = [[-0.50, 0.86, 0.34, 0.80, 0.82, 0.50], [-0.47, 0.97, 0.22, 0.88, 0.90, 0.52], [-0.38, 1.00, 0.12, 0.92, 0.95, 0.54], [-0.24, 1.00, 0.09, 0.90, 1.02, 0.52],
+  [-0.10, 0.97, 0.08, 0.86, 1.15, 0.54], [-0.02, 0.96, 0.08, 0.84, 1.19, 0.56], [0.08, 0.96, 0.08, 0.80, 1.14, 0.56], [0.20, 0.97, 0.08, 0.74, 0.78, 0.54],
+  [0.33, 1.00, 0.08, 0.66, 0.68, 0.52], [0.44, 0.98, 0.09, 0.54, 0.56, 0.48], [0.495, 0.88, 0.13, 0.42, 0.44, 0.42], [0.50, 0.80, 0.17, 0.36, 0.38, 0.38]];
+// Front-mid engine: long bonnet, cabin over the rear axle, short tail.
+STYLES.gtfront = [[-0.50, 0.84, 0.36, 0.78, 0.80, 0.50], [-0.47, 0.96, 0.24, 0.88, 0.92, 0.52], [-0.40, 1.00, 0.14, 0.92, 1.00, 0.54], [-0.30, 1.00, 0.10, 0.92, 1.14, 0.56],
+  [-0.20, 0.98, 0.09, 0.90, 1.24, 0.58], [-0.10, 0.97, 0.09, 0.88, 1.22, 0.58], [0.00, 0.97, 0.09, 0.86, 0.92, 0.56], [0.20, 0.99, 0.09, 0.84, 0.86, 0.54],
+  [0.36, 1.00, 0.09, 0.78, 0.80, 0.52], [0.45, 0.98, 0.10, 0.68, 0.70, 0.50], [0.495, 0.88, 0.14, 0.54, 0.56, 0.45], [0.50, 0.82, 0.18, 0.46, 0.48, 0.40]];
+const REF_H = { gt: 1.25, hatch: 1.41, proto: 1.08, gtmid: 1.19, gtfront: 1.24 };
+// Liveries of the procedural GT3 bodies (also the colours of the race kit bolted onto the detailed models).
+const GT_LIVERY = {
+  r8: { num: '25', stripe: 0xd4002a, accent: 0xd4002a, rim: 0x1c1c1e },
+  huracan: { num: '63', stripe: 0x101012, accent: 0x101012, rim: 0x1c1c1e },
+  amg: { num: '4', stripe: 0xe8d400, accent: 0xe8d400, rim: 0x1c1c1e },
+  f296: { num: '51', stripe: 0xf2c200, accent: 0xf4f4f0, rim: 0xc9a227 },
+  mc720: { num: '59', stripe: 0xff7a00, accent: 0xff7a00, rim: 0x1c1c1e },
+};
 
 function sampleStations(keys, n) {
   const out = [], C = keys[0].length;
@@ -233,6 +249,49 @@ function buildWheel(R, width, rimColor, race) {
 
 function box(w, h, d, mat, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; return m; }
 
+// GT3 aero kit: front splitter with end fences, side skirts, rear diffuser with strakes, and a
+// full-width rear wing on swan-neck pylons. Positions in the car's root frame (metres).
+// Used by the procedural GT bodies and bolted onto detailed road-car models (GLB_MODELS `kit`).
+function raceKit(g, { front, rear, width, wingY, deckY, carbon, accentM, legacy = false, tailMat = null, skirts = true, splitter = true, wingX = 0.12, span = 0.94 }) {
+  const add = (m) => { g.add(m); return m; };
+  if (legacy) {
+    add(box(0.5, 0.025, width * 0.98, carbon, front - 0.12, 0.075, 0));
+    add(box(0.7, 0.03, width * 0.9, carbon, rear + 0.3, 0.09, 0));
+    add(box(0.34, 0.03, width * 0.96, carbon, rear + 0.2, wingY, 0));
+    add(box(0.1, 0.012, width * 0.96, carbon, rear + 0.04, wingY + 0.05, 0));
+    for (const sgn of [1, -1]) {
+      add(box(0.4, 0.2, 0.02, carbon, rear + 0.2, wingY - 0.03, sgn * width * 0.48));
+      add(box(0.05, 0.36, 0.03, carbon, rear + 0.3, wingY - 0.19, sgn * width * 0.24));
+    }
+    return;
+  }
+  if (splitter) {
+    add(box(0.5, 0.022, width * 0.9, carbon, front - 0.2, 0.062, 0));
+    for (const sgn of [1, -1]) {
+      add(box(0.36, 0.08, 0.016, carbon, front - 0.24, 0.1, sgn * width * 0.448));                       // splitter end fences
+      const dive = add(box(0.24, 0.012, 0.13, carbon, front - 0.44, 0.38, sgn * (width * 0.5 - 0.06))); dive.rotation.z = -0.3;   // dive planes
+      const dive2 = add(box(0.2, 0.012, 0.11, carbon, front - 0.42, 0.27, sgn * (width * 0.5 - 0.05))); dive2.rotation.z = -0.22;
+    }
+  }
+  if (skirts) for (const sgn of [1, -1]) add(box((front - rear) * 0.4, 0.028, 0.07, carbon, (front + rear) / 2, 0.07, sgn * (width * 0.5 - 0.06)));
+  // diffuser: floor exit and strakes
+  add(box(0.5, 0.02, width * 0.74, carbon, rear + 0.3, 0.15, 0)).rotation.z = 0.2;
+  for (let k = -3; k <= 3; k++) add(box(0.46, 0.12, 0.012, carbon, rear + 0.27, 0.13, k * width * 0.105));
+  // wing: cambered main plane (three slats), gurney, end plates, swan necks
+  const wx = rear + wingX, sp = width * span;
+  for (const [dx, dy, ch, rot] of [[0.1, 0.018, 0.14, -0.05], [0, 0, 0.16, 0.08], [-0.11, 0.022, 0.12, 0.26]]) { const m = add(box(ch, 0.022, sp, carbon, wx + dx, wingY + dy, 0)); m.rotation.z = rot; }
+  add(box(0.012, 0.03, sp, accentM, wx - 0.17, wingY + 0.055, 0));
+  for (const sgn of [1, -1]) {
+    add(box(0.4, 0.17, 0.016, accentM, wx - 0.02, wingY - 0.015, sgn * sp * 0.5));
+    // swan neck: up from the deck behind the wing, hooking forward over its top
+    const zc = sgn * width * 0.2, top = wingY + 0.075;
+    const post = add(box(0.05, Math.max(0.1, top - deckY), 0.022, carbon, wx + 0.3, (top + deckY) / 2, zc)); post.rotation.z = 0.12;
+    add(box(0.3, 0.035, 0.022, carbon, wx + 0.16, top, zc));
+    add(box(0.035, 0.07, 0.022, carbon, wx + 0.02, top - 0.03, zc));
+  }
+  if (tailMat) add(box(0.03, 0.09, 0.07, tailMat, rear + 0.01, 0.34, 0));                                // rain light
+}
+
 export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}) {
   const glb = ghost ? null : glbConfig(spec);   // detailed model, swapped in when it has loaded
   const b = spec.body.style === 'glb' ? { ...spec.body, style: spec.body.fallback } : spec.body, R = spec.wheelRadius;
@@ -254,7 +313,8 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
   const wheelZ = [];
   let shadow = null;
 
-  const kind = spec.id === 'hypercar' ? 'proto' : spec.id === 'mini' ? 'mini' : b.style;
+  const gtShape = b.style === 'gt' && b.shape ? (b.shape === 'amg' ? 'gtfront' : 'gtmid') : null, livery = GT_LIVERY[b.shape] || null;
+  const kind = spec.id === 'hypercar' ? 'proto' : spec.id === 'mini' ? 'mini' : gtShape || b.style;
   if (kind === 'mini') {
     // the Mini has its own body builder (minibody.js): British racing green, white roof and mirror caps
     const hw = b.width / 2;
@@ -264,7 +324,7 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
     wheelZ.push(hw - tyreW[0] / 2 - 0.005, hw - tyreW[1] / 2 - 0.005);
   } else if (b.style !== 'formula') {
     const proto = kind === 'proto';
-    const shift = mid + (proto ? 0 : b.style === 'gt' ? -0.05 : 0.06);
+    const shift = mid + (proto ? 0 : gtShape === 'gtmid' ? 0.03 : b.style === 'gt' ? -0.05 : 0.06);
     const hw = b.width / 2;
     const archR = (R) => R * (race ? 1.1 : 1.16) + 0.012;
     const loft = loftBody(kind, b.length, b.width, b.height, {
@@ -335,20 +395,23 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
       }
     } else if (b.style === 'gt') {
       // splitter, wing, diffuser, roundels
-      chassis.add(box(0.5, 0.025, b.width * 0.98, carbon, front - 0.12, 0.075, 0));
-      chassis.add(box(0.7, 0.03, b.width * 0.9, carbon, rear + 0.3, 0.09, 0));
-      const wingY = b.height + 0.02;
-      chassis.add(box(0.34, 0.03, b.width * 0.96, carbon, rear + 0.2, wingY, 0));
-      chassis.add(box(0.1, 0.012, b.width * 0.96, carbon, rear + 0.04, wingY + 0.05, 0));
+      const lv = livery || { num: '27', stripe: 0xd4002a, accent: null };
+      const accentM = lv.accent != null ? new THREE.MeshStandardMaterial({ color: lv.accent, roughness: 0.4 }) : carbon;
+      raceKit(chassis, { front, rear, width: b.width, wingY: gtShape ? b.height - 0.02 : b.height + 0.02, deckY: rs.pts[9][1] + (gtShape ? 0.06 : 0), carbon, accentM, legacy: !gtShape, tailMat });
       for (const sgn of [1, -1]) {
-        chassis.add(box(0.4, 0.2, 0.02, carbon, rear + 0.2, wingY - 0.03, sgn * b.width * 0.48));
-        chassis.add(box(0.05, 0.36, 0.03, carbon, rear + 0.3, wingY - 0.19, sgn * b.width * 0.24));
-        const ds = sectAt(shift - 0.1);
-        const num = new THREE.Mesh(new THREE.CircleGeometry(0.24, 20), new THREE.MeshStandardMaterial({ map: labelTexture('27', { w: 128, h: 128, bg: '#111', fg: '#fff', font: 'bold 84px sans-serif' }), roughness: 0.5, polygonOffset: true, polygonOffsetFactor: -3 }));
-        num.position.set(shift - 0.1, ds.pts[3][1], sgn * (ds.pts[3][0] + 0.004)); num.rotation.y = sgn > 0 ? 0 : Math.PI; chassis.add(num);
+        const dx = gtShape === 'gtfront' ? -0.45 : gtShape ? 0.25 : -0.1, ds = sectAt(shift + dx);
+        const num = new THREE.Mesh(new THREE.CircleGeometry(0.24, 20), new THREE.MeshStandardMaterial({ map: labelTexture(lv.num, { w: 128, h: 128, bg: gtShape ? '#f4f4f0' : '#111', fg: gtShape ? '#111' : '#fff', font: 'bold 84px sans-serif' }), roughness: 0.5, polygonOffset: true, polygonOffsetFactor: -3 }));
+        num.position.set(shift + dx, ds.pts[3][1], sgn * (ds.pts[3][0] + 0.004)); num.rotation.y = sgn > 0 ? 0 : Math.PI; chassis.add(num);
       }
-      const stripeM = new THREE.MeshStandardMaterial({ color: 0xd4002a, roughness: 0.4 });
+      const stripeM = new THREE.MeshStandardMaterial({ color: lv.stripe, roughness: 0.4 });
       addPatch(loft.patchGeo(-0.5, 0.5, 8, 8, 0.003), stripeM);                          // centre stripe over the whole car
+      if (gtShape) {
+        addPatch(loft.patchGeo(-0.5, 0.5, 1, 1, 0.003), stripeM);                        // sill band
+        if (gtShape === 'gtmid') addPatch(loft.patchGeo(-0.2, -0.08, 3, 4, 0.004), black);   // side intakes ahead of the rear wheels
+        else addPatch(loft.patchGeo(0.1, 0.17, 3, 3, 0.004), black);                     // front-wing vents behind the wheels
+        const sun = new THREE.MeshStandardMaterial({ color: lv.accent ?? 0x111111, roughness: 0.5 });
+        const w0 = gtShape === 'gtmid' ? 0.085 : -0.095; addPatch(loft.patchGeo(w0, w0 + 0.035, 7, 8, 0.004), sun);   // windscreen banner
+      }
     }
     if (b.style === 'hatch') chassis.add(box(0.28, 0.03, b.width * 0.72, paintMat, rear + 0.36, b.height * 0.985, 0));
     if (b.style === 'coupe') chassis.add(box(0.12, 0.04, b.width * 0.7, paintMat, rear + 0.12, rs.pts[5][1] + 0.04, 0));
@@ -360,7 +423,7 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
     if (!ghost) root.add(shadow = contactShadow(spec.wheelbase + 1.2, 1.5));
   }
 
-  const rimColor = b.style === 'formula' ? 0x202024 : b.style === 'gt' ? 0xc9a227 : b.style === 'coupe' ? 0x2a2a2c : 0xb8bcc4;
+  const rimColor = b.style === 'formula' ? 0x202024 : livery ? livery.rim : b.style === 'gt' ? 0xc9a227 : b.style === 'coupe' ? 0x2a2a2c : 0xb8bcc4;
   for (let i = 0; i < 4; i++) {
     const front = i < 2, sgn = i % 2 === 0 ? -1 : 1; // sim wheel 0 = front-left = -Z
     const steer = new THREE.Group();
@@ -378,7 +441,7 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
     });
   }
   const model = {
-    root, chassis, wheels, tailMat, shadow,
+    root, chassis, wheels, tailMat, shadow, glassMats: [glassMat],
     // steer angle (rad) for front wheels, spin increment (rad) for all
     setWheel(i, steer, dSpin) { const w = wheels[i]; if (i < 2) w.steer.rotation.y = steer; w.spin.rotation.z -= dSpin; },
     setBrake(on) { tailMat.emissiveIntensity = on ? 3.2 : 0.35; },
@@ -408,6 +471,9 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
 //               [x, y, z, width, height] in the model's own metres, facing backwards
 //   shadow      [length, width] of the soft contact shadow in metres (default: model bounds)
 //   ao          { url, w, l } baked ground-shadow texture laid under the model (model axes)
+//   kit         GT3 race kit (splitter, skirts, diffuser strakes, swan-neck wing) built around a road-car
+//               model: { wingY, deckY } = heights of the wing and of the rear deck its pylons stand on (m),
+//               wingX = how far ahead of the tail the wing sits, span, splitter / skirts: false to omit
 const GLB_MODELS = {
   f458: {
     url: 'models/ferrari.glb', rotY: -Math.PI / 2, wheels: ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr'],
@@ -416,6 +482,12 @@ const GLB_MODELS = {
   },
   // Porsche 911 Carrera 4S (991) by Karol Miklas, CC BY-SA 4.0 — stands in for the GT3 car
   gt3: { url: 'models/gt3.glb', paint: ['paint'], glass: ['window'], tyre: ['rubber'], color: 0xe9ecef, lamps: [[-2.15, 0.742, -0.56, 0.3, 0.03], [-2.15, 0.742, 0.56, 0.3, 0.03]] },
+  // Audi R8 (second generation road car) by jasonjliang, CC BY 4.0 — carries the GT3 race kit
+  r8lms: { url: 'models/r8lms.glb', kit: { wingY: 1.2, deckY: 0.98, wingX: 0.02 }, lamps: [[-2.1, 0.8, -0.6, 0.34, 0.035], [-2.1, 0.8, 0.6, 0.34, 0.035]] },
+  // Lamborghini Huracán (road car) by jkazulyblanco, CC BY 4.0 — carries the GT3 race kit
+  huracan: { url: 'models/huracan.glb', kit: { wingY: 1.2, deckY: 0.93, wingX: 0.04 }, lamps: [[-2.1, 0.79, -0.56, 0.36, 0.03], [-2.1, 0.79, 0.56, 0.36, 0.03]] },
+  // Mercedes-AMG GT (road car) by Yan Carvalho, CC BY 4.0 — carries the GT3 race kit
+  amggt3: { url: 'models/amggt3.glb', paint: ['Material.001'], glass: ['Material'], tyre: ['Material.023'], tail: ['Material.014', 'Material.034'], paintProps: { metalness: 0.7, roughness: 0.42 }, kit: { wingY: 1.25, deckY: 0.95, wingX: 0.05 } },
   // Honda Civic Type R (FK8) by shindedhirendra780, CC BY 4.0
   hatch: { url: 'models/hatch.glb', paint: ['Material.001'], glass: ['Material.002'], tyre: ['tyre_belt', 'tyre_side'], tail: ['Material.003'] },
   // 1967 Mustang fastback restomod by Nick Broad, CC BY 4.0
@@ -488,6 +560,12 @@ function attachGLB(model, spec, cfg, { a, bb, color }) {
     for (const w of model.wheels) w.steer.visible = false;
     while (model.chassis.children.length) model.chassis.remove(model.chassis.children[0]);
     model.chassis.add(holder);
+    if (cfg.kit) {
+      const lv = GT_LIVERY[spec.body.shape] || {}, X0 = mid - x0 * k, H = box.max.y * k;
+      const carbon = new THREE.MeshStandardMaterial({ color: 0x16171a, roughness: 0.45, metalness: 0.4 });
+      const accentM = lv.accent != null ? new THREE.MeshStandardMaterial({ color: lv.accent, roughness: 0.4 }) : carbon;
+      raceKit(model.chassis, { front: X0 + box.max.x * k, rear: X0 + box.min.x * k, width: (box.max.z - box.min.z) * k * (cfg.kit.widthK ?? 0.93), wingY: H * 0.97, deckY: H * 0.75, carbon, accentM, ...cfg.kit });
+    }
     if (gw) {
       // each wheel moves out of the body into a steer > spin pair on the root, so it stays on the
       // road while the body pitches and rolls, and spins about the car's lateral axis whatever
@@ -506,7 +584,7 @@ function attachGLB(model, spec, cfg, { a, bb, color }) {
       const L = cfg.shadow ? cfg.shadow[0] : (box.max.x - box.min.x) * k, W = cfg.shadow ? cfg.shadow[1] : (box.max.z - box.min.z) * k, g = model.shadow.geometry.parameters;
       model.shadow.scale.set(L * 1.16 / g.width, W * 1.4 / g.height, 1); model.shadow.position.x = mid - x0 * k + (box.max.x + box.min.x) / 2 * k;
     }
-    model.glb = { holder, scale: k };
+    model.glb = { holder, scale: k }; model.glassMats.push(mats.glass);
   }).catch((e) => { console.warn('car model not loaded, keeping the procedural body:', cfg.url, e?.message || e); });
 }
 

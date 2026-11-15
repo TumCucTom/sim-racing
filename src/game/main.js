@@ -22,16 +22,18 @@ const GradeShader = {
       gl_FragColor=vec4(x,c.a); }`,
 };
 import { buildTrack, nearestIndexGlobal, TRACKS, TRACK_ORDER } from '../sim/track.js';
-import { CARS, CAR_ORDER } from '../sim/cars.js';
+import { CARS, CAR_ORDER, CAR_GROUPS } from '../sim/cars.js';
 import { Sim } from '../sim/sim.js';
 import { SIM_DT, peakPower } from '../sim/vehicle.js';
 import { BaselineDriver, lineDriverOptions } from '../sim/drivers/baseline.js';
 import { PolicyDriver } from '../sim/drivers/policy-driver.js';
 import { OBS_DIM } from '../sim/drivers/rl-interface.js';
 import { buildWorld, trackHeight } from './world.js';
+import { viewAnchors, buildSteeringWheel } from './cockpit.js';
 import { buildCarModel } from './carmodel.js';
 import { getSky } from './sky.js';
 import { Input } from './input.js';
+import { DriveAssist, DIFFICULTY, DIFFICULTY_ORDER } from './assist.js';
 import { Effects } from './effects.js';
 import { HUD, fmtTime } from './hud.js';
 import { Recorder, TelemetryPanel, LapTrace, BIN } from './telemetry.js';
@@ -61,7 +63,7 @@ const QUALITY = {
   high: { shadows: true, shadowMap: 4096, shadowRange: 110, trees: 1500, treeCap: 20000, detail: 2, maxDpr: 2, bloom: true },
 };
 const params = new URLSearchParams(location.search);
-const CAMS = ['chase', 'far', 'bonnet', 'tv'];
+const CAMS = ['chase', 'far', 'bonnet', 'cockpit', 'tv'];
 
 class Game {
   constructor() {
@@ -102,6 +104,7 @@ class Game {
     this.input = new Input();
     this.wx = new Weather(this, { env: this.scene.environment });
     this.cam = 0; this.camPos = new THREE.Vector3(); this.camLook = new THREE.Vector3(); this.camInit = false;
+    this.diffId = DIFFICULTY[params.get('diff')] ? params.get('diff') : (DIFFICULTY[store.get('rr-diff')] ? store.get('rr-diff') : 'assist');
     this.ghostMode = 'best'; this.autopilot = false; this.paused = true; this.acc = 0; this.last = performance.now();
     this.perf = { show: params.has('perf'), frames: 0, t: 0, fps: 0, simMs: 0, frameMs: 0, simAcc: 0, frameAcc: 0, worst: 0 };
     this.wheelWorld = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
@@ -133,6 +136,7 @@ class Game {
     k.on(['Enter', 'Backspace'], () => { if (!this.paused) this.restart(); });
     k.on('KeyE', () => this.manualShift(1)); k.on('KeyQ', () => this.manualShift(-1));
     k.on('KeyM', () => { const a = this.sim.car.aids; a.autoShift = !a.autoShift; this.hud.toast(a.autoShift ? 'Automatic gearbox' : 'Manual gearbox (Q / E)', 1.5); });
+    k.on('KeyH', () => { this.setDifficulty(DIFFICULTY_ORDER[(DIFFICULTY_ORDER.indexOf(this.diffId) + 1) % DIFFICULTY_ORDER.length]); });
     k.on('KeyZ', () => { const a = this.sim.car.aids; a.abs = !a.abs; this.hud.toast(`ABS ${a.abs ? 'on' : 'off'}`, 1.2); });
     k.on('KeyX', () => { const a = this.sim.car.aids; a.tc = !a.tc; this.hud.toast(`Traction control ${a.tc ? 'on' : 'off'}`, 1.2); });
     k.on('KeyN', () => this.hud.toast(this.audio.toggleMute() ? 'Sound off' : 'Sound on', 1.2));
@@ -142,12 +146,18 @@ class Game {
     k.on('KeyV', () => this.setWeather(CONDITION_ORDER[(CONDITION_ORDER.indexOf(this.wxId) + 1) % CONDITION_ORDER.length]));
     k.on('KeyL', () => { this.showLine = !this.showLine; store.set('rr-line', this.showLine ? '1' : '0'); this.refreshLineGuide(); this.hud.toast(`Racing line ${this.showLine ? 'shown — green: power, red: brake' : 'hidden'}`, 1.6); });
     k.on('Escape', () => this.showMenu(document.getElementById('menu').classList.contains('hidden')));
-    CAR_ORDER.forEach((id, i) => k.on('Digit' + (i + 1), () => { if (!this.paused) { this.setCar(id); this.restart(); } }));
+    // 1-9 and 0 pick the first ten cars; [ and ] step through all of them
+    CAR_ORDER.slice(0, 10).forEach((id, i) => k.on('Digit' + ((i + 1) % 10), () => { if (!this.paused) { this.setCar(id); this.restart(); } }));
+    for (const [code, d] of [['BracketLeft', -1], ['BracketRight', 1]]) k.on(code, () => { if (this.paused) return; const n = CAR_ORDER.length; this.setCar(CAR_ORDER[(CAR_ORDER.indexOf(this.spec.id) + d + n) % n]); this.restart(); this.hud.toast(this.spec.name, 1.5); });
   }
 
   buildMenu() {
-    const wrap = document.getElementById('cars');
-    for (const id of CAR_ORDER) {
+    const root = document.getElementById('cars');
+    // one grid per class, in a scrolling panel (14 cars no longer fit on one screen)
+    for (const grp of CAR_GROUPS) {
+      const h = document.createElement('h4'); h.textContent = grp.title; root.appendChild(h);
+      const wrap = document.createElement('div'); wrap.className = 'grid'; root.appendChild(wrap);
+      for (const id of grp.ids) {
       const s = CARS[id], v = validation.find(r => r.car === s.name) || {}, pp = peakPower(s);
       const num = (x) => (typeof x === 'string' ? x.split(' ')[0] : '–');
       const el = document.createElement('div'); el.className = 'card'; el.dataset.id = id;
@@ -160,7 +170,7 @@ class Game {
       el.onclick = () => this.setCar(id);
       el.ondblclick = () => { this.setCar(id); this.start(false); };
       wrap.appendChild(el);
-    }
+    } }
     const ts = document.getElementById('track');
     for (const id of TRACK_ORDER) { const o = document.createElement('option'); o.value = id; o.textContent = `${TRACKS[id].name}${TRACKS[id].real ? ' — ' + TRACKS[id].country : ' (original)'}`; ts.appendChild(o); }
     ts.value = this.trackId;
@@ -171,6 +181,9 @@ class Game {
     const ws = document.getElementById('weather');
     for (const id of CONDITION_ORDER) { const o = document.createElement('option'); o.value = id; o.textContent = CONDITIONS[id].label; ws.appendChild(o); }
     ws.onchange = () => this.setWeather(ws.value);
+    const ds = document.getElementById('difficulty');
+    for (const id of DIFFICULTY_ORDER) { const o = document.createElement('option'); o.value = id; o.textContent = DIFFICULTY[id].label; ds.appendChild(o); }
+    ds.value = this.diffId; ds.onchange = () => this.setDifficulty(ds.value);
     document.getElementById('go').onclick = () => this.start(false);
     document.getElementById('watch').onclick = () => this.start(true);
   }
@@ -202,7 +215,7 @@ class Game {
     const c = CONDITIONS[id], wet = wetFor(c.sim);
     if (wet !== this.wet) {
       this.wet = wet; this.sim.setWet(wet);
-      this.ai = this.makeAI(this.spec); this.rec.hasAI = false; this.aiLap = null;
+      this.ai = this.makeAI(this.spec); this.rec.hasAI = false; this.aiLap = null; this.refreshAssist();
       this.refreshLineGuide();
       document.getElementById('aiinfo').textContent = `AI driver for this car: ${this.ai.label}`;
       clearTimeout(this.aiTimer); this.aiTimer = setTimeout(() => this.computeAILap(this.spec), 50);
@@ -274,6 +287,20 @@ class Game {
     this.setAutopilot(ai);
   }
 
+  // Driving difficulty for the human driver (see assist.js). Never affects the AI.
+  setDifficulty(id, quiet) {
+    if (!DIFFICULTY[id]) id = 'assist';
+    this.diffId = id; store.set('rr-diff', id);
+    const sel = document.getElementById('difficulty'); if (sel) sel.value = id;
+    this.refreshAssist();
+    if (!quiet) this.hud.toast(`Driving: ${DIFFICULTY[id].label}`, 1.8);
+  }
+  refreshAssist() {
+    if (!this.sim || !this.spec) return;
+    this.assist = new DriveAssist(this.track, this.spec, this.diffId || 'assist', this.wet);
+    if (!this.autopilot) this.assist.setup(this.sim.car); else { this.sim.car.gripScale = 1; this.sim.car.aids.abs = this.spec.abs; this.sim.car.aids.tc = this.spec.tc; }
+  }
+
   makeAI(spec) {
     // trained policies are specific to the circuit they were trained on
     // ... and to a dry track: in the wet the racing-line driver takes over with a scaled speed profile
@@ -287,7 +314,7 @@ class Game {
     if (!CARS[id]) id = 'gt3';
     const spec = this.spec = CARS[id];
     store.set('rr-car', id);
-    document.querySelectorAll('.card').forEach(c => c.classList.toggle('sel', c.dataset.id === id));
+    document.querySelectorAll('.card').forEach(c => { const on = c.dataset.id === id; c.classList.toggle('sel', on); if (on && c.scrollIntoView) c.scrollIntoView({ block: 'nearest' }); });
     this.sim = new Sim(this.track, spec); this.sim.setWet(this.wet);
     this.sim.onLap = (t, valid) => this.onLap(t, valid);
     if (this.model) { this.scene.remove(this.model.root); this.model.dispose(); this.scene.remove(this.ghost.root); this.ghost.dispose(); }
@@ -295,7 +322,7 @@ class Game {
     this.ghost = buildCarModel(spec, { ghost: true }); this.ghost.root.visible = false; this.scene.add(this.ghost.root);
     this.wx.attachCar(this.model, spec);
     this.rec.reset(); this.rec.hasAI = false;
-    this.ai = this.makeAI(spec);
+    this.ai = this.makeAI(spec); this.refreshAssist();
     this.hud.setCar(spec);
     this.refreshLineGuide();
     this.audio.setCar(spec);
@@ -326,6 +353,7 @@ class Game {
     this.sim.reset(); const a = this.sim.car.aids; a.abs = this.spec.abs; a.tc = this.spec.tc; a.autoShift = true;
     this.rec.cur.clear(); this.effects.clear(); this.props.reset(); this.ai.driver.reset?.();
     this.input.steerPos = 0; this.camInit = false; this.acc = 0;
+    this.refreshAssist();
     this.hud.toast(this.autopilot ? 'AI driving' : 'Go!', 1.2);
   }
 
@@ -339,7 +367,7 @@ class Game {
   manualShift(dir) { const car = this.sim.car; if (car.aids.autoShift && !this.spec.engine.electric) { car.aids.autoShift = false; this.hud.toast('Manual gearbox (M for auto)', 1.5); } car.requestShift(dir); }
 
   setAutopilot(on) {
-    this.autopilot = on; this.ai.driver.reset?.();
+    this.autopilot = on; this.ai.driver.reset?.(); this.refreshAssist();
     if (on) { const a = this.sim.car.aids; a.abs = this.spec.abs; a.tc = this.spec.tc; a.autoShift = true; }
     this.hud.toast(on ? `AI driving (${this.ai.label}) — press I to take over` : 'You have control', 2);
   }
@@ -368,7 +396,7 @@ class Game {
       let n = 0;
       while (this.acc >= SIM_DT && n < 40) {
         const car = this.sim.car;
-        const c = this.autopilot ? this.ai.driver.control(car) : this.input.read(car, SIM_DT);
+        const c = this.autopilot ? this.ai.driver.control(car) : this.assist.apply(this.input.read(car, SIM_DT), car, SIM_DT);
         this.sim.step(c);
         this.rec.sample(this.sim);
         this.acc -= SIM_DT; n++;
@@ -408,7 +436,7 @@ class Game {
     const n = Math.round(seconds / SIM_DT);
     for (let i = 0; i < n; i++) {
       const car = this.sim.car;
-      this.sim.step(this.autopilot ? this.ai.driver.control(car) : this.input.read(car, SIM_DT));
+      this.sim.step(this.autopilot ? this.ai.driver.control(car) : this.assist.apply(this.input.read(car, SIM_DT), car, SIM_DT));
       this.rec.sample(this.sim);
       if (i % 5 === 0) this.rec.sampleGG(car);
     }
@@ -471,6 +499,7 @@ class Game {
       const a = performance.now() * 0.00012;
       cam.position.set(pos.x + Math.cos(a) * 7.5, pos.y + 2.1, pos.z + Math.sin(a) * 7.5);
       cam.lookAt(pos.x, pos.y + 0.6, pos.z); cam.fov = 42; cam.updateProjectionMatrix();
+      if (this.model.wheelRig) this.model.wheelRig.group.visible = false;
       return;
     }
     let fov = 58;
@@ -483,14 +512,20 @@ class Game {
       cam.position.copy(this.camPos);
       cam.lookAt(pos.x + fx * 4.5, pos.y + 1.0, pos.z + fz * 4.5);
       fov = 56 + Math.min(18, spd * 0.2);
-    } else if (mode === 'bonnet') {
-      const b = this.spec.body, form = b.style === 'formula';
-    const low = b.style === 'glb';
-      const cy = Math.cos(car.yaw), sy = Math.sin(car.yaw), ox = form ? 0.05 : 0.25, oy = form ? 0.78 : low ? b.height * 0.86 : b.height * 0.86;
-      cam.position.set(pos.x + cy * ox, pos.y + oy, pos.z - sy * ox);
-      const look = car.yaw + THREE.MathUtils.clamp(car.r * 0.12, -0.25, 0.25);
-      cam.lookAt(cam.position.x + Math.cos(look) * 10, cam.position.y - 0.6 + Math.atan(this.track.grade[car.idx]) * 10 * Math.cos(car.headErr), cam.position.z - Math.sin(look) * 10);
-      fov = 68 + Math.min(10, spd * 0.1);
+    } else if (mode === 'bonnet' || mode === 'cockpit') {
+      // anchors are measured from the car's real geometry (re-measured once the detailed model has loaded)
+      const m = this.model, key = m.glb ? 2 : 1;
+      if (m.viewKey !== key) { m.viewKey = key; m.view = viewAnchors(m, this.spec); }
+      const p = mode === 'cockpit' ? m.view.eye : m.view.bonnet;
+      const cy = Math.cos(car.yaw), sy = Math.sin(car.yaw);
+      // head leans a little with g-forces in the cockpit; model +Z (right) is world (sin yaw, 0, cos yaw)
+      const sway = mode === 'cockpit' ? THREE.MathUtils.clamp(-(car.ayF || 0) * 0.0016, -0.035, 0.035) : 0, surge = mode === 'cockpit' ? THREE.MathUtils.clamp(-(car.axF || 0) * 0.0012, -0.03, 0.04) : 0;
+      const px = p.x + surge, pz = p.z + sway;
+      cam.position.set(pos.x + cy * px + sy * pz, pos.y + p.y, pos.z - sy * px + cy * pz);
+      const look = car.yaw + THREE.MathUtils.clamp(car.r * (mode === 'cockpit' ? 0.2 : 0.12), -0.3, 0.3);
+      const drop = mode === 'cockpit' ? 0.55 : 0.6;
+      cam.lookAt(cam.position.x + Math.cos(look) * 10, cam.position.y - drop + Math.atan(this.track.grade[car.idx]) * 10 * Math.cos(car.headErr), cam.position.z - Math.sin(look) * 10);
+      fov = mode === 'cockpit' ? 64 + Math.min(8, spd * 0.08) : 68 + Math.min(10, spd * 0.1);
     } else {
       let best = this.tvPosts[0], bd = Infinity;
       for (const p of this.tvPosts) { const d = p.distanceToSquared(pos); if (d < bd) { bd = d; best = p; } }
@@ -500,9 +535,18 @@ class Game {
     if (mode !== 'tv') {
       // engine / road vibration grows with speed; kerbs and grass rattle the camera
       const t = performance.now() * 0.001, k = Math.min(1, spd / 75), off = car.surf && (car.surf[0] || car.surf[1] || car.surf[2] || car.surf[3]) ? Math.min(1, spd / 25) : 0;
-      const amp = (mode === 'bonnet' ? 0.007 : 0.0035) * k * k + off * (mode === 'bonnet' ? 0.016 : 0.008);
+      const inCar = mode === 'bonnet' || mode === 'cockpit';
+      const amp = (inCar ? 0.007 : 0.0035) * k * k + off * (inCar ? 0.016 : 0.008);
       cam.position.y += amp * (Math.sin(t * 61) + 0.6 * Math.sin(t * 37.3));
       cam.rotation.z += amp * 0.35 * Math.sin(t * 29.1); cam.rotation.x += amp * 0.25 * Math.sin(t * 43.7);
+    }
+    { // steering wheel and hands: only exist in the driver's-eye view
+      const m = this.model, show = mode === 'cockpit' && !this.paused;
+      if (show && !m.wheelRig && m.view) { const w = buildSteeringWheel(this.spec), e = m.view.eye; w.group.position.set(e.x + 0.56, e.y - 0.31, e.z); m.chassis.add(w.group); m.wheelRig = w; }
+      // from inside, tinted glass must not black out the view
+      if (m.glassIn !== show) { m.glassIn = show; for (const g of m.glassMats || []) { if (g.userData.op0 === undefined) { g.userData.op0 = g.opacity; g.userData.tr0 = g.transparent; } g.transparent = show ? true : g.userData.tr0; g.opacity = show ? 0.1 : g.userData.op0; g.depthWrite = !show; g.needsUpdate = true; } }
+      if (m.wheelRig) { m.wheelRig.group.visible = show; if (show) m.wheelRig.spin.rotation.z = car.steer * m.wheelRig.lock; }
+      const near = mode === 'cockpit' || mode === 'bonnet' ? 0.06 : 0.3; if (cam.near !== near) { cam.near = near; cam.updateProjectionMatrix(); }
     }
     if (Math.abs(cam.fov - fov) > 0.05) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 6); cam.updateProjectionMatrix(); }
   }

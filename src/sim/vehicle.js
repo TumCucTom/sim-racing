@@ -94,6 +94,8 @@ export class Vehicle {
     this.aids = { abs: s.abs, tc: s.tc, autoShift: true };
     this.gripScale = 1;   // track-condition multiplier (domain randomisation / weather)
     this.wet = null;      // wet-track state (src/sim/wet.js); null = dry, exactly the original behaviour
+    // slipstream (src/sim/race.js): multipliers on drag and downforce; exactly 1 = free air, bit-identical
+    this.dragK = 1; this.downK = 1;
     this.reset({ x: 0, y: 0, yaw: 0, speed: 0 });
   }
 
@@ -186,7 +188,7 @@ export class Vehicle {
 
     // --- loads -----------------------------------------------------------
     const v2 = this.vx * this.vx + this.vy * this.vy;
-    const down = 0.5 * RHO * s.ClA * v2;
+    const down = 0.5 * RHO * s.ClA * v2 * this.downK;
     const w = s.mass * G;
     const dLong = s.mass * this.axF * s.cgHeight / s.wheelbase;
     const latTot = s.mass * this.ayF * s.cgHeight;
@@ -408,7 +410,7 @@ export class Vehicle {
 
     // --- aero, gravity ----------------------------------------------------
     const spd = Math.sqrt(v2);
-    const drag = 0.5 * RHO * s.CdA * spd;
+    const drag = 0.5 * RHO * s.CdA * spd * this.dragK;
     Fx -= drag * this.vx; Fy -= drag * this.vy;
     const fg = -w * trk.grade[this.idx];
     Fx += fg * che; Fy += -fg * she;

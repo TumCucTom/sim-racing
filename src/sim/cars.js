@@ -313,3 +313,9 @@ CARS.mc720s = gt3Car({
 });
 
 export const CAR_ORDER = ['gt3', 'r8lms', 'huracan', 'amggt3', 'f296gt3', 'mc720s', 'f458', 'hypercar', 'lmp1', 'mini', 'hatch', 'coupe', 'formula', 'ev'];
+// Menu grouping (every car appears exactly once; CAR_ORDER stays the canonical order for tools and keys).
+export const CAR_GROUPS = [
+  { title: 'GT3 race cars', ids: ['gt3', 'r8lms', 'huracan', 'amggt3', 'f296gt3', 'mc720s'] },
+  { title: 'Prototypes and single-seater', ids: ['hypercar', 'lmp1', 'formula'] },
+  { title: 'Road cars', ids: ['f458', 'mini', 'hatch', 'coupe', 'ev'] },
+];
