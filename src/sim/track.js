@@ -40,7 +40,7 @@ function unpack(def) {
   if (!def.q || def.pts) return def;
   const b = Uint8Array.from(atob(def.q), c => c.charCodeAt(0)), pts = [];
   let x = def.q0[0], y = def.q0[1];
-  for (let k = 0; k < b.length; k += 4) { x += (b[k] << 24) >> 24; y += (b[k + 1] << 24) >> 24; pts.push([x / 10, y / 10, b[k + 2] / 10, b[k + 3] / 10]); }
+  for (let k = 0; k < b.length; k += 4) { x += (b[k] << 24) >> 24; y += (b[k + 1] << 24) >> 24; pts.push([x / 10, y / 10, Math.min(9.9, b[k + 2] / 10), Math.min(9.9, b[k + 3] / 10)]); }   // (the track model takes half-widths up to 10 m)
   def.pts = pts;
   if (def.eq) { const e = Uint8Array.from(atob(def.eq), c => c.charCodeAt(0)), m = e.length / 2; def.elevation = Array.from({ length: m }, (_, j) => [j / m, (e[2 * j] | (e[2 * j + 1] << 8)) / 10]); }
   else def.elevation = [[0, 0], [0.5, 0]];
@@ -76,9 +76,13 @@ export const TRACKS = {
   laguna: { ...laguna, real: true, trackside: { ...laguna.trackside, ...lagunaSide } },
 };
 for (const id of Object.keys(GP)) TRACKS[id] = { ...GP[id], real: true };
-export const TRACK_ORDER = ['ravenscar', 'silverstone', 'spa', 'monza', 'nordschleife', 'monaco', 'laguna', ...Object.keys(GP)];
+// only circuits marked `ready` (length, geometry and every car's AI lap verified) are offered; the rest can still be built by id
+const GP_READY = Object.keys(GP).filter(id => GP[id].ready);
+export const TRACK_ORDER = ['ravenscar', 'silverstone', 'spa', 'monza', 'nordschleife', 'monaco', 'laguna', ...GP_READY];
+// lap lengths in km for the menu (official figures; the built length is tested to be within 1 %)
+export const TRACK_KM = { ravenscar: 2.91, silverstone: 5.891, spa: 7.004, monza: 5.793, nordschleife: 20.832, monaco: 3.337, laguna: 3.602, cota: 5.513, hungaroring: 4.381, mexico: 4.304, montreal: 4.361, bahrain: 5.412, interlagos: 4.309, shanghai: 5.451, redbullring: 4.318, suzuka: 5.807 };
 // menu grouping
-export const TRACK_GROUPS = [['Original', ['ravenscar']], ['Grand Prix circuits', ['silverstone', 'spa', 'monza', 'monaco', ...Object.keys(GP)].sort((a, b) => TRACKS[a].name.localeCompare(TRACKS[b].name))], ['Other', ['nordschleife', 'laguna']]];
+export const TRACK_GROUPS = [['Original', ['ravenscar']], ['Grand Prix circuits', ['silverstone', 'spa', 'monza', 'monaco', ...GP_READY].sort((a, b) => TRACKS[a].name.localeCompare(TRACKS[b].name))], ['Other', ['nordschleife', 'laguna']]];
 
 function catmullRomClosed(pts, perSeg = 40) {
   const n = pts.length;
@@ -298,6 +302,19 @@ export function buildTrack(id = 'ravenscar') {
     // terrain model's noise (trees, buildings) is larger than the real gradients
     z = def.elevation.length < 3 ? z : def.elevSmooth ? smoothClosed(z, 3, def.elevSmooth) : def.elevation.length > 100 && hi - lo > 40 ? smoothClosed(z, 3, 22) : smoothClosed(z, 3, 45);
   }
+  // Crossover (Suzuka's figure of eight): the track model is one closed ribbon, so where it crosses
+  // itself the upper road is lifted onto a bridge: a smooth hump giving `clearance` over the lower road.
+  // `deck[i]` marks the bridge samples, `under[i]` the lower-road sample beneath each of them.
+  let deck = null, under = null;
+  if (def.crossover) {
+    let bd = Infinity, ia = 0, ib = 0;
+    for (let a = 0; a < n; a += 2) for (let b = a + 200; b < n; b += 2) { if (n - (b - a) < 200) continue; const d = (x[a] - x[b]) ** 2 + (y[a] - y[b]) ** 2; if (d < bd) { bd = d; ia = a; ib = b; } }
+    const up = def.crossover.upper === 'early' ? ia : ib, lowI = up === ia ? ib : ia, ramp = def.crossover.ramp ?? 160, span = def.crossover.span ?? 16;
+    const lift = Math.max(0, z[lowI] + (def.crossover.clearance ?? 6.5) - z[up]);
+    for (let k = -ramp; k <= ramp; k++) { const i = (up + k + n) % n, c = Math.cos(Math.PI * k / (2 * ramp)); z[i] += lift * c * c; }
+    deck = new Uint8Array(n); under = new Int32Array(n).fill(-1);
+    for (let k = -span; k <= span; k++) { const i = (up + k + n) % n; deck[i] = 1; let q = lowI, qd = Infinity; for (let j = -40; j <= 40; j++) { const w = (lowI + j + n) % n, d = (x[w] - x[i]) ** 2 + (y[w] - y[i]) ** 2; if (d < qd) { qd = d; q = w; } } under[i] = q; }
+  }
   // terrain models pick up buildings and cuttings: keep smoothing until no
   // gradient exceeds what a circuit road can have (~20 %)
   for (let pass = 0; pass < 16; pass++) {
@@ -390,9 +407,9 @@ export function buildTrack(id = 'ravenscar') {
   for (let i = 0; i < n; i++) { gravelL[i] = side.gBL[i] > 0 ? 1 : 0; gravelR[i] = side.gBR[i] > 0 ? 1 : 0; }
 
   const t = {
-    id, name: def.name, country: def.country, real, narrow: !!def.runoff, urban, source: def.source || null, theme: tsDef?.theme || null, scene: def.scene || null, sections: tsDef?.sections || null,
+    id, name: def.name, country: def.country, real, narrow: !!def.runoff, urban, source: def.source || null, theme: tsDef?.theme || null, aiGrip: def.aiGrip ?? 1, scene: def.scene || null, sections: tsDef?.sections || null,
     n, ds, length, halfWidth: HALF_WIDTH, hw, kerbWidth: KERB_WIDTH,
-    x, y, z, grade, heading, curv: curvS, s: sArr, gravelL, gravelR, wallL, wallR,
+    x, y, z, grade, heading, curv: curvS, s: sArr, gravelL, gravelR, wallL, wallR, deck, under,
     ...side, verge: urban ? SX.PAVE : SX.GRASS,
     sectors: [0, Math.round(n * 0.33), Math.round(n * 0.67)],
   };

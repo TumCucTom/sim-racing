@@ -117,5 +117,6 @@ export function lineDriverOptions(track, spec) {
   // other barrier-lined circuits (Monaco): every car is clean across the swept range
   if (track.narrow) return { grip: 0.86, trail: 0.4, line: track.line, brake: spec.abs ? 0.8 : 0.6 };
   const t = LINE_TUNE[spec.id] || { grip: 0.85, trail: 0 };
-  return { ...t, line: track.line, brake: spec.abs ? 0.85 : 0.65 };
+  // a circuit may ask every car for a little more margin (`aiGrip` in its data, e.g. 0.96)
+  return { ...t, grip: t.grip * (track.aiGrip ?? 1), line: track.line, brake: spec.abs ? 0.85 : 0.65 };
 }

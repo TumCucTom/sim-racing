@@ -1,0 +1,8 @@
+{
+ "note": "Barrier lines from OpenStreetMap. Run-off surface is not modelled per corner (the real venue is mostly paved run-off); kerbs are rule-placed.",
+ "style": {
+  "kerb": "red-white"
+ },
+ "theme": "dry",
+ "corners": []
+}

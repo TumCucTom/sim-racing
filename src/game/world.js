@@ -58,7 +58,8 @@ export function makeTerrainFn(track, { sea = false } = {}) {
     return sg * Math.sqrt(bd);
   } : null;
   return (x, y) => {
-    const i = nearestIndexGlobal(track, x, y);
+    let i = nearestIndexGlobal(track, x, y);
+    if (track.deck && track.deck[i]) i = track.under[i];          // crossover: the ground under a bridge belongs to the lower road
     const d = latOffset(track, i, x, y);
     const dist = Math.hypot(x - track.x[i], y - track.y[i]);
     const corr = (d > 0 ? track.wallL[i] : track.wallR[i]) + 1.5;
@@ -541,7 +542,7 @@ export function buildWorld(track, renderer, qualityIn) {
       const z = track.z[i], a = inner(i), b = Math.max(a + 0.2, wallAt(side, i)), mid = a + Math.min(1.2, (b - a) * 0.5);
       if (urban) o.push(side * a, z - 0.004, 0, side * (a + 0.03), z + 0.11, 0, side * b, z + 0.11, 0);      // raised pavement
       else o.push(side * a, z - 0.004, 0, side * mid, z - 0.018, 0, side * b, z - 0.05, 0);
-    }, { uMetric: 2.3, vScale: 2.3, flip: side < 0, rub, mask: mc ? (i) => !mc.inTun(i) : null }), vergeMat);
+    }, { uMetric: 2.3, vScale: 2.3, flip: side < 0, rub, mask: mc ? (i) => !mc.inTun(i) : track.deck ? (i) => !track.deck[i] : null }), vergeMat);
     // paved run-off from roA to the barrier (level with the pavement on street circuits)
     const up = urban ? 0.125 : 0;
     add(strip(track, ksEdge, (i, o) => { const z = track.z[i] + up, a = A.roA[i], b = Math.max(a + 0.1, wallAt(side, i)); o.push(side * a, z - 0.008, 0, side * (a + b) / 2, z - 0.016, 0, side * b, z - 0.03, 0); },
@@ -664,6 +665,14 @@ export function buildWorld(track, renderer, qualityIn) {
     }
   }
 
+  // ---- crossover bridge deck: slab under the upper road, where verge and terrain are left out ----
+  if (track.deck) {
+    const g = strip(track, ksRoad, (i, o) => { const z = track.z[i], l = track.wallL[i] + 0.3, r = track.wallR[i] + 0.3; o.push(l, z + 0.9, 0, l, z - 0.9, 0.2, -r, z - 0.9, 0.8, -r, z + 0.9, 1); }, { mask: i => track.deck[i], vScale: 3 });
+    const top = strip(track, ksRoad, (i, o) => { const z = track.z[i] - 0.03; o.push(-track.wallR[i] - 0.3, z, 0, track.wallL[i] + 0.3, z, 1); }, { mask: i => track.deck[i], vScale: 3, flip: true });
+    const bm = new THREE.MeshStandardMaterial({ map: concreteFallback, color: 0xb9b9b4, roughness: 0.9, side: THREE.DoubleSide });
+    add(g, bm, { cast: true }); add(top, bm);
+  }
+
   // ---- bridges over the track (visual only) ----------------------------------------
   if (track.bridges?.length) {
     const steelB = wettable(new THREE.MeshStandardMaterial({ color: 0x8a8f96, roughness: 0.55, metalness: 0.5 }), 0.4), deckB = wettable(new THREE.MeshStandardMaterial({ color: 0xcfd2d6, roughness: 0.8 }), 0.4);
@@ -748,7 +757,7 @@ export function buildWorld(track, renderer, qualityIn) {
         let last = 0;
         for (const r of rings) { const off = side * (w + r + 0.4), X = track.x[i] + nx * off, Y = track.y[i] + ny * off; last = groundH(X, Y); o.push(off, last, 0); }
         o.push(side * (w + 97), last - 6, 0);
-      }, { flip: side < 0, color: (X, Y, out) => (urban ? tintUrban : tint)(X, Y, terrain(X, Y).h, out) }));
+      }, { flip: side < 0, mask: track.deck ? (i) => !track.deck[i] : null, color: (X, Y, out) => (urban ? tintUrban : tint)(X, Y, terrain(X, Y).h, out) }));
     }
     const cg = mergeGeometries(geos.filter(Boolean));
     { const p = cg.attributes.position, u = cg.attributes.uv; for (let k = 0; k < p.count; k++) u.setXY(k, p.getX(k) / 2.3, -p.getZ(k) / 2.3); }

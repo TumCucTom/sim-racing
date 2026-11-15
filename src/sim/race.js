@@ -68,7 +68,7 @@ export class Race {
     this.raceTime = this.green ? 0 : -this.greenTime;
     this.leaderFinished = false; this.leaderFinishTime = null; this.over = false; this.finishers = 0;
     this.events = []; this.pairT = new Map();
-    this.overtakes = 0; this.cleanOvertakes = 0; this.overtakeLog = []; this.rel = null;
+    this.overtakes = 0; this.cleanOvertakes = 0; this.strictOvertakes = 0; this.strictClean = 0; this.overtakeLog = []; this.rel = null;
     this.order = this.cars.map((_, i) => i);
     for (const c of this.cars) {
       const g = gridSlot(t, c.index, o.gridGap);
@@ -387,10 +387,16 @@ export class Race {
         const now = diff > 5 ? 1 : diff < -5 ? -1 : was;
         if (now !== was) {
           const by = now > 0 ? a : b2, on = now > 0 ? b2 : a;
-          if (by.sim.lap >= 1 && on.sim.lap >= 1 && this.time - on.lastRespawnT > 6 && this.time - by.lastRespawnT > 6 && !on.needRespawn && on.car.vx > 8) {
+          // (the passed car must be racing: on the road, pointing the right way, not just respawned;
+          // slow is fine, a chicane apex is 40 km/h)
+          if (by.sim.lap >= 1 && on.sim.lap >= 1 && this.time - on.lastRespawnT > 6 && this.time - by.lastRespawnT > 6 && !on.needRespawn
+            && on.car.vx > 3 && Math.abs(on.car.headErr) < 0.8 && !on.sim.offTrack) {
             const ev = this.pairT.get(i * 64 + j), touched = !!ev && this.time - ev.tLast < 4;
-            const clean = !touched && on.car.vx > 0.7 * by.car.vx && this.time - on.lastOffT > 4;
-            this.overtakes++; if (clean) this.cleanOvertakes++;
+            const clean = !touched && on.car.vx > 0.5 * by.car.vx && this.time - on.lastOffT > 4 && this.time - by.lastOffT > 4;
+            // the first version of this counter also required the passed car to be above 8 m/s, and 70 % of
+            // the passer's speed to be "clean": kept as the strict count, for comparison with older tables
+            const strict = on.car.vx > 8, cleanStrict = strict && clean && on.car.vx > 0.7 * by.car.vx;
+            this.overtakes++; if (clean) this.cleanOvertakes++; if (strict) this.strictOvertakes++; if (cleanStrict) this.strictClean++;
             this.overtakeLog.push({ t: this.raceTime, by: by.index, on: on.index, s: by.car.s, lap: by.sim.lap, clean });
           }
         }

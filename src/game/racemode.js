@@ -145,7 +145,8 @@ export class RaceMode {
     const g = this.g; this.stop(true);
     const c = this.cfg; for (const key of ['n', 'laps', 'grid', 'klass', 'skill', 'seed', 'order']) if (o[key] !== undefined) c[key] = o[key];
     const n = clamp(Math.round(c.n), 2, 20), ai = !!o.ai;
-    const grid = c.grid === 'last' || isNaN(+c.grid) ? n : clamp(Math.round(+c.grid), 1, n);
+    // grid: a slot number, 'last' (default), or 'quali' = wherever the car's pace puts it (what tools/race-sim.js runs)
+    const grid = c.grid === 'quali' ? null : c.grid === 'last' || isNaN(+c.grid) ? n : clamp(Math.round(+c.grid), 1, n);
     const field = buildField(g.track, { n, car: g.spec.id, klass: c.klass, difficulty: c.skill, seed: c.seed, wet: g.wet, grid, aiPlayer: true, order: c.order });
     const pe = field.find(e => e.player); this.playerDriver = pe.driver; this.playerAiName = pe.name;
     if (!ai) { pe.name = 'You'; pe.driver = null; }
@@ -170,7 +171,7 @@ export class RaceMode {
     g.rec.cur.clear(); g.effects.clear(); g.props.reset(); g.input.steerPos = 0; g.camInit = false; g.acc = 0;
     g.setAutopilot(ai);
     this.hud.show(true);
-    g.hud.toast(`${n} cars · ${c.laps} lap${c.laps > 1 ? 's' : ''} · you start P${grid}`, 3);
+    g.hud.toast(`${n} cars · ${c.laps} lap${c.laps > 1 ? 's' : ''} · you start P${race.cars[this.playerIdx].gridPos}`, 3);
     this.sync(0);
     return this.info();
   }

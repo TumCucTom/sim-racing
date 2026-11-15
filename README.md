@@ -173,6 +173,29 @@ model has no suspension, so kerb-riding and crest behaviour are missing.
 | Monaco | 3.31 km | OpenStreetMap street centrelines (ODbL), official 3.337 km | SRTM 30 m, scaled to the real 42 m relief (rooftops inflate it), max 7.3 %; the tunnel stretch is bridged |
 | Laguna Seca | 3.60 km | OpenStreetMap raceway centreline (ODbL), official 3.602 km, anticlockwise | USGS 3DEP 10 m (`ned10m`), 57 m relief; the Corkscrew drops 17.5 m in 140 m (peak gradient 16 %), under 14 % elsewhere |
 
+#### Grand Prix circuits added from the TUMFTM database (9 of the 20 asked for)
+| Circuit (`?track=`) | Length | Elevation | GT3 AI lap |
+|---|---|---|---|
+| Circuit of the Americas (`cota`) | 5.51 km, anticlockwise | USGS 3DEP 10 m: 29.6 m relief, 11.8 % up Turn 1 | 2:23.20 |
+| Hungaroring (`hungaroring`) | 4.38 km | EU-DEM 25 m scaled to 35 m relief, max 6.3 % | 1:59.15 |
+| Autódromo Hermanos Rodríguez (`mexico`) | 4.30 km | SRTM 30 m scaled to 4 m (flat) | 1:50.32 |
+| Circuit Gilles Villeneuve (`montreal`) | 4.36 km | SRTM 30 m scaled to 5 m (flat) | 1:44.79 |
+| Bahrain International Circuit (`bahrain`) | 5.41 km | SRTM 30 m scaled to 17 m, max 3.0 % | 2:11.47 |
+| Interlagos (`interlagos`) | 4.31 km, anticlockwise | SRTM 30 m scaled to 43 m, max 9.6 % | 1:46.02 |
+| Shanghai International Circuit (`shanghai`) | 5.45 km | SRTM 30 m: 3.6 m (flat) | 2:16.63 |
+| Red Bull Ring (`redbullring`) | 4.32 km | EU-DEM 25 m scaled to 65 m, max 11 % | 1:37.87 |
+| Suzuka (`suzuka`) | 5.81 km, figure of eight | SRTM 30 m scaled to 40 m, max 7.3 %; the crossover bridge is a 6.5 m hump added to the upper road | 2:13.63 |
+
+All nine: centreline and widths are TUMFTM survey data (half-width capped at 9.9 m), lap length within 0.1 % of
+the official figure (tested), barrier lines and gravel beds from OpenStreetMap after georeferencing (residual
+1.4–2.8 m), kerbs rule-placed in red/white, **no hand-authored corner data yet** (so no paved run-off, astro-turf
+or sausage kerbs: what OSM does not map as gravel is grass), generic scenery (Bahrain uses the dry theme, the
+others the default forest/grass; no floodlit night setting, no Foro Sol, no Suzuka Ferris wheel). Bahrain's OSM
+"sand" polygons are the desert and were dropped. Four circuits ask the AI for extra margin (`aiGrip` 0.93–0.96).
+Stored compactly (`src/sim/tracks/gp/`, 131 kB for nine). **Not added:** Jeddah, Albert Park, Miami, Imola,
+Barcelona, Zandvoort, Baku, Singapore, Las Vegas, Lusail, Yas Marina — they need OpenStreetMap loop-building
+per venue (TUMFTM has none or an outdated layout) and that work was not reached.
+
 What "real" means here, precisely: the **plan-view layout is real survey or
 map data** (lap lengths within 1 % of official figures — tested), and elevation
 on five of the six real circuits is sampled from public terrain models and

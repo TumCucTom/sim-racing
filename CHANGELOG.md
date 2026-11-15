@@ -78,6 +78,25 @@ tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
 - The HUD's dial shrinks in the cockpit view, where the dash shows the same numbers.
 - Tests: `tests/cockpit.test.js` (seating on a synthetic saloon and roadster, overrides, class of every car).
 
+## Unreleased — nine Grand Prix circuits (of twenty requested)
+- **Added**: Circuit of the Americas, Hungaroring, Mexico City, Montreal, Bahrain, Interlagos, Shanghai,
+  Red Bull Ring, Suzuka (`cota`, `hungaroring`, `mexico`, `montreal`, `bahrain`, `interlagos`, `shanghai`,
+  `redbullring`, `suzuka`): TUMFTM centreline and widths, lengths within 0.1 % of official, direction checked
+  (COTA and Interlagos anticlockwise), terrain-model elevation through `fitElevation` with per-circuit limits
+  and published relief, OSM barrier lines and gravel via `tools/trackside-osm.mjs`. All 16 cars lap each
+  cleanly, the GT3 also in rain, and a 12-car three-lap GT3 race finishes on each with no wall contact or DNF.
+- **Suzuka's crossover**: the upper road is lifted 6.5 m onto a bridge deck (`def.crossover`; `track.deck`,
+  `track.under`), verge and terrain are left out under the deck, and a test drives both roads through the
+  crossing checking the car is never snapped to, or stopped by, the other one.
+- **Compact circuit format** (`src/sim/tracks/gp/*.json`, `tools/add-circuit.mjs`): centreline as base64
+  byte deltas in decimetres, heights as uint16; 131 kB for nine circuits. Circuits are only offered once
+  marked `ready`. Hosted page 15.29 MB (limit 16). The seven older circuits were not re-encoded.
+- Menu grouped (Original / Grand Prix circuits / Other) with country and length. `tools/ai-laps.js` takes a
+  circuit list. `lineDriverOptions` honours a per-circuit `aiGrip` margin (used by four circuits).
+- **Not done**: the other eleven circuits (Jeddah, Albert Park, Miami, Imola, Barcelona, Zandvoort, Baku,
+  Singapore, Las Vegas, Lusail, Yas Marina), hand-authored corner data, scenery themes, night floodlighting,
+  in-game screenshots of the new circuits.
+
 ## Unreleased — trackside from data, and Laguna Seca
 - **Kerbs, run-off, gravel and barriers are now data per circuit, per corner and per side**
   (`src/sim/trackside.js`), shared by physics and renderer, instead of one curvature rule and a uniform

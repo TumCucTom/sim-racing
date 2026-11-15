@@ -8,7 +8,7 @@ const require = createRequire('/opt/node-tools/node_modules/');
 const { chromium } = require('playwright');
 const [dir, query = 'track=monaco&car=gt3&q=medium', ...shots] = process.argv.slice(2);
 const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
-const p = await b.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+const p = await b.newPage({ viewport: { width: +(process.env.W || 1280), height: +(process.env.H || 720) }, deviceScaleFactor: 1 });
 const errs = [];
 p.on('console', m => { if (m.type() === 'error') errs.push(`[${m.type()}] ${m.text()}`); });
 p.on('pageerror', e => errs.push('[pageerror] ' + e.message));

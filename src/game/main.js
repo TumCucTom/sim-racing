@@ -21,7 +21,7 @@ const GradeShader = {
       vec2 d=vUv-0.5; x*=1.0-dot(d,d)*vignette;
       gl_FragColor=vec4(x,c.a); }`,
 };
-import { buildTrack, nearestIndexGlobal, TRACKS, TRACK_ORDER } from '../sim/track.js';
+import { buildTrack, nearestIndexGlobal, TRACKS, TRACK_ORDER, TRACK_GROUPS, TRACK_KM } from '../sim/track.js';
 import { CARS, CAR_ORDER, CAR_GROUPS } from '../sim/cars.js';
 import { Sim } from '../sim/sim.js';
 import { SIM_DT, peakPower } from '../sim/vehicle.js';
@@ -177,7 +177,7 @@ class Game {
       wrap.appendChild(el);
     } }
     const ts = document.getElementById('track');
-    for (const id of TRACK_ORDER) { const o = document.createElement('option'); o.value = id; o.textContent = `${TRACKS[id].name}${TRACKS[id].real ? ' — ' + TRACKS[id].country : ' (original)'}`; ts.appendChild(o); }
+    for (const [label, ids] of TRACK_GROUPS) { const g = document.createElement('optgroup'); g.label = label; for (const id of ids) { const o = document.createElement('option'); o.value = id; o.textContent = `${TRACKS[id].name}${TRACKS[id].real ? ' — ' + TRACKS[id].country : ' (original)'}${TRACK_KM[id] ? ' · ' + TRACK_KM[id].toFixed(2) + ' km' : ''}`; g.appendChild(o); } ts.appendChild(g); }
     ts.value = this.trackId;
     ts.onchange = () => this.setTrack(ts.value);
     this.updateTrackInfo();

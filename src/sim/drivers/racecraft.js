@@ -116,7 +116,7 @@ export class RaceDriver {
     this.nL = false; this.nR = false; this.lOff = 0; this.lSep = 0; this.rOff = 0; this.rSep = 0;   // cars alongside, left and right
     this.vF = Infinity; this.speedK = 1; this.paceK = 1; this.extra = 0;
     this.held = 0; this.defApex = -1; this.defD = 0; this.mistakeT = 0; this.braking = false; this.lastLap = -1;
-    this.yieldTo = null; this.keepT = 0; this.started = false; this.spun = false; this.slowPass = false; this.lapK = 1; this.formK = 1; this.phaseT = 20; this.atk = 0; this.lateM = 0; this.vApexAtk = 10; this.panic = false; this.wakeF = 0; this.near = false; this.lastBrakeT = -1e9;
+    this.yieldTo = null; this.keepT = 0; this.started = false; this.spun = false; this.slowPass = false; this.stuckOn = null; this.stuckT = 0; this.lapK = 1; this.formK = 1; this.phaseT = 20; this.atk = 0; this.lateM = 0; this.vApexAtk = 10; this.panic = false; this.wakeF = 0; this.near = false; this.lastBrakeT = -1e9;
     this.passes = 0; this.aborts = 0; this.defends = 0; this.mistakes = 0; this.why = {};
     this.info = { ahead: null, gapA: 0, behind: null, gapB: 0, left: false, right: false };
   }
@@ -177,7 +177,7 @@ export class RaceDriver {
     // (never more than the line's own speed there)
     if (this.atk > 0) {
       // brake `atk` metres later than the profile of my lane, fading to nothing as the speed comes down to the apex speed
-      const f = (v - 1.2 * this.vApexAtk) / (0.4 * v + 1), sh = this.atk * (f < 0 ? 0 : f > 1 ? 1 : f);
+      const f = (v - 1.2 * this.vApexAtk) / (0.4 * v + 1), sh = Math.min(this.atk * (f < 0 ? 0 : f > 1 ? 1 : f), 0.3 * v);    // (never more than three tenths of a second late)
       const v2 = this.vAt(((k - Math.round(sh / t.ds)) % n + n) % n, this.o); if (v2 > vt) vt = v2;
     }
     const kk = this.speedK * this.paceK * (this.mistakeT > 0 ? this.slipK : 1);
@@ -287,6 +287,9 @@ export class RaceDriver {
       else if (gap < gapB && clear < 2.5) { B = o; gapB = gap; }
     }
     this.near = !!A && gapA < 30;
+    // stuck behind the same car: patience runs out, a little more every second (up to +0.3)
+    if (A && A === this.stuckOn && gapA < 0.9 * v) this.stuckT += dt; else { this.stuckOn = A; this.stuckT = 0; }
+    const aggr = Math.min(1, p.aggression + Math.min(0.3, 0.012 * this.stuckT));
     const I = this.info; I.ahead = A; I.gapA = gapA; I.behind = B; I.gapB = gapB; I.left = left; I.right = right;
 
     // distance to the next braking point on my own line (for a touch more than my present speed:
@@ -374,10 +377,12 @@ export class RaceDriver {
         this.mode = 'line'; this.target = null; this.keepT = 0.4; this.cool = 0.5;
       } else {
         // not going to work? then tuck back in behind
+        // (a lunge for the corner is judged at turn-in: nose alongside by then, or back out; a pass
+        // on pace that has not got alongside by the braking zone is given up there)
         const why = ds > 70 ? 'gone' : room < 0.2 && !overlap ? 'room' : this.passT > 9 && !overlap ? 'time'
-          : this.slowPass ? '' : inBrake && !overlap && this.side !== inside ? 'brake'
-            : dBrake < 40 && this.side !== inside && ds > sepL * 0.3 && p.aggression < 0.8 ? 'outside'
-              : this.side === inside && !this.switched && dApex < 30 && ds > sepL - 0.7 ? 'late' : '';
+          : this.slowPass ? '' : this.lateM > 0 ? (dApex < 30 && ds > sepL - 0.7 ? 'late' : '')
+            : inBrake && !overlap && this.side !== inside ? 'brake'
+              : dBrake < 40 && this.side !== inside && ds > sepL * 0.3 && p.aggression < 0.8 ? 'outside' : '';
         // the door was shut on the inside: go for the outside instead (the defender is now off line)
         const limO = this.lim[tc.idx], roomO = limO - this.side * -1 * tc.d - sepW - 0.5;
         if (why === 'room' && !this.switched && !this.slowPass && roomO > 0 && ds < 30 && p.aggression > 0.3 && T.driver && T.driver.mode === 'defend') { this.side = -this.side; this.switched = true; this.lateM *= 0.6; this.why.swap = (this.why.swap || 0) + 1; }
@@ -389,7 +394,7 @@ export class RaceDriver {
       if (this.mode === 'pass') this.oT = oStar;
       // out-braking: on the inside for the corner and not yet clear, use the braking the tuned profile
       // keeps in reserve (brake later, arrive hotter); given up at the apex
-      atk = this.mode === 'pass' && this.lateM > 0 && (this.side === inside || this.switched) && dApex > 10 ? this.lateM : 0;
+      atk = this.mode === 'pass' && this.lateM > 0 && dApex > 10 ? this.lateM : 0;
     } else if (this.mode === 'defend') {
       // one move, then hold it until the corner; release at the apex
       const passed = ((idx - this.defApex + n) % n) < n / 2;
@@ -422,7 +427,7 @@ export class RaceDriver {
           for (let q = 0; q <= 60; q += 15) { const i = (idx + Math.round(q / t.ds)) % n, dA = t.lineD[i] + oA; roomL = Math.min(roomL, this.lim[i] - (dA + sepW + 0.5)); roomR = Math.min(roomR, (dA - sepW - 0.5) + this.lim[i]); }
           // room to go two abreast through the corner at all?
           let limC = limMin; for (let q = 0; q < dApex + 40 && q < 400; q += 15) limC = Math.min(limC, this.lim[(idx + Math.round(q / t.ds)) % n]);
-          const twoWide = 2 * limC > sepW + 1.6;
+          const twoWide = 2 * limC > sepW + (t.narrow ? 2.6 : 1.6);
           const canComplete = dNeed < dBrake * (twoWide ? 1.0 : 0.7);
           const dive = twoWide && dBrake < 260 && gapA < 3 + 5 * p.aggression && p.aggression > 0.3 && closing > -0.5;
           // set up a move for the braking zone: close enough on the approach, take the inside early
@@ -433,17 +438,18 @@ export class RaceDriver {
           // than them and any closing speed on the way in add to it.
           let vApex = v; for (let q = 0; q < (dBrake + 170) / t.ds; q += 5) { const u = this.vLine[(idx + q) % n]; if (u < vApex) vApex = u; }
           // (how much later: a share of the braking distance, from the braking the tune keeps in reserve)
-          const late = (v * v - vApex * vApex) / 28 * (0.08 + 0.10 * p.aggression) * this.atkK;
+          const late = (v * v - vApex * vApex) / 28 * (0.08 + 0.10 * aggr) * this.atkK * (t.narrow ? 0.5 : 1);
           const tGap = (gapA + sepL) / v - late / v - 0.4 * Math.max(0, closing) * (dBrake / v) / v;
           const overlapAtApex = sepL - tGap * vApex;
-          const setup = twoWide && dBrake > 40 && dBrake < 50 + 1.6 * v && closing > -1.5 && overlapAtApex > 1.3 - 0.9 * p.aggression;
+          const setup = twoWide && dBrake > 40 && dBrake < 50 + 1.6 * v && closing > -1.5 && overlapAtApex > 1.3 - 0.9 * aggr;
           const ok = (s) => (s > 0 ? roomL >= 0 && !left : roomR >= 0 && !right);
           I.att = { setup, twoWide, ov: overlapAtApex, okIn: ok(inside), canComplete, dBrake };
-          let side = 0;
+          let side = 0, outLunge = false;
           if (slow) { const rl = lim - (ad + sepW + 0.5), rr = (ad - sepW - 0.5) + lim; side = rl >= rr ? (rl >= -0.2 && !left ? 1 : 0) : (rr >= -0.2 && !right ? -1 : 0); }
           else if (ok(inside) && (canComplete || dive || setup)) side = inside;
           else if (ok(-inside) && canComplete && dNeed < dBrake * 0.75) side = -inside;
-          if (side) { this.mode = 'pass'; this.side = side; this.target = A; this.passT = 0; this.held = 0; this.slowPass = slow; this.switched = false; this.lateM = side === inside && !slow ? late : 0; this.vApexAtk = vApex; }
+          else if (ok(-inside) && !ok(inside) && setup && overlapAtApex > 2.4 && aggr > 0.45) { side = -inside; outLunge = true; }      // no room inside: round the outside
+          if (side) { this.mode = 'pass'; this.side = side; this.target = A; this.passT = 0; this.held = 0; this.slowPass = slow; this.switched = false; this.lateM = slow ? 0 : side === inside ? late : outLunge ? 0.6 * late : 0; this.vApexAtk = vApex; }
         }
       }
       // defend? one move to the inside on the approach to a braking zone
