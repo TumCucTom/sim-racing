@@ -40,7 +40,7 @@ const perfMd = perf ? `Measured in this repository's CI-like container (4 vCPU, 
 | Physics cost per 60 Hz frame (5 steps) | ${perf.simMsPerFrame} ms |
 | RL training throughput | ${perf.trainSps} env steps/s per process (4 in parallel) |
 | Training time | ${perf.trainMinutes} min per 3M-step seed |
-| Build size | ${perf.bundleKb} kB JS (${perf.gzipKb} kB gzip), no external assets |
+| Build size | ${perf.bundleKb} kB JS (${perf.gzipKb} kB gzip) + 1.7 MB car model and Draco decoder |
 ${perf.render.map(r => `| Render, ${r.quality} @ ${r.track} (software GL, 1280×720) | ${r.fps} fps, ${r.calls} draw calls, ${r.tris} triangles, CPU ${r.frameMs} ms/frame |`).join('\n')}
 | Test suite | ${perf.tests} |` : '_run tools/perf.mjs_';
 md = md.replace('VALIDATION_TABLE', table).replace('RL_SECTION', rl).replace('PERF_SECTION', perfMd);

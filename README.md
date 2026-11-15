@@ -156,7 +156,7 @@ Measured in this repository's CI-like container (4 vCPU, **no GPU**: Chromium re
 | Physics cost per 60 Hz frame (5 steps) | 0.005 ms |
 | RL training throughput | 1930 env steps/s per process (4 in parallel) |
 | Training time | 23.8 min per 3M-step seed |
-| Build size | 1903 kB JS (502 kB gzip), no external assets |
+| Build size | 1903 kB JS (502 kB gzip) + 1.7 MB car model and Draco decoder |
 | Render, low @ ravenscar (software GL, 1280×720) | 55.6 fps, 178 draw calls, 112896 triangles, CPU 24.37 ms/frame |
 | Render, medium @ ravenscar (software GL, 1280×720) | 24.7 fps, 290 draw calls, 231488 triangles, CPU 2.87 ms/frame |
 | Render, medium @ spa (software GL, 1280×720) | 23.6 fps, 248 draw calls, 503522 triangles, CPU 2.74 ms/frame |
