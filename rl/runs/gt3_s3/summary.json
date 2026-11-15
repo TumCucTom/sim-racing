@@ -3,10 +3,10 @@
   "seed": 3,
   "steps": 3002368,
   "best": {
-    "score": 4937.366915540068,
-    "lap": 62.633084459932,
-    "completed": 5,
-    "steps": 2949120
+    "score": 3934.9391658082804,
+    "lap": 65.06083419171975,
+    "completed": 4,
+    "steps": 1515520
   },
-  "wallSeconds": 1474.211
+  "wallSeconds": 1536.569
 }

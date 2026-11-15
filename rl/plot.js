@@ -35,7 +35,7 @@ function axes(x0, y0, x1, y1, xt, yt, X, Y, xl, yl) {
   const lo = Math.floor(Math.min(...allLap) - 1), hi = Math.ceil(Math.min(Math.max(...allLap), (bench.baseline.stintMean ?? bench.baseline.mean) + 6) + 1);
   const ya0 = 80, ya1 = 320, YA = (v) => ya1 - (Math.min(hi, v) - lo) / (hi - lo) * (ya1 - ya0);
   const yt = []; for (let v = lo; v <= hi; v += Math.max(1, Math.round((hi - lo) / 6))) yt.push(v);
-  svg += `<text x="${x0}" y="${ya0 - 10}" font-size="12.5" font-weight="600" fill="${C.text}">Validation stint pace (s/lap) — checkpoints where every validation start gave a clean 5-lap stint</text>`;
+  svg += `<text x="${x0}" y="${ya0 - 10}" font-size="12.5" font-weight="600" fill="${C.text}">Validation stint pace (s/lap) — checkpoints where every validation start gave a clean 8-lap stint</text>`;
   svg += axes(x0, ya0, x1, ya1, xt, yt, X, YA, '', 'lap time (s), lower is better');
   svg += `<line x1="${x0}" x2="${x1}" y1="${YA((bench.baseline.stintMean ?? bench.baseline.mean))}" y2="${YA((bench.baseline.stintMean ?? bench.baseline.mean))}" stroke="${C.base}" stroke-width="2" stroke-dasharray="6 4"/><text x="${x1 + 8}" y="${YA((bench.baseline.stintMean ?? bench.baseline.mean)) + 4}" font-size="12" fill="${C.text}">Baseline ${(bench.baseline.stintMean ?? bench.baseline.mean).toFixed(2)} s</text>`;
   for (const ev of evals) {

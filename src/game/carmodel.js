@@ -4,6 +4,18 @@
 // the CG's ground projection.
 import * as THREE from 'three';
 import { labelTexture } from './textures.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+
+let gltfLoader = null;
+const glbCache = new Map();
+function loadGLB(url) {
+  if (!glbCache.has(url)) {
+    if (!gltfLoader) { const d = new DRACOLoader(); d.setDecoderPath('draco/'); gltfLoader = new GLTFLoader(); gltfLoader.setDRACOLoader(d); }
+    glbCache.set(url, gltfLoader.loadAsync(url));
+  }
+  return glbCache.get(url);
+}
 
 // [xFrac, halfWidthFrac, floorY, beltY, roofY, roofWidthFrac] (heights in metres, scaled by style height)
 const STYLES = {
@@ -119,7 +131,8 @@ function buildWheel(R, width, rimColor, race) {
 function box(w, h, d, mat, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; return m; }
 
 export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}) {
-  const b = spec.body, R = spec.wheelRadius;
+  const glb = spec.body.style === 'glb' && !ghost ? spec.body : null;
+  const b = spec.body.style === 'glb' ? { ...spec.body, style: spec.body.fallback } : spec.body, R = spec.wheelRadius;
   const root = new THREE.Group();        // follows the sim pose
   const chassis = new THREE.Group();     // pitches / rolls on the suspension
   root.add(chassis);
@@ -209,11 +222,58 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
       if (o.isMesh) { o.material = new THREE.MeshBasicMaterial({ color: 0x66ccff, transparent: true, opacity: 0.28, depthWrite: false }); o.castShadow = false; }
     });
   }
-  return {
+  const model = {
     root, chassis, wheels, tailMat,
+    // steer angle (rad) for front wheels, spin increment (rad) for all
+    setWheel(i, steer, dSpin) { const w = wheels[i]; if (i < 2) w.steer.rotation.y = steer; w.spin.rotation.z -= dSpin; },
     setBrake(on) { tailMat.emissiveIntensity = on ? 3.2 : 0.35; },
-    dispose() { root.traverse(o => { if (o.isMesh) { o.geometry.dispose(); } }); },
+    dispose() { this.disposed = true; root.traverse(o => { if (o.isMesh && !o.userData.shared) { o.geometry.dispose(); } }); },
   };
+  if (glb) attachGLB(model, spec, glb, { a, bb });
+  return model;
+}
+
+// Swap the procedural stand-in for a detailed glTF model once it has loaded.
+function attachGLB(model, spec, body, { a, bb }) {
+  loadGLB(body.model).then((gltf) => {
+    if (model.disposed) return;
+    const car = gltf.scene.clone(true);
+    const bodyMat = new THREE.MeshPhysicalMaterial({ color: body.color, metalness: 0.9, roughness: 0.45, clearcoat: 1, clearcoatRoughness: 0.03 });
+    const detail = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 1, roughness: 0.4 });
+    const glass = new THREE.MeshPhysicalMaterial({ color: 0x0c1014, metalness: 0.6, roughness: 0.02, transparent: true, opacity: 0.72 });
+    const set = (name, mat) => { const o = car.getObjectByName(name); if (o) o.material = mat; };
+    set('body', bodyMat); set('glass', glass); set('trim', detail);
+    for (const n of ['rim_fl', 'rim_fr', 'rim_rr', 'rim_rl']) set(n, detail);
+    car.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.userData.shared = true; } });
+    const rubber = new THREE.MeshStandardMaterial({ color: 0x0c0c0d, roughness: 0.9, metalness: 0 });
+    car.traverse(o => { if (o.isMesh && o.name.startsWith('tire')) o.material = rubber; });
+    // the model's own tail-light lenses double as brake lights
+    const tail = new THREE.MeshStandardMaterial({ color: 0x5a0000, emissive: 0xff1408, emissiveIntensity: 0.25, roughness: 0.3 });
+    const lr = car.getObjectByName('lights_red'); if (lr) lr.traverse(o => { if (o.isMesh) o.material = tail; });
+    model.setBrake = (on) => { tail.emissiveIntensity = on ? 3.5 : 0.25; };
+    const names = ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr'];
+    const gw = names.map(n => car.getObjectByName(n));
+    if (gw.some(w => !w)) return;                 // unexpected model layout: keep the stand-in
+    // model faces -Z; ours faces +X. Align axles with the sim's wheelbase.
+    const holder = new THREE.Group(); holder.rotation.y = -Math.PI / 2; holder.add(car);
+    const zf = gw[0].position.z, zr = gw[2].position.z, k = spec.wheelbase / Math.abs(zf - zr);
+    car.scale.setScalar(k);
+    car.position.z = -((zf + zr) / 2) * k;
+    holder.position.x = (a - bb) / 2;
+    // remove procedural parts, keep groups
+    for (const w of model.wheels) w.steer.visible = false;
+    while (model.chassis.children.length) model.chassis.remove(model.chassis.children[0]);
+    model.chassis.add(holder);
+    // wheels live inside the chassis in this model; steer + spin them there
+    for (const w of gw) w.rotation.order = 'YXZ';
+    const spin = [0, 0, 0, 0];
+    model.setWheel = (i, steer, dSpin) => { const w = gw[i]; spin[i] -= dSpin; if (i < 2) w.rotation.y = steer; w.rotation.x = spin[i]; };
+    // baked contact shadow under the car
+    new THREE.TextureLoader().load('models/ferrari_ao.png', (tex) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.655 * 4 * k, 1.3 * 4 * k), new THREE.MeshBasicMaterial({ map: tex, blending: THREE.MultiplyBlending, toneMapped: false, transparent: true, premultipliedAlpha: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }));
+      m.rotation.x = -Math.PI / 2; m.position.y = 0.012; m.renderOrder = 2; m.userData.shared = false; car.add(m);
+    });
+  }).catch(() => { /* offline or blocked: the procedural stand-in remains */ });
 }
 
 function buildFormula(chassis, spec, { paintMat, carbon, black, tailMat, a, bb }) {

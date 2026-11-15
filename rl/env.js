@@ -79,7 +79,7 @@ export class RaceEnv {
       // leaving the circuit ends the episode; the penalty grows with speed so
       // 'arrive slower' is always an improvement the learner can find
       const vc = car.speed / 50;
-      this.done = true; r -= 2.0 + 3.0 * vc * vc;
+      this.done = true; r -= 6.0 + 9.0 * vc * vc;
     } else if (this.steps >= this.maxSteps) this.truncated = true;
     buildObs(car, this.track, this.obs);
     return r;

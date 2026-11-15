@@ -300,8 +300,8 @@ export function buildWorld(track, renderer, quality) {
     // grandstand (left of the straight) and pit building (right)
     const concrete = new THREE.MeshStandardMaterial({ map: TX.concreteTexture(aniso), roughness: 0.9 });
     const crowdC = document.createElement('canvas'); crowdC.width = 512; crowdC.height = 64; const cx = crowdC.getContext('2d');
-    const rr = new RNG(77); cx.fillStyle = '#3a3f4a'; cx.fillRect(0, 0, 512, 64);
-    for (let i = 0; i < 2600; i++) { cx.fillStyle = `hsl(${rr.int(360)},${30 + rr.int(50)}%,${35 + rr.int(40)}%)`; cx.fillRect(rr.int(512), rr.int(64), 3, 4); }
+    const rr = new RNG(77); cx.fillStyle = '#2b2f37'; cx.fillRect(0, 0, 512, 64);
+    for (let i = 0; i < 5200; i++) { cx.fillStyle = `hsl(${rr.int(360)},${8 + rr.int(26)}%,${22 + rr.int(38)}%)`; cx.fillRect(rr.int(512), rr.int(64), 2, 3); }
     const crowdT = new THREE.CanvasTexture(crowdC); crowdT.colorSpace = THREE.SRGBColorSpace;
     const crowdMat = new THREE.MeshStandardMaterial({ map: crowdT, roughness: 1 });
     const stand = new THREE.Group();

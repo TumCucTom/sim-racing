@@ -32,6 +32,8 @@ export class RaceAudioSynth {
       I4: { off: [0, 0.5, 0.25, 0.75], bank: [0, 0, 0, 0], sharp: 9, drive: 1.5, formants: [[105, 2.5, 1.0], [390, 3, 0.7], [1500, 2.5, 0.35]], pipe: [5.2, 5.2], bright: 0.9, pops: 0.15, gain: 0.95, jitter: 0.07, intake: 0.5 },
       // cross-plane V8, firing order 1-5-4-8-6-3-7-2: banks see L R R L R L L R
       V8X: { off: [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875], bank: [0, 1, 1, 0, 1, 0, 0, 1], sharp: 6.5, drive: 2.3, formants: [[72, 2.2, 1.3], [210, 2.5, 0.9], [760, 2, 0.4]], pipe: [7.4, 8.1], bright: 0.75, pops: 0.5, gain: 1.0, merge: 0.12, jitter: 0.1, intake: 0.4 },
+      // flat-plane V8: banks alternate evenly, so each bank fires like an inline four
+      V8F: { off: [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875], bank: [0, 1, 0, 1, 0, 1, 0, 1], sharp: 12, drive: 2.7, formants: [[190, 2.5, 0.8], [700, 3.2, 1.0], [2700, 3, 0.65]], pipe: [3.0, 3.2], bright: 1.35, pops: 0.4, gain: 1.0, merge: 0.35, jitter: 0.05, intake: 0.9 },
       F6: { off: [0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6], bank: [0, 1, 0, 1, 0, 1], sharp: 12, drive: 2.9, formants: [[150, 2.5, 0.8], [560, 3.5, 1.0], [2300, 3, 0.6]], pipe: [3.6, 3.9], bright: 1.25, pops: 0.35, gain: 1.15, merge: 0.6, jitter: 0.06, intake: 0.9 },
       V10: { off: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9], bank: [0, 1, 0, 1, 0, 1, 0, 1, 0, 1], sharp: 13, drive: 2.4, formants: [[310, 2.5, 0.7], [1150, 3.5, 1.0], [3600, 3, 0.75]], pipe: [1.7, 1.85], bright: 1.6, pops: 0.25, gain: 0.9, merge: 0.7, jitter: 0.04, intake: 1.0 },
       EV: { off: [], bank: [], sharp: 1, drive: 1, formants: [], pipe: [1, 1], bright: 1, pops: 0, gain: 0, jitter: 0, intake: 0, electric: true },
@@ -218,6 +220,7 @@ export function audioConfigFor(spec) {
     hatch: { turbo: true, gearWhine: 0, squealGain: 1.0, bright: 0.7 },
     coupe: { gearWhine: 0, squealGain: 1.1 },
     gt3: { gearWhine: 1.0, squealGain: 0.55 },
+    f458: { gearWhine: 0.15, squealGain: 0.9 },
     formula: { gearWhine: 0.7, squealGain: 0.35 },
     ev: { gearWhine: 0, squealGain: 1.0 },
   }[spec.id] || {};

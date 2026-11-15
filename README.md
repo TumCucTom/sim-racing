@@ -1,7 +1,7 @@
 # Racing Simulator
 
 A browser racing simulator with a deterministic vehicle-dynamics core, five
-cars from different classes, four circuits (one original, three real layouts),
+cars from different classes plus a real Ferrari 458 Italia, four circuits (one original, three real layouts),
 synthesised engine audio, an interactive telemetry overlay — and an AI driver
 trained with reinforcement learning on the same physics code the browser runs.
 
@@ -18,7 +18,7 @@ npm run plot       # docs/learning-curve-gt3.svg, docs/benchmark-gt3.svg
 Controls: **WASD / arrows** drive (gamepad supported) · **Q / E** shift ·
 **M** auto/manual · **R** recover · **Enter** restart · **C** camera ·
 **T** telemetry · **G** ghost (best / AI) · **I** AI autopilot · **Z** ABS ·
-**X** TC · **F** perf stats · **N** mute · **1–5** car · **Esc** menu.
+**X** TC · **F** perf stats · **N** mute · **1–6** car · **Esc** menu.
 
 ## Architecture
 
@@ -26,7 +26,7 @@ Controls: **WASD / arrows** drive (gamepad supported) · **Q / E** shift ·
 src/sim/      deterministic core, no DOM — shared by browser, tests and RL
   track.js      circuits -> typed arrays (centreline, width, curvature, elevation, walls)
   vehicle.js    vehicle dynamics (300 Hz fixed step)
-  cars.js       five car specifications + real-world reference envelopes
+  cars.js       six car specifications + real-world reference envelopes
   sim.js        car + track + lap/sector timing + track limits
   drivers/      scripted baseline, RL observation/action interface, policy runner
 src/game/     Three.js renderer, cameras, HUD, telemetry, effects, cannon-es props
@@ -101,6 +101,7 @@ tests check the spectra:
 | Arrow GT3-R | flat-6 | 3× and 6× with some 1.5× (separate banks), straight-cut gear whine |
 | FX-10 | V10 | 5× crank — 1.5 kHz fundamental at 18,000 rpm |
 | Volt-R | electric | motor orders tracking motor speed, no combustion |
+| Ferrari 458 | flat-plane V8 | 4× and 8× crank, no sub-orders — a wail, not a burble |
 
 Plus tyre squeal, scrub, kerb rumble, wind, loose-surface noise, impacts and
 shift clunks. I could verify the audio *structurally* (spectral tests, running
@@ -116,8 +117,10 @@ RL_SECTION
 PERF_SECTION
 
 ## Known limitations
-- Car bodies are procedural lofts: recognisable silhouettes, not photoreal
-  models. Scenery is low-poly procedural.
+- Visuals are well short of a commercial sim such as Assetto Corsa. The 458
+  uses a detailed third-party model; the other five car bodies are procedural
+  lofts (recognisable silhouettes, not photoreal) and all scenery is low-poly
+  and generated in code. Closing that gap needs authored 3D assets.
 - Real circuits: accurate layout/width only (see above); the in-game AI on
   them is the conservative centre-line baseline, so its lap times are well off
   real-world pace.
@@ -127,4 +130,8 @@ PERF_SECTION
 
 ## Credits
 Real-circuit geometry: [TUMFTM racetrack-database](https://github.com/TUMFTM/racetrack-database)
-(LGPL-3.0). Rendering: three.js. Prop physics: cannon-es. Car names are fictional.
+(LGPL-3.0). Ferrari 458 Italia 3D model by
+[vicent091036](https://sketchfab.com/models/57bf6cc56931426e87494f554df1dab6) (CC BY), via the
+three.js examples. Rendering: three.js. Prop physics: cannon-es. The other five car names are
+fictional. This is a non-commercial technical project and is not affiliated with or endorsed by
+Ferrari or the circuit owners.

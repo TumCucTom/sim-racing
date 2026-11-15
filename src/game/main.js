@@ -4,6 +4,22 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+
+// Final grade: gentle filmic contrast, a touch of saturation, vignette.
+const GradeShader = {
+  uniforms: { tDiffuse: { value: null }, amount: { value: 1 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+    void main(){ vec4 c=texture2D(tDiffuse,vUv); vec3 x=c.rgb;
+      float l=dot(x,vec3(0.2126,0.7152,0.0722)); x=mix(vec3(l),x,1.12);
+      x=mix(x, x*x*(3.0-2.0*x), 0.22);
+      x*=vec3(1.02,1.0,0.97);
+      vec2 d=vUv-0.5; x*=1.0-dot(d,d)*0.55;
+      gl_FragColor=vec4(x,c.a); }`,
+};
 import { buildTrack, nearestIndexGlobal, TRACKS, TRACK_ORDER } from '../sim/track.js';
 import { CARS, CAR_ORDER } from '../sim/cars.js';
 import { Sim } from '../sim/sim.js';
@@ -158,8 +174,13 @@ class Game {
     if (!this.quality.bloom) return;
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.22, 0.6, 0.92));
+    const ao = new GTAOPass(this.scene, this.camera, 1, 1);
+    ao.blendIntensity = 0.9; ao.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.4, thickness: 1.2, scale: 1.1, samples: 12 });
+    this.composer.addPass(ao);
+    this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.1, 0.4, 3.0));
     this.composer.addPass(new OutputPass());
+    this.composer.addPass(new ShaderPass(GradeShader));
+    this.composer.addPass(new SMAAPass());
   }
 
   // Swap circuits in place (no page reload).
@@ -342,9 +363,7 @@ class Game {
     m.chassis.position.y = -Math.min(0.03, 0.6 * spec.ClA * car.speed * car.speed / (spec.mass * 9.81) * 0.02) + shake * 2;
     const delta = car.steer * spec.steerLock;
     for (let i = 0; i < 4; i++) {
-      const w = m.wheels[i];
-      if (i < 2) w.steer.rotation.y = delta;
-      w.spin.rotation.z -= car.omega[i] * dt;
+      m.setWheel(i, delta, car.omega[i] * dt);
       // contact patch world position for effects
       const cy = Math.cos(car.yaw), sy = Math.sin(car.yaw), wx = car.wx[i], wy = car.wy[i];
       this.wheelWorld[i].set(car.x + wx * cy - wy * sy, h, -(car.y + wx * sy + wy * cy));
@@ -398,7 +417,8 @@ class Game {
       fov = 56 + Math.min(18, spd * 0.2);
     } else if (mode === 'bonnet') {
       const b = this.spec.body, form = b.style === 'formula';
-      const cy = Math.cos(car.yaw), sy = Math.sin(car.yaw), ox = form ? 0.05 : 0.25, oy = form ? 0.78 : b.height * 0.86;
+    const low = b.style === 'glb';
+      const cy = Math.cos(car.yaw), sy = Math.sin(car.yaw), ox = form ? 0.05 : 0.25, oy = form ? 0.78 : low ? b.height * 0.93 : b.height * 0.86;
       cam.position.set(pos.x + cy * ox, pos.y + oy, pos.z - sy * ox);
       const look = car.yaw + THREE.MathUtils.clamp(car.r * 0.12, -0.25, 0.25);
       cam.lookAt(cam.position.x + Math.cos(look) * 10, cam.position.y - 0.6 + Math.atan(this.track.grade[car.idx]) * 10 * Math.cos(car.headErr), cam.position.z - Math.sin(look) * 10);

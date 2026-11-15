@@ -46,9 +46,9 @@ const iters = Math.ceil(totalSteps / n);
 
 function evaluate() {
   const pol = ppo.exportPolicy();
-  const res = VALIDATION_SEEDS.map(s => evaluateDriver(track, spec, () => { const d = new PolicyDriver(track, pol); return c => d.control(c); }, s, { laps: 5 }));
-  // a checkpoint only counts on a seed if all five laps of the stint are clean;
-  // it is scored on stint pace (mean of laps 2-5), not on one hot lap
+  const res = VALIDATION_SEEDS.map(s => evaluateDriver(track, spec, () => { const d = new PolicyDriver(track, pol); return c => d.control(c); }, s, { laps: 8 }));
+  // a checkpoint only counts on a seed if all eight laps of the stint are clean;
+  // it is scored on stint pace (mean of laps 2-8), not on one hot lap
   const ok = res.filter(r => r.allClean);
   const mean = ok.length ? ok.reduce((a, r) => a + r.stintMean, 0) / ok.length : null;
   return { completed: ok.length, lap: mean, fails: res.map(r => r.fail || (r.allClean ? 'ok' : 'invalid')) };

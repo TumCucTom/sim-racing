@@ -360,7 +360,10 @@ export class Vehicle {
 
       // tyre thermal state
       const heat = (Math.abs(fxi * svx) + Math.abs(fyi * vt)) * 0.34;
-      const cool = (7 + 0.55 * Math.sqrt(v2)) * (this.tireT[i] - 28);
+      // convective + (above the working window) rapidly growing losses, so an
+      // abused tyre settles at a hot equilibrium instead of running away
+      const over = this.tireT[i] - t.tOpt;
+      const cool = (7 + 0.55 * Math.sqrt(v2)) * (this.tireT[i] - 28) * (over > 0 ? 1 + over / 30 : 1);
       this.tireT[i] += dt * (Math.min(heat, 60000) - cool) / 9000;
       if (this.tireT[i] > 160) this.tireT[i] = 160;
 

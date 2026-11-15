@@ -113,4 +113,26 @@ export const CARS = {
   },
 };
 
-export const CAR_ORDER = ['gt3', 'hatch', 'coupe', 'formula', 'ev'];
+// A real production car, modelled from published figures (and rendered with a
+// detailed CC-BY model — see README credits).
+CARS.f458 = {
+  id: 'f458', name: 'Ferrari 458 Italia', klass: 'Supercar · RWD · 4.5 flat-plane V8',
+  blurb: 'Mid-engined, 9,000 rpm, dual-clutch. Real 458 figures: 570 PS, 1,565 kg with driver.',
+  mass: 1565, wheelbase: 2.65, frontWeight: 0.42, cgHeight: 0.45, trackF: 1.67, trackR: 1.61,
+  yawK: 0.95, wheelRadius: 0.35, wheelInertia: 1.7,
+  drive: 'RWD', diff: { lock: 110, preload: 90, ramp: 0.4 },
+  tireStagger: 0.9, tire: TIRES.sport, rollStiffFront: 0.50,
+  CdA: 0.70, ClA: 0.74, aeroBalance: 0.40,
+  brakeTorque: 10500, brakeBias: 0.66, abs: true, tc: true,
+  engine: {
+    layout: 'V8F', cylinders: 8, turbo: false, inertia: 0.13,
+    idle: 1000, redline: 9000, limiter: 9100,
+    torque: [[1000, 330], [2000, 400], [3250, 460], [4500, 505], [6000, 540], [7000, 525], [8000, 490], [9000, 445], [9300, 380]],
+    friction: [24, 0.012],
+  },
+  gears: [3.08, 2.19, 1.63, 1.29, 1.03, 0.84, 0.69], finalDrive: 5.14, shiftTime: 0.06, efficiency: 0.92,
+  steerLock: 0.5, body: { style: 'glb', fallback: 'coupe', model: 'models/ferrari.glb', length: 4.53, width: 1.94, height: 1.21, color: 0xc80a0a },
+  reference: { zeroTo100: [3.2, 3.7], brake100: [30, 35], latG: [1.0, 1.15], topKmh: [315, 335] },
+};
+
+export const CAR_ORDER = ['gt3', 'f458', 'hatch', 'coupe', 'formula', 'ev'];

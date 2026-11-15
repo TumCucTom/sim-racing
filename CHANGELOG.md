@@ -3,6 +3,23 @@
 All notable changes, newest first. Numbers quoted here were measured by the
 tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
 
+## 0.6.0 — graphics pass, a real car
+- Added the Ferrari 458 Italia as a sixth car: specification from published
+  figures (570 PS, 7-speed DCT ratios, 42/58 weight split), rendered with a
+  detailed CC-BY glTF model instead of a procedural body. Measured in the sim:
+  0–100 km/h 3.4 s, 100–0 in 32 m, 1.07 g. Flat-plane V8 audio voice (banks
+  fire evenly, unlike the cross-plane muscle car).
+- High quality now adds ground-truth ambient occlusion, a filmic grade with
+  vignette, SMAA and a bloom that only catches real highlights (the first
+  bloom setting washed the whole frame out — caught on a screenshot).
+- Tyre thermal model: heat loss now rises steeply above the working window.
+  Before, an over-driven tyre never reached equilibrium (hotter -> less grip ->
+  more sliding -> hotter), which is what ended every RL stint on lap 6.
+- RL crash penalty raised 3x so the policy keeps margin; checkpoint selection
+  uses 8-lap stints.
+- Honest status of visuals: this is not Assetto-Corsa-grade. One car uses a
+  detailed model; the other five and all scenery are generated in code.
+
 ## 0.5.0 — AI that survives a stint
 - Found by watching the AI in the game: the first trained policies lapped
   Ravenscar in 62–64 s (baseline 69.1 s, 20 fixed seeds) but hit the wall on
