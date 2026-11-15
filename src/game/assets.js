@@ -56,7 +56,7 @@ export const ASSETS = {
   skyHDR: 'env/sky_1k.hdr',
   skyJPG: 'env/sky_8k.jpg',
   asphaltDiff: 'tex/asphalt_diff.jpg', asphaltNor: 'tex/asphalt_nor.jpg', asphaltRough: 'tex/asphalt_rough.jpg', asphaltOld: 'tex/asphalt_old_diff.jpg',
-  grassDiff: 'tex/grass_diff.jpg', grassNor: 'tex/grass_nor.jpg', forestFloor: 'tex/forest_floor_diff.jpg',
+  grassDiff: 'tex/grass_diff.jpg', grassNor: 'tex/grass_nor.jpg',
   gravelDiff: 'tex/gravel_diff.jpg', gravelNor: 'tex/gravel_nor.jpg', concrete: 'tex/concrete_diff.jpg',
   trees: 'tex/trees_atlas.png',
 };

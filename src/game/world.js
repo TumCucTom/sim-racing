@@ -29,7 +29,7 @@ function latOffset(track, i, x, y) {
   return -(x - track.x[i]) * Math.sin(h) + (y - track.y[i]) * Math.cos(h);
 }
 
-export function makeTerrainFn(track) {
+export function makeTerrainFn(track, { sea = false } = {}) {
   let cx = 0, cy = 0;
   for (let i = 0; i < track.n; i++) { cx += track.x[i]; cy += track.y[i]; }
   cx /= track.n; cy /= track.n;
@@ -37,6 +37,12 @@ export function makeTerrainFn(track) {
   for (let i = 0; i < track.n; i++) { zMin = Math.min(zMin, track.z[i]); zMax = Math.max(zMax, track.z[i]); zMean += track.z[i] / track.n; }
   const amp = Math.max(0.12, Math.min(1.6, (zMax - zMin) / 23));
   let ext = 0; for (let i = 0; i < track.n; i += 10) ext = Math.max(ext, Math.hypot(track.x[i] - cx, (track.y[i] - cy) * 1.4));
+  // coastal circuits: the land falls away into the sea beyond the lowest part of the lap
+  let sx = 0, sy = 0, lx0 = 0, ly0 = 0, ln = 0;
+  if (sea) {
+    for (let i = 0; i < track.n; i++) if (track.z[i] < zMin + 0.12 * (zMax - zMin)) { lx0 += track.x[i]; ly0 += track.y[i]; ln++; }
+    lx0 /= ln; ly0 /= ln; const d = Math.hypot(lx0 - cx, ly0 - cy) || 1; sx = (lx0 - cx) / d; sy = (ly0 - cy) / d;
+  }
   return (x, y) => {
     const i = nearestIndexGlobal(track, x, y);
     const d = latOffset(track, i, x, y);
@@ -48,7 +54,13 @@ export function makeTerrainFn(track) {
     const far = zMean + amp * (22 * (vnoise(x / 420 + 3.1, y / 420 + 7.7) - 0.4) + 8 * (vnoise(x / 130, y / 130) - 0.4)) + 1.2 * vnoise(x / 28, y / 28)
       + (60 + 90 * amp) * smooth(ext + 300, ext + 1200, rc) * (0.45 + 0.9 * vnoise(x / 300 + 11, y / 300 + 5));
     const t = smooth(corr, corr + 80, dist);
-    return { h: near + (far - near) * t, idx: i, dist, corr, t };
+    let h = near + (far - near) * t;
+    if (sea) {
+      const p = (x - lx0) * sx + (y - ly0) * sy, w = smooth(20, 260, p) * smooth(corr + 4, corr + 60, dist);
+      h += (zMin - 14 - h) * w;                       // sea bed
+      h += (1 - smooth(-200, 500, p)) * smooth(corr + 30, corr + 400, dist) * 60;   // the town climbs the hill behind
+    }
+    return { h, idx: i, dist, corr, t, zMin };
   };
 }
 
@@ -73,6 +85,14 @@ function patch(mat, key, { uniforms = {}, vpars = '', vmain = '', fpars = '', co
   };
   mat.customProgramCacheKey = () => key;
   return mat;
+}
+// Alpha-cut cards and see-through meshes must not be drawn by passes that
+// replace materials (the GTAO normal pass would treat them as solid walls).
+function skipOverride(mesh) {
+  const own = new Set([].concat(mesh.material, mesh.customDepthMaterial || []));
+  if (mesh.isInstancedMesh) { const n = mesh.count; mesh.onBeforeRender = (r, s, c, g, m) => { mesh.count = own.has(m) ? n : 0; }; mesh.onAfterRender = () => { mesh.count = n; }; }
+  else { const g0 = mesh.geometry; mesh.onBeforeRender = (r, s, c, g, m) => { g0.setDrawRange(0, own.has(m) ? Infinity : 0); }; mesh.onAfterRender = () => { g0.setDrawRange(0, Infinity); }; }
+  return mesh;
 }
 const ROAD_V = { vpars: 'attribute vec4 aRoad; attribute float aRub; varying vec4 vRoad; varying float vRub;', vmain: 'vRoad = aRoad; vRub = aRub;' };
 
@@ -133,10 +153,11 @@ export function buildWorld(track, renderer, qualityIn) {
   const quality = { detail: 1, trees: 700, treeCap: 9000, shadowRange: 95, ...qualityIn };
   const group = new THREE.Group();
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-  const terrain = makeTerrainFn(track);
+  const urban = track.id === 'monaco' || !!track.urban;
+  const terrain = makeTerrainFn(track, { sea: urban });
   const HW = track.halfWidth, KW = track.kerbWidth, hwA = track.hw, n = track.n;
   const wallAt = (side, i) => (side > 0 ? track.wallL[i] : track.wallR[i]);
-  const gravelAt = (side, i) => (side > 0 ? track.gravelL[i] : track.gravelR[i]);
+  const gravelAt = (side, i) => !urban && (side > 0 ? track.gravelL[i] : track.gravelR[i]);
   const add = (geo, mat, { cast = false, receive = true } = {}) => { if (!geo) return null; const m = new THREE.Mesh(geo, mat); m.castShadow = cast && quality.shadows; m.receiveShadow = receive; group.add(m); return m; };
   const photo = (mat, slots) => { applyTextures(mat, slots); return mat; };
 
@@ -169,7 +190,7 @@ export function buildWorld(track, renderer, qualityIn) {
   const rub = new Float32Array(n);
   {
     const raw = new Float32Array(n);
-    for (let i = 0; i < n; i++) { let m = 0; for (let q = 0; q <= 70; q += 10) m = Math.max(m, Math.abs(track.curv[(i + q) % n]) * (1 - q / 110)); raw[i] = Math.min(1, 0.5 + m * 55); }
+    for (let i = 0; i < n; i++) { let m = 0; for (let q = 0; q <= 70; q += 10) m = Math.max(m, Math.abs(track.curv[(i + q) % n]) * (1 - q / 110)); raw[i] = Math.min(1, 0.62 + m * 50); }
     for (let i = 0; i < n; i++) { let a = 0; for (let q = -6; q <= 6; q++) a += raw[(i + q + n) % n]; rub[i] = a / 13; }
   }
 
@@ -191,7 +212,7 @@ export function buildWorld(track, renderer, qualityIn) {
       float sect = smoothstep(0.55, 0.62, vnoise(vec2(m.y / 310.0, 3.7)));
       vec3 old = texture2D(uOld, m / 7.0).rgb;
       alb = mix(alb, old * 0.78 * mix(1.0, lum(a2) / uAvg, 0.4), sect * 0.85);
-      alb = mix(vec3(lum(alb)), alb, 0.55) * 1.22;
+      alb = mix(vec3(lum(alb)), alb, 0.55) * 1.08;
       // resurfacing patches with sealed edges
       vec2 pg = vec2(m.x / 3.6, m.y / 19.0), pc = floor(pg), pf = fract(pg);
       float ph = hash12(pc + 11.0);
@@ -205,20 +226,20 @@ export function buildWorld(track, renderer, qualityIn) {
       alb *= 0.95 + 0.1 * vnoise(vec2(m.x * 0.55, m.y / 90.0));
       // rubbered-in racing line: two wheel tracks inside a broad dark band
       float x = m.x - vRoad.z;
-      float streak = 0.55 + 0.9 * vnoise(vec2(m.x * 2.2, m.y / 28.0)) * vnoise(vec2(m.x * 0.4 + 9.0, m.y / 140.0));
-      float g = 0.55 * exp(-x * x / 5.3) + 0.36 * (exp(-(x - 0.82) * (x - 0.82) / 0.2) + exp(-(x + 0.82) * (x + 0.82) / 0.2));
+      float streak = 0.72 + 0.56 * vnoise(vec2(m.x * 2.2, m.y / 28.0));
+      float g = 0.72 * exp(-x * x / 3.6) + 0.3 * (exp(-(x - 0.82) * (x - 0.82) / 0.2) + exp(-(x + 0.82) * (x + 0.82) / 0.2));
       gRub = clamp(g * vRub * streak, 0.0, 1.0);
-      alb *= 1.0 - 0.52 * gRub;
+      alb *= 1.0 - 0.68 * gRub;
       // dust and marbles collect towards the edges
       float de = vRoad.w - abs(m.x);
       float dust = smoothstep(2.2, 0.0, de) * (0.5 + 0.5 * vnoise(m * vec2(1.5, 0.12)));
       alb = mix(alb, alb * 1.3 + vec3(0.02, 0.017, 0.011), dust * 0.55);
       // painted edge lines, worn where the aggregate stands proud
-      float aa = fwidth(de) * 0.8;
-      float ln = smoothstep(0.05 - aa, 0.05 + aa, de) * (1.0 - smoothstep(0.21 - aa, 0.21 + aa, de));
-      float wear = smoothstep(0.8, 1.5, lum(a1) / uAvg + 0.9 * vnoise(m * vec2(7.0, 1.2)) - 0.25);
-      gPaint = ln * (1.0 - 0.75 * wear);
-      alb = mix(alb, vec3(0.6, 0.6, 0.58) * (0.85 + 0.15 * lum(a1) / uAvg), gPaint);
+      float aa = min(fwidth(de) * 0.8, 0.07);
+      float ln = smoothstep(0.04 - aa, 0.04 + aa, de) * (1.0 - smoothstep(0.2 - aa, 0.2 + aa, de));
+      float wear = smoothstep(1.2, 1.8, lum(a1) / uAvg + 0.8 * vnoise(m * vec2(7.0, 1.2)));
+      gPaint = ln * (1.0 - 0.6 * wear);
+      alb = mix(alb, vec3(0.7, 0.7, 0.68) * (0.8 + 0.2 * lum(a1) / uAvg), gPaint);
       diffuseColor.rgb = alb;
     }`,
     rough: 'roughnessFactor = clamp(roughnessFactor - 0.3 * gRub - 0.22 * gPaint, 0.28, 1.0);',
@@ -242,8 +263,8 @@ export function buildWorld(track, renderer, qualityIn) {
         float q = m.y / 1.6, f = fract(q), aa = fwidth(q);
         float blk = smoothstep(0.5 - aa, 0.5 + aa, f) * (1.0 - smoothstep(1.0 - aa, 1.0, f)) + (1.0 - smoothstep(0.0, aa, f));
         vec3 paint = mix(vec3(0.5, 0.022, 0.02), vec3(0.66, 0.66, 0.63), clamp(blk, 0.0, 1.0));
-        float chip = smoothstep(0.62, 0.74, vnoise(m * vec2(9.0, 5.0)) * 0.6 + vnoise(m * vec2(2.0, 0.7)) * 0.5);
-        vec3 alb = mix(paint, vec3(0.33, 0.32, 0.3), chip * 0.6) * (0.72 + 0.6 * c);
+        float chip = smoothstep(0.6, 0.72, vnoise(m * vec2(46.0, 23.0)) * 0.45 + vnoise(m * vec2(9.0, 4.0)) * 0.35 + vnoise(m * vec2(1.6, 0.5)) * 0.3 - 0.06);
+        vec3 alb = mix(paint, vec3(0.33, 0.32, 0.3), chip * 0.3) * (0.72 + 0.6 * c);
         float d = abs(m.x) - vRoad.w;                                            // distance onto the kerb
         float scuff = smoothstep(0.75, 0.05, d) * vnoise(vec2(m.x * 3.0, m.y / 6.0)) * (0.4 + 0.6 * vRub);
         alb *= 1.0 - 0.6 * scuff;
@@ -269,8 +290,8 @@ export function buildWorld(track, renderer, qualityIn) {
     vec3 groundAlbedo(sampler2D tex, vec2 uvm, vec3 near){
       vec3 far = texture2D(tex, uvm / 31.0 + 0.19).rgb, mid = texture2D(tex, uvm.yx / 9.0 + 0.6).rgb;
       float fade = smoothstep(25.0, 140.0, vViewPosition.z);                      // detail gives way to tone with distance
-      vec3 c = mix(near, mid, 0.35 + 0.4 * fade) * mix(1.0, lum(far) / 0.075, 0.7);
-      return mix(c, vec3(lum(c)) * vec3(0.9, 1.0, 0.62), 0.12);
+      vec3 c = mix(near, mid, 0.15 + 0.6 * fade) * mix(1.0, lum(far) / 0.075, 0.55);
+      return c * vec3(0.8, 1.0, 0.72);
     }`;
   const grassMat = patch(new THREE.MeshStandardMaterial({ map: grassFallback, roughness: 0.95, normalScale: new THREE.Vector2(1.2, 1.2) }), 'verge', {
     ...ROAD_V, fpars: 'varying vec4 vRoad; varying float vRub;' + GROUND_F,
@@ -283,7 +304,7 @@ export function buildWorld(track, renderer, qualityIn) {
       alb *= 0.8 + 0.42 * vnoise(vec2(m.x / 7.0, m.y / 33.0));
       // drier, yellower patches and a worn dirt strip where cars drop wheels
       float dry = smoothstep(0.5, 0.8, vnoise(vec2(m.x / 3.0 + 5.0, m.y / 14.0)));
-      alb = mix(alb, lum(alb) * vec3(1.75, 1.5, 0.75), dry * 0.4);
+      alb = mix(alb, lum(alb) * vec3(1.75, 1.5, 0.75), dry * 0.18);
       float worn = smoothstep(1.5, 0.1, d + 1.1 * vnoise(vec2(m.x * 0.8, m.y / 5.0)));
       alb = mix(alb, vec3(0.2, 0.165, 0.11) * (0.6 + 6.0 * lum(alb)), worn * 0.7);
       diffuseColor.rgb = alb;
@@ -301,6 +322,22 @@ export function buildWorld(track, renderer, qualityIn) {
     }`,
   });
   photo(gravelMat, { map: [ASSETS.gravelDiff, { aniso }], normalMap: [ASSETS.gravelNor, { aniso, srgb: false }] });
+  // street circuits: paving slabs instead of grass
+  const paveMat = patch(new THREE.MeshStandardMaterial({ map: concreteFallback, roughness: 0.85 }), 'pave', {
+    ...ROAD_V, fpars: 'varying vec4 vRoad; varying float vRub;',
+    color: `{
+      vec2 m = vRoad.xy; float d = abs(m.x) - vRoad.w;
+      vec3 alb = diffuseColor.rgb * (0.62 + 0.25 * vnoise(vec2(m.x / 3.0, m.y / 9.0)));
+      vec2 sl = vec2(d / 0.6, m.y / 0.9), sf = abs(fract(sl) - 0.5);
+      alb *= 0.72 + 0.28 * smoothstep(0.47, 0.44, max(sf.x, sf.y));           // slab joints
+      alb *= 0.9 + 0.2 * hash12(floor(sl));
+      alb = mix(alb, vec3(0.5, 0.5, 0.48), smoothstep(0.32, 0.28, d) * 0.6);   // kerb stone
+      alb *= 1.0 - 0.3 * smoothstep(0.5, 0.0, d) * vnoise(vec2(m.x * 4.0, m.y / 3.0));
+      diffuseColor.rgb = alb;
+    }`,
+  });
+  photo(paveMat, { map: [ASSETS.concrete, { aniso }] });
+  const vergeMat = urban ? paveMat : grassMat;
   for (const side of [1, -1]) {
     const inner = i => hwA[i] + (track.kerb[i] ? KW - 0.02 : -0.01);
     const gStart = i => Math.min(hwA[i] + KW + 2.0, wallAt(side, i));
@@ -308,8 +345,9 @@ export function buildWorld(track, renderer, qualityIn) {
     // grass from the track edge to the wall (or to the start of the gravel)
     add(strip(track, ksEdge, (i, o) => {
       const z = track.z[i], a = inner(i), b = outer(i), mid = a + Math.min(1.2, (b - a) * 0.5);
-      o.push(side * a, z - 0.004, 0, side * mid, z - 0.012, 0, side * b, z - 0.03, 0);
-    }, { uMetric: 2.3, vScale: 2.3, flip: side < 0, rub }), grassMat);
+      if (urban) o.push(side * a, z - 0.004, 0, side * (a + 0.03), z + 0.11, 0, side * b, z + 0.11, 0);      // raised pavement
+      else o.push(side * a, z - 0.004, 0, side * mid, z - 0.012, 0, side * b, z - 0.03, 0);
+    }, { uMetric: 2.3, vScale: 2.3, flip: side < 0, rub }), vergeMat);
     add(strip(track, ksEdge, (i, o) => { const z = track.z[i] - 0.03; o.push(side * gStart(i), z, 0, side * wallAt(side, i), z, 0); },
       { uMetric: 1.7, vScale: 1.7, flip: side < 0, mask: i => gravelAt(side, i), rub }), gravelMat);
   }
@@ -325,7 +363,7 @@ export function buildWorld(track, renderer, qualityIn) {
     // debris fence where spectators would be: around the pits and on the outside of fast corners
     const fenceOn = (side, i) => {
       const dPit = Math.min(i, n - i) * track.ds;
-      if (dPit < 330) return true;
+      if (dPit < 330 || urban) return true;
       if (quality.detail < 1) return false;
       return vnoise(i * track.ds / 420 + (side > 0 ? 17 : 91), 0.5) > 0.56;
     };
@@ -355,7 +393,7 @@ export function buildWorld(track, renderer, qualityIn) {
     add(merge(tyreGeo), tyreMat, { cast: true });
     const wallMat = new THREE.MeshStandardMaterial({ map: concreteFallback, roughness: 0.85, color: 0xd9d9d6 }); photo(wallMat, { map: [ASSETS.concrete, { aniso }] });
     add(merge(beltGeo), wallMat, { cast: true });
-    const fence = add(merge(fenceGeo), fenceMat, { receive: false }); if (fence) { fence.renderOrder = 5; }
+    const fence = add(merge(fenceGeo), fenceMat, { receive: false }); if (fence) { fence.renderOrder = 5; skipOverride(fence); }
     void beltMat;
   }
 
@@ -374,6 +412,7 @@ export function buildWorld(track, renderer, qualityIn) {
     const fd = 1 - 0.62 * f; r *= fd * (1 - 0.1 * f); g *= fd; b *= fd * (1 - 0.15 * f);     // forest floor / canopy tone
     out.push(r * (1 - rock) + 1.9 * rock, g * (1 - rock) + 1.5 * rock, b * (1 - rock) + 2.2 * rock);
   };
+  const tintUrban = (X, Y, h, out) => { const v = 0.5 + 0.25 * vnoise(X / 23, Y / 23) + 0.12 * vnoise(X / 4, Y / 4); out.push(v, v, v * 0.98); };
   let zMean = 0; for (let i = 0; i < n; i++) zMean += track.z[i] / n;
   const terrainMat = patch(new THREE.MeshStandardMaterial({ map: grassFallback, vertexColors: true, roughness: 0.96 }), 'terrain', {
     vpars: 'varying vec2 vWxz;', vmain: 'vWxz = (modelMatrix * vec4(position, 1.0)).xz;',
@@ -423,12 +462,17 @@ export function buildWorld(track, renderer, qualityIn) {
         let last = 0;
         for (const r of rings) { const off = side * (w + r + 0.4), X = track.x[i] + nx * off, Y = track.y[i] + ny * off; last = groundH(X, Y); o.push(off, last, 0); }
         o.push(side * (w + 97), last - 6, 0);
-      }, { flip: side < 0, color: (X, Y, out) => tint(X, Y, terrain(X, Y).h, out) }));
+      }, { flip: side < 0, color: (X, Y, out) => (urban ? tintUrban : tint)(X, Y, terrain(X, Y).h, out) }));
     }
     const cg = mergeGeometries(geos.filter(Boolean));
     { const p = cg.attributes.position, u = cg.attributes.uv; for (let k = 0; k < p.count; k++) u.setXY(k, p.getX(k) / 2.3, -p.getZ(k) / 2.3); }
     cg.deleteAttribute('aRoad'); cg.deleteAttribute('aRub');
-    add(cg, terrainMat);
+    if (urban) {
+      const m = patch(new THREE.MeshStandardMaterial({ map: concreteFallback, vertexColors: true, roughness: 0.9 }), 'uground', {
+        vpars: 'varying vec2 vWxz;', vmain: 'vWxz = (modelMatrix * vec4(position, 1.0)).xz;', fpars: 'varying vec2 vWxz;',
+        color: 'diffuseColor.rgb *= 0.75 + 0.5 * texture2D(map, vWxz / 37.0).g;' });
+      photo(m, { map: [ASSETS.concrete, { aniso }] }); add(cg, m);
+    } else add(cg, terrainMat);
   }
 
   // ---- trees: photographic impostor cards, instanced in chunks along the circuit --------
@@ -437,7 +481,8 @@ export function buildWorld(track, renderer, qualityIn) {
       [0.179, 0.984, 19, 1], [0.22, 0.984, 17, 1], [0.254, 0.984, 15, 1], [0.344, 0.984, 9, 1],
       [0.385, 0.984, 11, 0], [0.465, 0.984, 9, 0], [0.492, 0.741, 9, 0], [0.492, 0.937, 16, 1]];
     const rng = new RNG(4242);
-    const N = Math.round(Math.min(quality.treeCap, quality.trees * track.length / 1000 * (1 + 1.2 * Math.max(0, fbias))));
+    const N = Math.round(Math.min(quality.treeCap, quality.trees * track.length / 1000 * (1 + 1.2 * Math.max(0, fbias))) * (urban ? 0.1 : 1));
+    const gap = track.narrow ? 2.4 : 4.5;
     // two crossed quads with soft, outward-leaning normals
     const quad = (ang) => {
       const c = Math.cos(ang), s = Math.sin(ang), g = new THREE.BufferGeometry();
@@ -449,10 +494,12 @@ export function buildWorld(track, renderer, qualityIn) {
     const cardG = mergeGeometries(quality.detail > 0 ? [quad(0), quad(Math.PI / 2)] : [quad(0.4)]);
     const uvPatch = (m) => { m.onBeforeCompile = (sh) => {
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aTile;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvMapUv = aTile.xy + uv * aTile.zw;');
-      sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal = normalize(vNormal);');
-    }; m.customProgramCacheKey = () => 'tree'; return m; };
+      // keep the soft card normals on both faces, and drop cards seen edge-on
+      if (!m.isMeshDepthMaterial) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>',
+        '#include <normal_fragment_begin>\nnormal = normalize(vNormal);\n{ vec3 fn = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition))); if (abs(dot(fn, normalize(vViewPosition))) < 0.3) discard; }');
+    }; m.customProgramCacheKey = () => 'tree' + m.type; return m; };
     // stand-in until the atlas has loaded: flat dark-green cards would look worse than nothing
-    const treeMat = uvPatch(new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0, alphaTest: 0.42, side: THREE.DoubleSide, visible: false, envMapIntensity: 0.8 }));
+    const treeMat = uvPatch(new THREE.MeshPhysicalMaterial({ roughness: 1, metalness: 0, specularIntensity: 0, alphaTest: 0.42, side: THREE.DoubleSide, visible: false }));
     const depthMat = uvPatch(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, alphaTest: 0.42, side: THREE.DoubleSide }));
     loadTexture(ASSETS.trees, { repeat: false, aniso: 4 }).then((t) => { if (!t) return; treeMat.map = t; depthMat.map = t; treeMat.visible = true; treeMat.needsUpdate = depthMat.needsUpdate = true; });
     const c0 = Math.cos(track.heading[0]), s0 = Math.sin(track.heading[0]);
@@ -461,15 +508,16 @@ export function buildWorld(track, renderer, qualityIn) {
     let placed = 0, guard = 0;
     while (placed < N && guard++ < N * 12) {
       const i = rng.int(n), side = rng.next() < 0.5 ? 1 : -1, u = rng.next();
-      const off = wallAt(side, i) + 4.5 + reach * Math.pow(u, 1.8);
+      const off = wallAt(side, i) + gap + reach * Math.pow(u, track.narrow ? 2.4 : 1.8);
       const h = track.heading[i], X = track.x[i] - Math.sin(h) * off * side, Y = track.y[i] + Math.cos(h) * off * side;
       const t = terrain(X, Y);
       if (t.dist < t.corr + 3.5) continue;                       // inside some other part of the circuit
       const f = forestAt(X, Y);
-      if (rng.next() > 0.07 + 0.93 * f) continue;
+      if (rng.next() > (urban ? 0.5 : 0.07 + 0.93 * f)) continue;
+      if (urban && off < wallAt(side, i) + 60) continue;
       // keep the main-straight facilities clear
       { const dx = X - track.x[0], dy = Y - track.y[0], lx = dx * c0 + dy * s0, ly = -dx * s0 + dy * c0; if (lx > -230 && lx < 190 && ly > -75 && ly < 75) continue; }
-      const conifer = vnoise(X / 210 + 1.5, Y / 210 + 6.5) + (track.id === 'nordschleife' || track.id === 'spa' ? 0.12 : -0.08) > 0.5;
+      const conifer = !urban && vnoise(X / 210 + 1.5, Y / 210 + 6.5) + (track.id === 'nordschleife' || track.id === 'spa' ? 0.12 : -0.08) > 0.5;
       let k; do { k = rng.int(TILES.length); } while ((TILES[k][3] === 1) !== conifer && rng.next() < 0.82);
       const T = TILES[k], hgt = T[2] * rng.uniform(0.75, 1.3) * (0.8 + 0.35 * f);
       chunks[Math.min(nCh - 1, Math.floor(i * track.ds / CH))].push({ X, Y, y: groundH(X, Y, t) - 0.25, k, hgt, w: hgt * T[0] / T[1], rot: rng.uniform(0, Math.PI), shade: rng.uniform(0.8, 1.12) * (1 - 0.18 * f), hue: rng.uniform(-0.035, 0.035) });
@@ -491,8 +539,81 @@ export function buildWorld(track, renderer, qualityIn) {
       im.customDepthMaterial = depthMat;
       im.castShadow = quality.shadows; im.receiveShadow = false;
       im.computeBoundingSphere(); im.computeBoundingBox();
-      group.add(im);
+      group.add(skipOverride(im));
     }
+  }
+
+  // ---- street circuit: city blocks behind the fences and the sea beyond the harbour ----
+  if (urban) {
+    const rng = new RNG(1929);
+    // one bay x one floor of facade; tinted per building
+    const mkFacade = (seed, balcony) => {
+      const S = 128, c = document.createElement('canvas'), r = document.createElement('canvas'); c.width = c.height = r.width = r.height = S;
+      const x = c.getContext('2d'), y = r.getContext('2d'), q = new RNG(seed);
+      x.fillStyle = '#f4efe6'; x.fillRect(0, 0, S, S); y.fillStyle = '#e0e0e0'; y.fillRect(0, 0, S, S);
+      for (let k = 0; k < 500; k++) { x.fillStyle = `rgba(90,80,70,${0.03 + q.next() * 0.04})`; x.fillRect(q.int(S), q.int(S), 2 + q.int(5), 1 + q.int(14)); }
+      const g = x.createLinearGradient(0, 22, 0, 96); g.addColorStop(0, '#8fb0cc'); g.addColorStop(0.4, '#4a6076'); g.addColorStop(1, '#232d38');
+      x.fillStyle = '#c9c2b6'; x.fillRect(26, 18, 76, 84);                     // frame
+      x.fillStyle = g; x.fillRect(31, 23, 66, 74); y.fillStyle = '#151515'; y.fillRect(31, 23, 66, 74);
+      x.fillStyle = '#c9c2b6'; x.fillRect(62, 23, 4, 74);
+      x.fillStyle = 'rgba(0,0,0,0.25)'; x.fillRect(26, 102, 76, 4);
+      if (balcony) { x.fillStyle = '#8f8a82'; x.fillRect(8, 98, 112, 6); x.strokeStyle = '#3d4044'; x.lineWidth = 2; for (let k = 10; k < 120; k += 9) { x.beginPath(); x.moveTo(k, 70); x.lineTo(k, 98); x.stroke(); } x.fillStyle = '#3d4044'; x.fillRect(8, 68, 112, 3); }
+      x.fillStyle = 'rgba(60,50,40,0.18)'; x.fillRect(0, 0, S, 3);             // floor line
+      const map = new THREE.CanvasTexture(c), rough = new THREE.CanvasTexture(r);
+      for (const t of [map, rough]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = aniso; }
+      map.colorSpace = THREE.SRGBColorSpace;
+      return { map, rough };
+    };
+    // four walls, no caps; uv.x in bays, uv.y in floors via per-instance repeat
+    const wallG = new THREE.BoxGeometry(1, 1, 1); wallG.translate(0, 0.5, 0);
+    { const idx = wallG.index.array, keep = []; for (let f = 0; f < 6; f++) if (f !== 2 && f !== 3) for (let k = 0; k < 6; k++) keep.push(idx[f * 6 + k]); wallG.setIndex(keep); }
+    const roofG = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    const repPatch = (m) => { m.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aRep;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvMapUv = uv * aRep; vRoughnessMapUv = vMapUv;');
+    }; m.customProgramCacheKey = () => 'bldg'; return m; };
+    const list = [[], []];
+    const c0 = Math.cos(track.heading[0]), s0 = Math.sin(track.heading[0]);
+    const clear = (X, Y, hx, hy, ca, sa) => { let lo = Infinity, hi = -Infinity; for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0], [0, -1], [0, 1]]) { const px = X + a * hx * ca - b * hy * sa, py = Y + a * hx * sa + b * hy * ca, t = terrain(px, py); if (t.dist < t.corr + 3) return null; const dx = px - track.x[0], dy = py - track.y[0], lx = dx * c0 + dy * s0, ly = -dx * s0 + dy * c0; if (lx > -240 && lx < 200 && ly > -60 && ly < 60) return null; const h = groundH(px, py, t); lo = Math.min(lo, h); hi = Math.max(hi, h); } return { lo, hi }; };
+    const placed = [];
+    for (const row of [0, 1, 2]) for (const side of [1, -1]) {
+      let i = Math.floor(rng.uniform(0, 30));
+      while (i < n) {
+        const w = rng.uniform(16, 34), d = rng.uniform(13, 20), h0 = track.heading[i];
+        const off = side * (wallAt(side, i) + 5 + d / 2 + row * rng.uniform(26, 34));
+        const X = track.x[i] - Math.sin(h0) * off, Y = track.y[i] + Math.cos(h0) * off;
+        const c = clear(X, Y, w / 2, d / 2, Math.cos(h0), Math.sin(h0));
+        const seaLevel = terrain(X, Y).zMin - 3;
+        if (c && c.lo > seaLevel + 1.5 && !placed.some(p => Math.hypot(p.X - X, p.Y - Y) < (p.r + Math.hypot(w, d) / 2) * 0.82)) {
+          const floors = Math.round(rng.uniform(4, 8) + row * rng.uniform(1, 7) + (rng.next() < 0.12 ? 9 : 0));
+          const b = { X, Y, w, d, rot: h0, y: c.lo - 1, hgt: floors * 3.1 + (c.hi - c.lo) + 1, floors: floors + (c.hi - c.lo + 1) / 3.1, r: Math.hypot(w, d) / 2,
+            tint: [[1, 0.93, 0.8], [0.98, 0.84, 0.7], [1, 1, 0.97], [0.95, 0.78, 0.62], [0.9, 0.9, 0.86], [1, 0.88, 0.62]][rng.int(6)] };
+          placed.push(b); list[rng.int(2)].push(b);
+        }
+        i += Math.round((w + rng.uniform(3, 14)) / track.ds);
+      }
+    }
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pv = new THREE.Vector3(), sv = new THREE.Vector3(), cc = new THREE.Color();
+    const roofMat = new THREE.MeshStandardMaterial({ color: 0x8d6a55, roughness: 0.9 });
+    list.forEach((bl, k) => {
+      if (!bl.length) return;
+      const f = mkFacade(31 + k, k === 0), mat = repPatch(new THREE.MeshStandardMaterial({ map: f.map, roughnessMap: f.rough, roughness: 1, metalness: 0 }));
+      const g = wallG.clone(), rep = new Float32Array(bl.length * 2);
+      const im = new THREE.InstancedMesh(g, mat, bl.length), roofs = new THREE.InstancedMesh(roofG, roofMat, bl.length);
+      bl.forEach((b, j) => {
+        q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, b.rot);
+        im.setMatrixAt(j, m4.compose(pv.set(b.X, b.y, -b.Y), q, sv.set(b.w, b.hgt, b.d)));
+        roofs.setMatrixAt(j, m4.compose(pv.set(b.X, b.y + b.hgt, -b.Y), q, sv.set(b.w, 1, b.d)));
+        im.setColorAt(j, cc.setRGB(b.tint[0], b.tint[1], b.tint[2]));
+        rep.set([Math.round(b.w / 3.3), b.floors], j * 2);
+      });
+      g.setAttribute('aRep', new THREE.InstancedBufferAttribute(rep, 2));
+      for (const o of [im, roofs]) { o.castShadow = quality.shadows; o.receiveShadow = true; o.computeBoundingSphere(); group.add(o); }
+    });
+    // sea
+    const zs = terrain(track.x[0], track.y[0]).zMin - 3;
+    const seaN = TX.asphaltTile(aniso).normalMap; seaN.repeat.set(900, 900);
+    const sea = new THREE.Mesh(new THREE.PlaneGeometry(16000, 16000).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x0a2f48, roughness: 0.16, metalness: 0, normalMap: seaN, normalScale: new THREE.Vector2(0.35, 0.35) }));
+    sea.position.set(track.x[0], zs, -track.y[0]); sea.receiveShadow = false; group.add(sea);
   }
 
   // ---- start/finish furniture ---------------------------------------------------

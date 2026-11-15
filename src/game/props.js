@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { labelTexture } from './textures.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export class Props {
   constructor(scene, track, world3d) {
@@ -18,14 +19,14 @@ export class Props {
 
     const coneGeo = new THREE.Group();
     const orange = new THREE.MeshStandardMaterial({ color: 0xff5a0a, roughness: 0.6 }), white = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.6 });
-    const mkCone = () => {
-      const g = new THREE.Group();
-      const c = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.66, 12), orange); c.position.y = 0.02; g.add(c);
-      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.118, 0.14, 12), white); band.position.y = 0.04; g.add(band);
-      const base = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.04, 0.4), orange); base.position.y = -0.31; g.add(base);
-      g.traverse(o => { if (o.isMesh) o.castShadow = true; });
-      return g;
-    };
+    // one merged, vertex-coloured mesh per cone (a single draw call each)
+    const paintGeo = (g, hex) => { const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g.index ? g.toNonIndexed() : g; };
+    const coneG = mergeGeometries([
+      paintGeo(new THREE.ConeGeometry(0.17, 0.66, 12).translate(0, 0.02, 0), 0xff5a0a),
+      paintGeo(new THREE.CylinderGeometry(0.085, 0.118, 0.14, 12).translate(0, 0.04, 0), 0xf2f2f2),
+      paintGeo(new THREE.BoxGeometry(0.4, 0.04, 0.4).translate(0, -0.31, 0), 0xff5a0a)]);
+    const coneMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 });
+    const mkCone = () => { const m = new THREE.Mesh(coneG, coneMat); m.castShadow = true; return m; };
     const add = (mesh, body, baseY) => { scene.add(mesh); w.addBody(body); body.allowSleep = true; body.sleepSpeedLimit = 0.25; body.sleepTimeLimit = 0.6; this.items.push({ mesh, body, baseY, home: body.position.clone(), homeQ: body.quaternion.clone() }); body.sleep(); };
 
     // cones: pit-exit line on the main straight and inside a few apexes

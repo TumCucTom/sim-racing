@@ -14,10 +14,10 @@ const GradeShader = {
   vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
   fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
     void main(){ vec4 c=texture2D(tDiffuse,vUv); vec3 x=c.rgb;
-      float l=dot(x,vec3(0.2126,0.7152,0.0722)); x=mix(vec3(l),x,1.12);
-      x=mix(x, x*x*(3.0-2.0*x), 0.22);
-      x*=vec3(1.02,1.0,0.97);
-      vec2 d=vUv-0.5; x*=1.0-dot(d,d)*0.55;
+      float l=dot(x,vec3(0.2126,0.7152,0.0722)); x=mix(vec3(l),x,1.2);
+      x=mix(x, x*x*(3.0-2.0*x), 0.26);
+      x*=vec3(1.015,1.0,0.975);
+      vec2 d=vUv-0.5; x*=1.0-dot(d,d)*0.42;
       gl_FragColor=vec4(x,c.a); }`,
 };
 import { buildTrack, nearestIndexGlobal, TRACKS, TRACK_ORDER } from '../sim/track.js';
@@ -187,7 +187,7 @@ class Game {
     const ao = new GTAOPass(this.scene, this.camera, 1, 1);
     ao.blendIntensity = 0.9; ao.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.4, thickness: 1.2, scale: 1.1, samples: 12 });
     this.composer.addPass(ao);
-    this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.1, 0.4, 3.0));
+    this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.16, 0.5, 6.0));
     this.composer.addPass(new OutputPass());
     this.composer.addPass(new ShaderPass(GradeShader));
     this.composer.addPass(new SMAAPass());
@@ -333,7 +333,7 @@ class Game {
     this.updateCamera(dt);
     if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera);
     const car = this.sim.car;
-    this.audio.update(car, this.paused);
+    this.audio.update(car, this.paused, CAMS[this.cam], this.camera.position.distanceTo(this.model.root.position));
     if (!this.paused) {
       const ref = this.tel.ref();
       this.hud.update(dt, this.sim, {
@@ -436,7 +436,7 @@ class Game {
     } else if (mode === 'bonnet') {
       const b = this.spec.body, form = b.style === 'formula';
     const low = b.style === 'glb';
-      const cy = Math.cos(car.yaw), sy = Math.sin(car.yaw), ox = form ? 0.05 : 0.25, oy = form ? 0.78 : low ? b.height * 0.93 : b.height * 0.86;
+      const cy = Math.cos(car.yaw), sy = Math.sin(car.yaw), ox = form ? 0.05 : 0.25, oy = form ? 0.78 : low ? b.height * 0.86 : b.height * 0.86;
       cam.position.set(pos.x + cy * ox, pos.y + oy, pos.z - sy * ox);
       const look = car.yaw + THREE.MathUtils.clamp(car.r * 0.12, -0.25, 0.25);
       cam.lookAt(cam.position.x + Math.cos(look) * 10, cam.position.y - 0.6 + Math.atan(this.track.grade[car.idx]) * 10 * Math.cos(car.headErr), cam.position.z - Math.sin(look) * 10);
@@ -446,6 +446,13 @@ class Game {
       for (const p of this.tvPosts) { const d = p.distanceToSquared(pos); if (d < bd) { bd = d; best = p; } }
       cam.position.copy(best); cam.lookAt(pos.x, pos.y + 0.6, pos.z);
       fov = THREE.MathUtils.clamp(2 * Math.atan(9 / Math.sqrt(bd)) * 57.3, 7, 50);
+    }
+    if (mode !== 'tv') {
+      // engine / road vibration grows with speed; kerbs and grass rattle the camera
+      const t = performance.now() * 0.001, k = Math.min(1, spd / 75), off = car.surf && (car.surf[0] || car.surf[1] || car.surf[2] || car.surf[3]) ? Math.min(1, spd / 25) : 0;
+      const amp = (mode === 'bonnet' ? 0.007 : 0.0035) * k * k + off * (mode === 'bonnet' ? 0.016 : 0.008);
+      cam.position.y += amp * (Math.sin(t * 61) + 0.6 * Math.sin(t * 37.3));
+      cam.rotation.z += amp * 0.35 * Math.sin(t * 29.1); cam.rotation.x += amp * 0.25 * Math.sin(t * 43.7);
     }
     if (Math.abs(cam.fov - fov) > 0.05) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 6); cam.updateProjectionMatrix(); }
   }

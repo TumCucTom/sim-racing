@@ -24,7 +24,7 @@ def load(path, t0=0, t1=None):
     a = int(t0 * SR); b = len(x) if t1 is None else int(t1 * SR)
     return x[a:b]
 
-def track_f0(x, fmin, fmax, H=8, nwin=2048, hop=256, nfft=16384, halfpen=1.0, jump=0.5):
+def track_f0(x, fmin, fmax, H=8, nwin=2048, hop=256, nfft=16384, halfpen=1.0, jump=0.5, w1=2.5):
     """Firing-frequency track by harmonic-comb salience + Viterbi. Returns t, f, salience-confidence."""
     F, T, Z = stft(x, SR, window='hann', nperseg=nwin, noverlap=nwin - hop, nfft=nfft, boundary=None, padded=False)
     A = np.abs(Z) ** 0.5
@@ -36,7 +36,7 @@ def track_f0(x, fmin, fmax, H=8, nwin=2048, hop=256, nfft=16384, halfpen=1.0, ju
         s = 0
         for h in range(1, H + 1):
             if h * f > SR / 2 - 200: break
-            w = h ** -0.4
+            w = h ** -0.4 * (w1 if h == 1 else 1.0)    # the firing order itself must carry energy (guards against octave-down locks)
             s = s + w * (A[int(round(h * f / df))] - halfpen * A[int(round((h - 0.5) * f / df))])
         S[i] = s
     # Viterbi
@@ -84,10 +84,12 @@ def refine_phase(x, t, f, harm=1, bw=0.18):
 def cmd_track(a):
     x = load(a.file, a.t0, a.t1)
     t, f, c = track_f0(x, a.fmin, a.fmax, halfpen=a.halfpen)
-    step = max(1, int(a.every * SR / 256))
+    step = max(1, int(a.every * SR / 256)); row = []
     for i in range(0, len(t), step):
-        rms = 20 * np.log10(np.sqrt(np.mean(x[int(t[i] * SR) - 1024:int(t[i] * SR) + 1024] ** 2)) + 1e-9)
-        print(f"{t[i] + a.t0:7.2f}s  f={f[i]:6.1f}Hz  rpm={f[i] * 120 / a.cyl:6.0f}  conf={c[i]:.2f}  {rms:6.1f}dB")
+        rms = 20 * np.log10(np.sqrt(np.mean(x[max(0, int(t[i] * SR) - 1024):int(t[i] * SR) + 1024] ** 2)) + 1e-9)
+        row.append(f"{t[i] + a.t0:6.2f}s {f[i] * 120 / a.cyl:6.0f}rpm c{c[i]:4.1f} {rms:4.0f}dB")
+        if len(row) == 4: print(' | '.join(row)); row = []
+    if row: print(' | '.join(row))
 
 
 # ---------------------------------------------------------------- grains ----
@@ -98,8 +100,8 @@ def feat_bands():
     return 50.0 * 2 ** (np.arange(NFEAT + 1) / 6.0)
 
 def chunk_features(chunks, sr=SR):
-    """Average power spectrum of equal-length chunks -> 1/6-octave band levels (dB, total-normalised)."""
-    n = len(chunks[0]); w = np.hanning(n)
+    """Average power spectrum of equal-length chunks -> 1/6-octave band powers."""
+    n = len(chunks[0]); w = np.hanning(n + 1)[:n]
     P = np.zeros(n // 2 + 1)
     for c in chunks: P += np.abs(np.fft.rfft(c * w)) ** 2
     P /= len(chunks); F = np.fft.rfftfreq(n, 1 / sr)
@@ -114,7 +116,7 @@ def cycles_from_source(src, refdir):
     x = load(os.path.join(refdir, src['file']), src.get('t0', 0), src.get('t1'))
     x = x - np.mean(x)
     cyl = src['cyl']
-    t, f, conf = track_f0(x, src['fmin'], src['fmax'], halfpen=src.get('halfpen', 1.0), jump=src.get('jump', 0.5))
+    t, f, conf = track_f0(x, src['fmin'], src['fmax'], halfpen=src.get('halfpen', 1.0), jump=src.get('jump', 0.5), w1=src.get('w1', 2.5))
     ph, h, env = refine_phase(x, t, f, harm=src.get('harm', 1))
     ph = np.maximum.accumulate(ph)
     th = ph / cyl                                   # 720-degree cycles
@@ -123,13 +125,18 @@ def cycles_from_source(src, refdir):
     ks = np.arange(k0, max(k0, k1))
     tk = np.interp(ks, th, ts)                      # time of each cycle start
     cycles = []
-    for i in range(1, len(ks) - 1):
+    for i in range(2, len(ks) - 2):
         dur = tk[i + 1] - tk[i]
+        if dur <= 0: continue
         rpm = 120.0 / dur
-        slope = (120.0 / (tk[i + 1] - tk[i]) - 120.0 / (tk[i] - tk[i - 1])) / dur
+        slope = (120.0 / max(1e-6, tk[i + 2] - tk[i + 1]) - 120.0 / max(1e-6, tk[i - 1] - tk[i - 2])) / max(1e-6, tk[i + 1] - tk[i - 2])
         a = int(tk[i] * SR)
         lvl = np.sqrt(np.mean(x[a:a + int(dur * SR) + 1] ** 2))
-        cycles.append(dict(k=ks[i], t=tk[i], rpm=rpm, slope=slope, lvl=lvl, src=src))
+        cycles.append(dict(k=int(ks[i]), t=float(tk[i]), rpm=rpm, slope=slope, lvl=lvl, src=src))
+    # keep only the part of the recording where the car is close (pass-bys fade into crowd and PA noise)
+    if cycles and src.get('floor', 18) is not None:
+        top = np.percentile([c['lvl'] for c in cycles], 95)
+        cycles = [c for c in cycles if c['lvl'] >= top * 10 ** (-src.get('floor', 18) / 20.0)]
     return dict(x=x, th=th, ts=ts, cycles=cycles, t0=src.get('t0', 0), name=src['file'])
 
 def extract(trk, k, L, ncyc=2.3):
@@ -160,8 +167,7 @@ def build_bank(car, rc, refdir, outdir, refout, verbose=True):
     up, dn = rc.get('slopeOn', 250), rc.get('slopeOff', -120)
     pools = {(b, st): [] for b in range(nb) for st in (0, 1)}      # st 1 = on load, 0 = off
     for ti, trk in enumerate(tracks):
-        cs = trk['cycles']
-        for c in cs:
+        for c in trk['cycles']:
             if c['rpm'] < lo * 0.9 or c['rpm'] > hi * 1.1: continue
             b = int(np.searchsorted(edges, c['rpm'])); L = Ls[b]
             g = extract(trk, c['k'], L)
@@ -170,62 +176,61 @@ def build_bank(car, rc, refdir, outdir, refout, verbose=True):
             if force is not None: sts = [1] if force == 'on' else [0] if force == 'off' else [0, 1]
             elif c['slope'] > up: sts = [1]
             elif c['slope'] < dn: sts = [0]
-            else: sts = [0, 1] if b == 0 else ([1] if c['src'].get('steady', 'on') == 'on' else [0])
+            else: sts = [0, 1] if c['rpm'] < rc.get('idleBelow', lo * 1.25) else ([1] if c['src'].get('steady', 'on') == 'on' else [0])
             for st in sts: pools[(b, st)].append(dict(g=g, q=q, ti=ti, **c))
-    meta = dict(car=car, sr=SR, cyl=cyl, ov=OV, rpmScale=rc.get('rpmScale', 1.0), bands=[], credit=rc.get('credit', ''))
-    pcm = []; pos = 0; prev_tpl = None; ref = dict(car=car, bands=[]); summary = []
-    chosen = {}
-    for b in range(nb):
-        L = Ls[b]
-        for st in (1, 0):
-            cand = [c for c in pools[(b, st)] if c['q'] >= qmin]
-            cand.sort(key=lambda c: -c['q'])
-            sel = []
-            for c in cand:      # spread the picks in time so they are different combustion events
-                if all(c['ti'] != s['ti'] or abs(c['k'] - s['k']) >= 2 for s in sel): sel.append(c)
-                if len(sel) >= K: break
-            chosen[(b, st)] = sel
-    # level of each band/state as recorded (median over the pool)
-    def lvl(b, st):
-        p = [c['lvl'] for c in pools[(b, st)] if c['q'] >= qmin]
-        return float(np.median(p)) if p else None
+    meta = dict(car=car, sr=SR, cyl=cyl, ov=OV, rpmScale=rc.get('rpmScale', 1.0), bands=[])
+    pcm = []; pos = 0; prev_tpl = None; summary = []
+    ref = dict(car=car, cyl=cyl, rpmScale=rc.get('rpmScale', 1.0), source=[s_['file'] for s_ in rc['sources']], bands=[])
     for b in range(nb):
         L = Ls[b]; entry = dict(rpm=float(centers[b]), L=L, on=None, off=None)
         for st, key in ((1, 'on'), (0, 'off')):
-            sel = chosen[(b, st)]
-            real = len(sel) >= rc.get('minGrains', 3)
-            if not real:
-                entry[key] = None; continue
+            good = sorted([c for c in pools[(b, st)] if c['q'] >= qmin], key=lambda c: -c['q'])
+            cand = []
+            for c in good:      # spread the picks so they are different combustion events
+                if all(c['ti'] != s['ti'] or abs(c['k'] - s['k']) >= 2 for s in cand): cand.append(c)
+                if len(cand) >= 3 * K: break
+            if len(cand) < rc.get('minGrains', 3): continue
+            # the most typical cycle (medoid) is the template; keep the K cycles most like it, so that the
+            # cycle-to-cycle variation of the playback stays close to that of consecutive real cycles
+            if len(cand) > 2:
+                C = np.array([[best_shift(a['g'], b_['g'][:L])[1] if a is not b_ else 1.0 for b_ in cand] for a in cand])
+                m = int(np.argmax(C.sum(axis=0)))
+                order = np.argsort(-C[:, m])
+                sel = [cand[i] for i in order[:K]]
+            else: sel = cand
             tpl = sel[0]['g'][:L]
             if prev_tpl is not None:
-                # align this band to the neighbour so crossfades between bands stay in phase
+                # align this band to its neighbour so crossfades between bands and load states stay in phase
                 pt = np.interp(np.arange(L) / L, np.arange(len(prev_tpl)) / len(prev_tpl), prev_tpl, period=1.0)
-                s, _ = best_shift(np.concatenate([tpl, tpl]), pt); tpl = np.roll(tpl, -s)
-            grains = []
-            for c in sel:
-                s, cc = best_shift(c['g'], tpl)
-                g = c['g'][s:s + int(round(L * (1 + OV)))]
-                grains.append(g)
-            rms = np.sqrt(np.mean([np.mean(g[:L] ** 2) for g in grains]))
-            grains = [g / rms * np.clip(np.sqrt(np.mean(g[:L] ** 2)) / rms, 0.7, 1.4) / (np.sqrt(np.mean(g[:L] ** 2)) / rms) for g in grains]
+                s, _ = best_shift(tpl, pt); tpl = np.roll(tpl, -s)
             offs = []
-            for g in grains: offs.append(pos); pcm.append(g); pos += len(g)
-            entry[key] = dict(at=offs, n=len(grains), lvl=lvl(b, st), q=float(np.mean([c['q'] for c in sel])))
-            if st == 1 or prev_tpl is None or entry['on'] is None: prev_tpl = tpl
-            # reference features from the cycles that did NOT go into the bank (hold-out)
+            raw = [c['g'][best_shift(c['g'], tpl)[0]:][:int(round(L * (1 + OV)))] for c in sel]
+            rms = np.sqrt(np.mean([np.mean(g[:L] ** 2) for g in raw]))
+            for g in raw:
+                r = np.sqrt(np.mean(g[:L] ** 2)) / rms
+                g = g / rms * (np.clip(r, 0.75, 1.3) / r)          # unit RMS per band/state, keep mild cycle-to-cycle level variation
+                offs.append(pos); pcm.append(g); pos += len(g)
+            lv = float(np.median([c['lvl'] for c in good]))
+            entry[key] = dict(at=offs, n=len(offs), lvl=lv, q=float(np.mean([c['q'] for c in sel])))
+            if key == 'on' or entry['on'] is None: prev_tpl = tpl
+            # reference features from cycles that did NOT go into the bank (hold-out) where enough exist
             used = {(c['ti'], c['k']) for c in sel}
-            rest = [c for c in pools[(b, st)] if c['q'] >= qmin and all(c['ti'] != u[0] or abs(c['k'] - u[1]) >= 2 for u in used)]
+            rest = [c for c in good if all(c['ti'] != u[0] or abs(c['k'] - u[1]) >= 2 for u in used)]
             held = len(rest) >= 3
-            src = rest if held else sel
-            fb, P, F = chunk_features([c['g'][:2 * L] for c in src])
-            ref['bands'].append(dict(rpm=float(centers[b]), state=key, L=L, heldOut=held, n=len(src), feat=[float(v) for v in fb]))
-            summary.append(f"  {centers[b]:6.0f} rpm {key:3s}: pool {len(pools[(b, st)]):4d}  good {len([c for c in pools[(b, st)] if c['q'] >= qmin]):4d}  used {len(sel)}  q={entry[key]['q']:.2f}  lvl={20 * np.log10(entry[key]['lvl'] + 1e-9):6.1f} dB  holdout={'yes' if held else 'no'}")
+            srcs = rest if held else sel
+            fb, P, F = chunk_features([c['g'][:2 * L] for c in srcs])
+            # crank half-order amplitudes: the window holds 2 cycles = 4 revs, so half-order h sits at bin 2*h
+            no = int(min(cyl * 2, 2 * 8000.0 / (centers[b] / 60.0)))
+            orders = [float(P[2 * h - 1:2 * h + 2].sum()) for h in range(1, no + 1)]
+            ref['bands'].append(dict(rpm=float(centers[b]), state=key, L=L, heldOut=held, n=len(srcs), feat=[float(v) for v in fb], orders=orders, q=float(np.mean([c['q'] for c in srcs]))))
+            ts_ = sorted(trk_t for trk_t in [round(c['t'] + c['src'].get('t0', 0), 1) for c in sel])
+            summary.append(f"  {centers[b]:6.0f} rpm {key:3s}: pool {len(pools[(b, st)]):4d} good {len(good):4d} used {len(sel)} q={entry[key]['q']:.2f} lvl={20 * np.log10(lv + 1e-9):6.1f}dB held={'y' if held else 'n'} t={ts_[0]}..{ts_[-1]}")
         if entry['on'] is None and entry['off'] is None:
-            summary.append(f"  {centers[b]:6.0f} rpm : NO DATA (filled from neighbour at run time)")
+            summary.append(f"  {centers[b]:6.0f} rpm : no usable cycles (neighbour band is pitch-shifted at run time)")
         meta['bands'].append(entry)
-    allp = np.concatenate(pcm) if pcm else np.zeros(1)
-    peak = np.max(np.abs(allp)); scale = 0.89 / peak; meta['unit'] = float(1.0 / scale)   # rms 1.0 == `unit`... see synth
-    meta['norm'] = float(scale)
+    if not pcm: print(car, ': no grains found'); return
+    allp = np.concatenate(pcm)
+    scale = 0.89 / np.max(np.abs(allp)); meta['norm'] = float(scale)
     i16 = np.clip(np.round(allp * scale * 32767), -32768, 32767).astype('<i2')
     mj = json.dumps(meta, separators=(',', ':')).encode()
     if len(mj) % 2: mj += b' '
