@@ -34,6 +34,7 @@ import { Effects } from './effects.js';
 import { HUD, fmtTime } from './hud.js';
 import { Recorder, TelemetryPanel, LapTrace, BIN } from './telemetry.js';
 import { Props } from './props.js';
+import { buildLineGuide } from './lineviz.js';
 import { AudioEngine } from '../audio/audio.js';
 import validation from '../data/car-validation.json';
 
@@ -123,6 +124,7 @@ class Game {
     k.on('KeyF', () => { this.perf.show = !this.perf.show; document.getElementById('perf').style.display = this.perf.show ? 'block' : 'none'; });
     k.on('KeyG', () => { this.ghostMode = { off: 'best', best: 'ai', ai: 'off' }[this.ghostMode]; this.hud.toast(`Ghost: ${{ off: 'off', best: 'your best lap', ai: 'AI lap' }[this.ghostMode]}`, 1.5); });
     k.on('KeyI', () => this.setAutopilot(!this.autopilot));
+    k.on('KeyL', () => { this.showLine = !this.showLine; store.set('rr-line', this.showLine ? '1' : '0'); this.refreshLineGuide(); this.hud.toast(`Racing line ${this.showLine ? 'shown — green: power, red: brake' : 'hidden'}`, 1.6); });
     k.on('Escape', () => this.showMenu(document.getElementById('menu').classList.contains('hidden')));
     CAR_ORDER.forEach((id, i) => k.on('Digit' + (i + 1), () => { if (!this.paused) { this.setCar(id); this.restart(); } }));
   }
@@ -240,6 +242,7 @@ class Game {
     this.rec.reset(); this.rec.hasAI = false;
     this.ai = this.makeAI(spec);
     this.hud.setCar(spec);
+    this.refreshLineGuide();
     this.audio.setCar(spec);
     document.getElementById('aiinfo').textContent = `AI driver for this car: ${this.ai.label}`;
     this.camInit = false;
@@ -247,6 +250,12 @@ class Game {
     clearTimeout(this.aiTimer);
     this.aiTimer = setTimeout(() => this.computeAILap(spec), 50);
     this.syncVisuals(0);
+  }
+
+  refreshLineGuide() {
+    if (this.lineGuide) { this.scene.remove(this.lineGuide); this.lineGuide.geometry.dispose(); this.lineGuide = null; }
+    if (this.showLine === undefined) this.showLine = store.get('rr-line') === '1';
+    if (this.showLine) { this.lineGuide = buildLineGuide(this.track, this.spec); this.scene.add(this.lineGuide); }
   }
 
   computeAILap(spec) {

@@ -101,33 +101,75 @@ export function gravelTexture(aniso) {
   return finish(c, { aniso });
 }
 
-// Armco barrier: two corrugated rails on posts.
+// Plain asphalt tile (fallback when the photographic set is unavailable).
+export function asphaltTile(aniso) {
+  const S = 256, r = rng(11), c = canvas(S, S), ctx = c.getContext('2d'), img = ctx.createImageData(S, S);
+  const big = fbm(S, r, [3, 6, 12]), fine = new Float32Array(S * S);
+  for (let i = 0; i < S * S; i++) { fine[i] = r(); const v = 74 + (big[i] - 0.5) * 10 + (fine[i] - 0.5) * 26, o = i * 4; img.data[o] = v; img.data[o + 1] = v; img.data[o + 2] = v * 1.03; img.data[o + 3] = 255; }
+  ctx.putImageData(img, 0, 0);
+  return { map: finish(c, { aniso }), normalMap: finish(normalFromHeight(fine, S, 1.2), { srgb: false, aniso }) };
+}
+
+// Armco: three galvanised W-beams. U runs up the barrier, V along it (one 4 m panel).
+// The beam shape itself is geometry; the texture adds the centre groove, panel
+// joints, bolts and weathering.
 export function armcoTexture(aniso) {
-  const W = 256, H = 128, c = canvas(W, H), ctx = c.getContext('2d');
-  ctx.fillStyle = '#3c4138'; ctx.fillRect(0, 0, W, H);
-  for (const y0 of [8, 62]) {
-    const g = ctx.createLinearGradient(0, y0, 0, y0 + 50);
-    g.addColorStop(0, '#7d8388'); g.addColorStop(0.2, '#d6dade'); g.addColorStop(0.35, '#8d9398'); g.addColorStop(0.5, '#5d6368');
-    g.addColorStop(0.65, '#8d9398'); g.addColorStop(0.8, '#cdd1d5'); g.addColorStop(1, '#6d7378');
-    ctx.fillStyle = g; ctx.fillRect(0, y0, W, 50);
+  const W = 128, H = 512, c = canvas(W, H), ctx = c.getContext('2d'), r = rng(71);
+  ctx.fillStyle = '#b9bdc0'; ctx.fillRect(0, 0, W, H);
+  // galvanising streaks along the rail
+  for (let k = 0; k < 900; k++) { const v = 150 + r() * 80; ctx.fillStyle = `rgba(${v},${v + 2},${v + 5},0.10)`; ctx.fillRect(r() * W, r() * H, 1 + r() * 2, 20 + r() * 120); }
+  for (let b = 0; b < 3; b++) {
+    const u0 = (b + 0.5) / 3 * W;
+    const g = ctx.createLinearGradient(u0 - 6, 0, u0 + 6, 0);
+    g.addColorStop(0, 'rgba(40,44,48,0)'); g.addColorStop(0.5, 'rgba(40,44,48,0.55)'); g.addColorStop(1, 'rgba(40,44,48,0)');
+    ctx.fillStyle = g; ctx.fillRect(u0 - 6, 0, 12, H);                       // W groove
+    ctx.fillStyle = 'rgba(30,32,34,0.75)'; ctx.fillRect(b / 3 * W - 1.5, 0, 3, H);  // gap between beams
+    // rain streaks / grime under each beam
+    const d = ctx.createLinearGradient(b / 3 * W, 0, b / 3 * W + 12, 0); d.addColorStop(0, 'rgba(60,50,35,0.35)'); d.addColorStop(1, 'rgba(60,50,35,0)');
+    ctx.fillStyle = d; ctx.fillRect(b / 3 * W, 0, 12, H);
+    // panel joint: overlap shadow + bolts
+    ctx.fillStyle = 'rgba(20,22,24,0.55)'; ctx.fillRect(b / 3 * W, 0, W / 3, 3);
+    ctx.fillStyle = 'rgba(235,238,240,0.5)'; ctx.fillRect(b / 3 * W, 3, W / 3, 2);
+    for (const du of [-9, 9]) for (const v of [14, 30]) { ctx.fillStyle = '#4a4e52'; ctx.beginPath(); ctx.arc(u0 + du, v, 2.6, 0, 7); ctx.fill(); ctx.fillStyle = '#d5d8da'; ctx.beginPath(); ctx.arc(u0 + du - 0.6, v - 0.6, 1.2, 0, 7); ctx.fill(); }
   }
-  ctx.fillStyle = '#55595c'; ctx.fillRect(W / 2 - 5, 0, 10, H);
-  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0, 0, 2, H);
+  // occasional rust blooms and tyre scuffs
+  for (let k = 0; k < 26; k++) { const x = r() * W, y = r() * H, rad = 3 + r() * 9, g = ctx.createRadialGradient(x, y, 0, x, y, rad); const rust = r() < 0.6; g.addColorStop(0, rust ? 'rgba(110,62,30,0.45)' : 'rgba(15,15,15,0.5)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(x - rad, y - rad * (rust ? 1 : 4), 2 * rad, 2 * rad * (rust ? 1 : 4)); }
   return finish(c, { aniso });
 }
 
+// Tyre wall: columns of stacked tyres. U runs up the wall, V along it (two columns).
 export function tyreWallTexture(aniso) {
-  const W = 128, H = 128, c = canvas(W, H), ctx = c.getContext('2d');
-  ctx.fillStyle = '#141414'; ctx.fillRect(0, 0, W, H);
-  for (let row = 0; row < 4; row++) {
-    const y = row * 32;
-    const g = ctx.createLinearGradient(0, y, 0, y + 32);
-    g.addColorStop(0, '#0a0a0a'); g.addColorStop(0.5, '#2e2e2e'); g.addColorStop(1, '#050505');
-    ctx.fillStyle = g; ctx.fillRect(0, y, W, 30);
-    for (let k = 0; k < 2; k++) { const x = (k + (row % 2) * 0.5) * 64; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(x + 32, y + 15, 26, 9, 0, 0, 7); ctx.fill(); }
+  const W = 256, H = 256, c = canvas(W, H), ctx = c.getContext('2d'), r = rng(9);
+  ctx.fillStyle = '#060606'; ctx.fillRect(0, 0, W, H);
+  const rows = 5, cols = 2, top = 0.86;              // u > top is the top face
+  for (let col = 0; col < cols; col++) for (let row = 0; row < rows; row++) {
+    const u0 = row / rows * top * W, u1 = (row + 1) / rows * top * W, v0 = col / cols * H, v1 = (col + 1) / cols * H;
+    // tread face of one tyre: cylindrical shading across the column, darker gaps between tyres
+    for (let y = Math.floor(v0); y < v1; y++) {
+      const t = (y - v0) / (v1 - v0), sh = Math.pow(Math.sin(Math.PI * t), 0.6), v = 16 + 34 * sh + r() * 5;
+      ctx.fillStyle = `rgb(${v},${v},${v + 1})`; ctx.fillRect(u0 + 2, y, u1 - u0 - 4, 1);
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; for (let g = 0; g < 4; g++) ctx.fillRect(u0 + 2 + (g + 0.5) * (u1 - u0 - 4) / 4, v0 + 6, 1.5, v1 - v0 - 12); // tread grooves
+    ctx.fillStyle = 'rgba(70,70,72,0.5)'; ctx.fillRect(u0 + 2, v0 + 2, 2.5, v1 - v0 - 4); ctx.fillRect(u1 - 4.5, v0 + 2, 2.5, v1 - v0 - 4);               // sidewall shoulders
   }
-  ctx.fillStyle = '#c22'; ctx.fillRect(0, 0, W, 5);
+  // top face: looking down into the tyres
+  for (let col = 0; col < cols; col++) {
+    const cy = (col + 0.5) / cols * H, cx = (top + (1 - top) / 2) * W;
+    ctx.fillStyle = '#262626'; ctx.fillRect(top * W, col / cols * H + 3, (1 - top) * W, H / cols - 6);
+    ctx.fillStyle = '#020202'; ctx.beginPath(); ctx.ellipse(cx, cy, (1 - top) * W * 0.3, H / cols * 0.3, 0, 0, 7); ctx.fill();
+  }
   return finish(c, { aniso });
+}
+
+// Debris fence: chain-link mesh with posts and cables. U along (one 3 m bay), V up.
+export function fenceTexture(aniso) {
+  const W = 256, H = 256, c = canvas(W, H), ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(150,156,160,0.62)'; ctx.lineWidth = 1.1;
+  for (let k = -H; k < W + H; k += 8) { ctx.beginPath(); ctx.moveTo(k, 0); ctx.lineTo(k + H, H); ctx.stroke(); ctx.beginPath(); ctx.moveTo(k, H); ctx.lineTo(k + H, 0); ctx.stroke(); }
+  ctx.fillStyle = 'rgba(96,102,106,1)'; ctx.fillRect(0, 0, 7, H); ctx.fillRect(W - 3, 0, 3, H);
+  ctx.fillStyle = 'rgba(120,126,130,0.95)'; for (const y of [3, 84, 168, 250]) ctx.fillRect(0, y, W, 3);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = aniso; t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 
 export function concreteTexture(aniso) {
