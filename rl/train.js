@@ -15,7 +15,7 @@ const carId = args.car || 'gt3', seed = +(args.seed || 1), totalSteps = +(args.s
 const N = +(args.envs || 32), T = +(args.horizon || 128);
 const out = args.out || `rl/runs/${carId}_s${seed}`;
 const evalEvery = +(args.evalEvery || 10);
-export const VALIDATION_SEEDS = [9001, 9002, 9003, 9004, 9005];
+export const VALIDATION_SEEDS = [9001, 9002, 9003, 9004];
 
 fs.mkdirSync(out, { recursive: true });
 const track = buildTrack(), spec = CARS[carId];
@@ -46,10 +46,12 @@ const iters = Math.ceil(totalSteps / n);
 
 function evaluate() {
   const pol = ppo.exportPolicy();
-  const res = VALIDATION_SEEDS.map(s => evaluateDriver(track, spec, () => { const d = new PolicyDriver(track, pol); return c => d.control(c); }, s, { timeLimit: 300 }));
-  const ok = res.filter(r => r.flying !== null);
-  const mean = ok.length ? ok.reduce((a, r) => a + r.flying, 0) / ok.length : null;
-  return { completed: ok.length, lap: mean, fails: res.map(r => r.fail || (r.flying === null ? 'invalid' : 'ok')) };
+  const res = VALIDATION_SEEDS.map(s => evaluateDriver(track, spec, () => { const d = new PolicyDriver(track, pol); return c => d.control(c); }, s, { laps: 5 }));
+  // a checkpoint only counts on a seed if all five laps of the stint are clean;
+  // it is scored on stint pace (mean of laps 2-5), not on one hot lap
+  const ok = res.filter(r => r.allClean);
+  const mean = ok.length ? ok.reduce((a, r) => a + r.stintMean, 0) / ok.length : null;
+  return { completed: ok.length, lap: mean, fails: res.map(r => r.fail || (r.allClean ? 'ok' : 'invalid')) };
 }
 
 for (iter = 0; iter < iters; iter++) {

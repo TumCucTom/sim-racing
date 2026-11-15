@@ -1,0 +1,38 @@
+{
+  "simStepsPerSec": 1269588,
+  "realtimeFactor": 4232,
+  "simMsPerFrame": 0.004,
+  "trainSps": 2073,
+  "trainMinutes": 21.9,
+  "bundleKb": 911,
+  "gzipKb": 264,
+  "render": [
+    {
+      "quality": "low",
+      "track": "ravenscar",
+      "fps": 55.8,
+      "calls": 178,
+      "tris": 112896,
+      "frameMs": 22.16,
+      "simMs": 0.034
+    },
+    {
+      "quality": "medium",
+      "track": "ravenscar",
+      "fps": 34.3,
+      "calls": 290,
+      "tris": 231488,
+      "frameMs": 3.56,
+      "simMs": 0.085
+    },
+    {
+      "quality": "medium",
+      "track": "spa",
+      "fps": 0,
+      "frameMs": 0,
+      "simMs": 0
+    }
+  ],
+  "tests": "# pass 16 # fail 0 ",
+  "browserErrors": []
+}

@@ -31,13 +31,13 @@ function axes(x0, y0, x1, y1, xt, yt, X, Y, xl, yl) {
   let svg = frame(W, H, `Learning curves — PPO driver, ${bench.track}`, `${runs.length} training seeds; thin lines = individual seeds, thick = mean. Baseline = tuned scripted driver.`);
   // panel A: validation flying lap
   const evals = runs.map(r => r.rows.filter(q => q.evalLap != null && q.evalCompleted === (q.evalFails?.length ?? 0)));
-  const allLap = evals.flat().map(q => q.evalLap).concat([bench.baseline.mean]);
-  const lo = Math.floor(Math.min(...allLap) - 1), hi = Math.ceil(Math.min(Math.max(...allLap), bench.baseline.mean + 6) + 1);
+  const allLap = evals.flat().map(q => q.evalLap).concat([(bench.baseline.stintMean ?? bench.baseline.mean)]);
+  const lo = Math.floor(Math.min(...allLap) - 1), hi = Math.ceil(Math.min(Math.max(...allLap), (bench.baseline.stintMean ?? bench.baseline.mean) + 6) + 1);
   const ya0 = 80, ya1 = 320, YA = (v) => ya1 - (Math.min(hi, v) - lo) / (hi - lo) * (ya1 - ya0);
   const yt = []; for (let v = lo; v <= hi; v += Math.max(1, Math.round((hi - lo) / 6))) yt.push(v);
-  svg += `<text x="${x0}" y="${ya0 - 10}" font-size="12.5" font-weight="600" fill="${C.text}">Validation flying lap (s) — evaluations where every validation start produced a clean lap</text>`;
+  svg += `<text x="${x0}" y="${ya0 - 10}" font-size="12.5" font-weight="600" fill="${C.text}">Validation stint pace (s/lap) — checkpoints where every validation start gave a clean 5-lap stint</text>`;
   svg += axes(x0, ya0, x1, ya1, xt, yt, X, YA, '', 'lap time (s), lower is better');
-  svg += `<line x1="${x0}" x2="${x1}" y1="${YA(bench.baseline.mean)}" y2="${YA(bench.baseline.mean)}" stroke="${C.base}" stroke-width="2" stroke-dasharray="6 4"/><text x="${x1 + 8}" y="${YA(bench.baseline.mean) + 4}" font-size="12" fill="${C.text}">Baseline ${bench.baseline.mean.toFixed(2)} s</text>`;
+  svg += `<line x1="${x0}" x2="${x1}" y1="${YA((bench.baseline.stintMean ?? bench.baseline.mean))}" y2="${YA((bench.baseline.stintMean ?? bench.baseline.mean))}" stroke="${C.base}" stroke-width="2" stroke-dasharray="6 4"/><text x="${x1 + 8}" y="${YA((bench.baseline.stintMean ?? bench.baseline.mean)) + 4}" font-size="12" fill="${C.text}">Baseline ${(bench.baseline.stintMean ?? bench.baseline.mean).toFixed(2)} s</text>`;
   for (const ev of evals) {
     svg += `<path d="${ev.map((q, i) => `${i ? 'L' : 'M'}${X(q.steps / 1e6).toFixed(1)},${YA(q.evalLap).toFixed(1)}`).join('')}" fill="none" stroke="${C.rl}" stroke-width="1" opacity="0.45"/>`;
     for (const q of ev) svg += `<circle cx="${X(q.steps / 1e6).toFixed(1)}" cy="${YA(q.evalLap).toFixed(1)}" r="4" fill="${C.rl}" opacity="0.001"><title>${(q.steps / 1e6).toFixed(2)}M steps: ${q.evalLap.toFixed(2)} s</title></circle>`;
@@ -64,11 +64,11 @@ function axes(x0, y0, x1, y1, xt, yt, X, Y, xl, yl) {
 // ---------- benchmark: one dot per fixed-seed trial ----------
 {
   const rows = [bench.baseline, ...bench.policies];
-  const W = 860, rowH = 46, x0 = 215, x1 = W - 150, y0 = 84, H = y0 + rows.length * rowH + 64;
+  const W = 880, rowH = 46, x0 = 215, x1 = W - 170, y0 = 84, H = y0 + rows.length * rowH + 64;
   const all = rows.flatMap(r => r.laps.filter(v => v !== null));
   const lo = Math.floor(Math.min(...all) - 0.5), hi = Math.ceil(Math.max(...all) + 0.5);
   const X = (v) => x0 + (v - lo) / (hi - lo) * (x1 - x0);
-  let svg = frame(W, H, `Fixed-seed benchmark — ${CAR(bench)} at ${bench.track}`, `${bench.trials} trials per driver (seeds 1–${bench.trials}, unseen in training): standing start, then flying-lap time. Each dot is one trial; bar = mean.`);
+  let svg = frame(W, H, `Fixed-seed benchmark — ${CAR(bench)} at ${bench.track}`, `${bench.trials} trials per driver (seeds 1–${bench.trials}, unseen in training). Each dot = one trial's flying lap (lap 2); bar = mean. Right: ${bench.stintLaps}-lap stint results.`);
   for (let v = lo; v <= hi; v += Math.max(1, Math.round((hi - lo) / 8))) svg += `<line x1="${X(v)}" x2="${X(v)}" y1="${y0 - 8}" y2="${y0 + rows.length * rowH}" stroke="${C.grid}"/><text x="${X(v)}" y="${y0 + rows.length * rowH + 18}" font-size="11.5" text-anchor="middle" fill="${C.text2}">${v}</text>`;
   svg += `<text x="${(x0 + x1) / 2}" y="${y0 + rows.length * rowH + 40}" font-size="12" text-anchor="middle" fill="${C.text2}">flying lap time (s), lower is better</text>`;
   rows.forEach((r, i) => {
@@ -76,9 +76,9 @@ function axes(x0, y0, x1, y1, xt, yt, X, Y, xl, yl) {
     svg += `<text x="${x0 - 12}" y="${y + 4}" font-size="12.5" text-anchor="end" font-weight="${champ || i === 0 ? 700 : 400}" fill="${C.text}">${esc(r.name)}${champ ? ' ★' : ''}</text>`;
     r.laps.forEach((v, k) => { if (v !== null) svg += `<circle cx="${X(v).toFixed(1)}" cy="${(y + ((k * 7) % 13) - 6).toFixed(1)}" r="4" fill="${col}" stroke="${C.surface}" stroke-width="1.5" opacity="0.9"><title>seed ${bench.seeds[k]}: ${v.toFixed(3)} s</title></circle>`; });
     if (r.mean !== null) svg += `<line x1="${X(r.mean)}" x2="${X(r.mean)}" y1="${y - 14}" y2="${y + 14}" stroke="${C.text}" stroke-width="2"/>`;
-    svg += `<text x="${x1 + 12}" y="${y - 2}" font-size="12.5" font-weight="600" fill="${C.text}">${r.mean === null ? '—' : r.mean.toFixed(2) + ' s'}</text><text x="${x1 + 12}" y="${y + 13}" font-size="11.5" fill="${C.text2}">${r.completed}/${r.trials} clean · sd ${r.sd.toFixed(2)}</text>`;
+    svg += `<text x="${x1 + 12}" y="${y - 2}" font-size="12.5" font-weight="600" fill="${C.text}">${r.mean === null ? '—' : r.mean.toFixed(2) + ' s'}</text><text x="${x1 + 12}" y="${y + 13}" font-size="11.5" fill="${C.text2}">stint ${r.stintClean}/${r.trials} · ${r.stintMean === null ? '—' : r.stintMean.toFixed(2) + ' s'}</text>`;
   });
-  svg += `<text x="24" y="${H - 8}" font-size="11.5" fill="${C.text2}">★ = policy selected on separate validation seeds. Trials that crashed or broke track limits are not plotted (see “clean” count).</text>`;
+  svg += `<text x="24" y="${H - 8}" font-size="11.5" fill="${C.text2}">★ = policy selected on separate validation seeds. “stint a/b · t” = stints with all laps clean, and mean pace of laps 2–${bench.stintLaps}.</text>`;
   fs.writeFileSync(`docs/benchmark-${carId}.svg`, svg + '</svg>');
 }
 function CAR(b) { return { gt3: 'Arrow GT3-R', hatch: 'Vanta RS', coupe: 'Brawler GT 5.0', formula: 'FX-10', ev: 'Volt-R Quad' }[b.carId] || b.carId; }

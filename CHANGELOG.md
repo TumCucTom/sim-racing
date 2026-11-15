@@ -3,6 +3,22 @@
 All notable changes, newest first. Numbers quoted here were measured by the
 tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
 
+## 0.5.0 — AI that survives a stint
+- Found by watching the AI in the game: the first trained policies lapped
+  Ravenscar in 62–64 s (baseline 69.1 s, 20 fixed seeds) but hit the wall on
+  lap 3 of *every* stint, with tyres at 120–160 °C. Training episodes last
+  60 s, so the agent had never driven on tyres it had overheated itself.
+- Fix: front/rear tyre temperature added to the observations (22 -> 24),
+  training starts randomised from cool to badly overheated tyres, and both
+  checkpoint selection and the benchmark now use multi-lap stints
+  (all laps clean, mean pace of laps 2–N) instead of a single flying lap.
+- Model selection across runs uses 20 extra validation seeds, clean-rate
+  first. Selecting on 5 seeds by lap time alone had picked a fast but fragile
+  policy (7/20 clean on the benchmark).
+- Circuits and graphics quality now switch in place (no page reload);
+  storage access is failure-safe.
+- `tools/stint.js` (long-run reliability) and `tools/perf.mjs` (measurements).
+
 ## 0.4.0 — real circuits
 - Added Silverstone GP, Spa-Francorchamps and Monza. Centreline and left/right
   track widths come from the open TUMFTM racetrack-database (LGPL-3.0); lap

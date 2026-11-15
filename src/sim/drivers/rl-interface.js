@@ -4,7 +4,8 @@
 const G = 9.81, RHO = 1.2;
 
 export const LOOKAHEAD = [0, 10, 20, 35, 50, 70, 95, 125, 160, 200]; // metres
-export const OBS_DIM = 12 + LOOKAHEAD.length;
+const BASE = 14;
+export const OBS_DIM = BASE + LOOKAHEAD.length;
 export const ACT_DIM = 2;
 
 // Speed-sensitive steering authority (like a variable-ratio rack): the
@@ -34,6 +35,10 @@ export function buildObs(car, track, out) {
   out[k++] = car.ayF / 15;
   out[k++] = Math.max(-2, Math.min(2, (car.alpha[2] + car.alpha[3]) * 0.5 / spec.tire.peakAlpha));
   out[k++] = track.grade[car.idx] * 15;
+  // tyre temperature relative to the optimum, per axle (grip falls off either side)
+  const tt = car.tireT, ty = spec.tire;
+  out[k++] = ((tt[0] + tt[1]) * 0.5 - ty.tOpt) / ty.tWin;
+  out[k++] = ((tt[2] + tt[3]) * 0.5 - ty.tOpt) / ty.tWin;
   for (let j = 0; j < LOOKAHEAD.length; j++) {
     let i = car.idx + Math.round(LOOKAHEAD[j] / track.ds);
     if (i >= n) i -= n;
@@ -58,7 +63,7 @@ export function applyAction(car, a0, a1, controls) {
 export const MIRROR = (() => {
   const m = new Float64Array(OBS_DIM).fill(1);
   for (const i of [1, 2, 3, 5, 6, 9, 10]) m[i] = -1;
-  for (let j = 0; j < LOOKAHEAD.length; j++) m[12 + j] = -1;
+  for (let j = 0; j < LOOKAHEAD.length; j++) m[BASE + j] = -1;
   return m;
 })();
 
