@@ -3,6 +3,47 @@
 All notable changes, newest first. Numbers quoted here were measured by the
 tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
 
+## Unreleased — a driver's seat in every car
+- **Cockpit view rebuilt** (`src/game/cockpit.js`, `cockpit-fit.js`, `cockpit-scan.js`; **C** cycles chase,
+  far, bonnet, cockpit, TV). The first attempt put the eye at the windscreen and floated a wheel in front of
+  it. Now the body is rasterised once into a 2.5 cm top-down height map (2–50 ms per car in the software-GL
+  test browser, cached per car) and the cabin is measured from it: roof, windscreen header and base, belt
+  line, glasshouse width and plan sweep of the screen. No car is hand-placed; `spec.cockpit` can override
+  (`side`, `eye` nudge, any ergonomic field). The Mini is right-hand drive, everything else with two seats
+  is left-hand drive, the prototypes sit offset-centre, the single-seater central.
+- **Seating.** Eye = header minus a class distance (0.33 m road, 0.44 m GT, 0.45 m prototype), clamped to
+  the stretch of wheelbase where a driver can sit (0.36–0.50 of the wheelbase ahead of the rear axle for
+  road cars, 0.33–0.47 GT, 0.36–0.56 prototype), 20–21 cm under the roof skin above the seat and never less
+  than 12.5 cm above the scuttle. The single-seater's eyes are 0.47 m ahead of the airbox peak, 13.5 cm
+  above the cockpit rim. Open-top cars (the 458 is a Spider) are detected and get no roof.
+- **A procedural cockpit**, built on first use and shown only in that view: dashboard and scuttle,
+  instrument cluster drawn to one 512×192 canvas at 20 Hz (rev counter, speedometer, gear, shift lights,
+  ABS / TC lamps; a race logger with rev bar, gear, speed, lap time, gap to the reference lap and pedal
+  bars in GT cars; on the wheel in prototypes and the formula car), steering column, round road wheel or
+  flat butterfly wheel with buttons, rotaries, paddles and ten shift LEDs, gloved hands on the rim with
+  two-bone IK arms, A-pillars, header, mirror, roof lining, door tops, sun strip, a roll cage and window
+  net in GT cars, a centre screen in road cars, and a gear lever the inboard hand goes to on each change
+  in the three manual cars. Paddles flick on a shift.
+- **The model's own cabin is cut away while you sit in it.** A convex hull (windscreen plane, two
+  side-glass planes, front and rear limits) is clipped per fragment out of every material of the exterior
+  model, so third-party models never show a second, static steering wheel, and opaque or tinted glass
+  cannot black out the view. What you see through the openings is the real model: bonnet, wings, door
+  mirrors, front tyres on the formula car. The ambient-occlusion pass is skipped in this view (it cannot
+  see the clipping). The kit sits beside the car in the scene graph, casts no shadow and is not seen by
+  the wet-road reflection camera.
+- **Steering wheel**: road-wheel angle × ratio (14 road, 11 GT, 9 prototype, 7 formula), eased with a tanh
+  towards 126° / 115° / 109° / 103° so the hands never leave nine and three, 40 ms lag. Positive steer is
+  left and turns the wheel anticlockwise as the driver sees it; `tools/cockpit-shots.mjs` prints steer,
+  road-wheel and steering-wheel angle with each photograph.
+- **Camera**: rides the sprung body, so the cabin is fixed and the horizon pitches and rolls; 58–62°
+  vertical field of view; looks up to 11° into the corner, moves up to 3 cm with the g-forces and tilts up
+  to 1.7°; kerb and speed shake is a third of the bonnet camera's.
+- **Bonnet camera**: on the centreline 14 cm above everything around the base of the windscreen (nose
+  camera ahead of the cockpit on the formula car), pitched so the far edge of the bodywork sits low in the
+  frame. Near plane 7 cm in the cockpit, 10 cm on the bonnet, 30 cm elsewhere as before.
+- The HUD's dial shrinks in the cockpit view, where the dash shows the same numbers.
+- Tests: `tests/cockpit.test.js` (seating on a synthetic saloon and roadster, overrides, class of every car).
+
 ## Unreleased — trackside from data, and Laguna Seca
 - **Kerbs, run-off, gravel and barriers are now data per circuit, per corner and per side**
   (`src/sim/trackside.js`), shared by physics and renderer, instead of one curvature rule and a uniform
