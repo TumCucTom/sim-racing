@@ -1,0 +1,21 @@
+<!doctype html>
+<!-- Dev tool: every procedural sky side by side (looking toward the sun, then away). Open /tools/sky-preview.html on the dev server. -->
+<html><body style="margin:0;background:#111"><canvas id="c"></canvas>
+<script type="module">
+import * as THREE from 'three';
+import { CONDITIONS, CONDITION_ORDER } from '/src/game/wx.js';
+import { proceduralSky } from '/src/game/skygen.js';
+const ids = CONDITION_ORDER.filter(id => !CONDITIONS[id].photo), W = 640, H = 300;
+const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true });
+r.setSize(W * 2, H * ids.length); r.toneMapping = THREE.AgXToneMapping; r.outputColorSpace = THREE.SRGBColorSpace; r.setScissorTest(true);
+const cam = new THREE.PerspectiveCamera(62, W / H, 1, 20000);
+ids.forEach((id, k) => {
+  const c = CONDITIONS[id], s = proceduralSky(r, id, c, 0), sc = new THREE.Scene();
+  sc.add(new THREE.Mesh(s.geometry, s.material)); r.toneMappingExposure = c.exposure;
+  for (const side of [0, 1]) {
+    cam.position.set(0, 0, 0); cam.lookAt(side ? -1 : 1, 0.22, side ? 0.9 : 0.25);
+    r.setViewport(side * W, (ids.length - 1 - k) * H, W, H); r.setScissor(side * W, (ids.length - 1 - k) * H, W, H); r.render(sc, cam);
+  }
+});
+window.__done = true;
+</script></body></html>

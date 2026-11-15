@@ -215,3 +215,113 @@ test('surfaces, kerbs, brakes, impacts and shifts each add sound', () => {
     const { peak } = stats(L); assert.ok(peak > 0.03 && peak <= 1, `${trig} peak ${peak}`);
   }
 });
+
+// ---- transient behaviour and the harmonic + noise model ----
+function bankSynth(id) {
+  const s = new RaceAudioSynth(SR), cfg = audioConfigFor(CARS[id]); s.configure(cfg);
+  const b = bankFor(id); assert.ok(b && s.setBank(Object.assign({}, b.meta, { car: cfg.id }), b.pcm), `${id} bank`);
+  return s;
+}
+function run(s, seconds, set) {
+  if (set) s.set(set);
+  const n = Math.round(SR * seconds), L = new Float32Array(n), R = new Float32Array(n);
+  for (let o = 0; o < n; o += 128) s.process(L.subarray(o, o + 128), R.subarray(o, o + 128), Math.min(128, n - o));
+  return { L, R };
+}
+const db = (x, a = 0, b = x.length) => { let e = 0; for (let i = a; i < b; i++) e += x[i] * x[i]; return 10 * Math.log10(e / (b - a) + 1e-12); };
+
+test('every recorded band carries a noise layer; the non-periodic part of the engine never repeats', () => {
+  for (const id of ICE) {
+    const b = bankFor(id); if (!b) continue;
+    assert.ok(b.meta.nt > 0, `${id} noise textures built`);
+    for (const band of b.meta.bands) for (const k of ['on', 'off']) if (band[k]) {
+      assert.ok(band[k].nzAt > 0 && band[k].nzAt + b.meta.nt <= b.pcm.length && band[k].neAt > 0, `${id} ${band.rpm} ${k} noise in range`);
+      let e = 0; for (let i = 0; i < b.meta.nt; i++) e += b.pcm[band[k].nzAt + i] ** 2;
+      const rel = 10 * Math.log10(e / b.meta.nt + 1e-12);
+      assert.ok(rel > -30 && rel < -1, `${id} ${band.rpm} ${k} noise ${rel.toFixed(1)} dB re the cycle`);     // a real residual, never louder than the tone
+    }
+  }
+  // gt3 at a steady 3000 rpm: cut into engine cycles, high-pass, remove the mean cycle; what is left of one
+  // cycle must not turn up again a few cycles later (the old voice replayed 8 stored cycles: 1 pair in 8 did)
+  const s = bankSynth('gt3'), rpm = 3000; s.p.rpm = rpm;
+  const { L } = run(s, 4, { rpm, throttle: 1, load: 1, master: 0.6 });
+  const cl = SR * 120 / rpm, N = 256, cyc = [];
+  for (let c = 8; (c + 1) * cl + 4 < L.length; c++) {
+    const v = new Float64Array(N);
+    for (let j = 0; j < N; j++) { const q = c * cl + j * cl / N, k = q | 0; v[j] = L[k] + (q - k) * (L[k + 1] - L[k]); }
+    cyc.push(v);
+  }
+  const mean = new Float64Array(N); for (const v of cyc) for (let j = 0; j < N; j++) mean[j] += v[j] / cyc.length;
+  const res = cyc.map(v => { const r = new Float64Array(N); for (let j = 0; j < N; j++) r[j] = v[j] - mean[j]; const d = new Float64Array(N); for (let j = 0; j < N; j++) d[j] = r[j] - r[(j + N - 1) % N]; return d; });
+  let hits = 0, pairs = 0;
+  for (let i = 0; i + 12 < res.length; i++) for (let lag = 2; lag <= 12; lag++) {
+    let ab = 0, aa = 0, bb = 0; const a = res[i], c = res[i + lag];
+    for (let j = 0; j < N; j++) { ab += a[j] * c[j]; aa += a[j] * a[j]; bb += c[j] * c[j]; }
+    if (ab / Math.sqrt(aa * bb + 1e-20) > 0.6) hits++; pairs++;
+  }
+  assert.ok(hits / pairs < 0.01, `repeated residual in ${hits} of ${pairs} cycle pairs`);
+});
+
+test('banks without a noise layer (older files) still load and play', () => {
+  const b = bankFor('gt3'); if (!b) return;
+  const meta = JSON.parse(JSON.stringify(b.meta)); delete meta.nt;
+  for (const band of meta.bands) for (const k of ['on', 'off']) if (band[k]) { delete band[k].nz; delete band[k].ne; delete band[k].nzAt; delete band[k].neAt; }
+  const s = new RaceAudioSynth(SR), cfg = audioConfigFor(CARS.gt3); s.configure(cfg);
+  assert.ok(s.setBank(Object.assign(meta, { car: cfg.id }), b.pcm));
+  const { L } = run(s, 0.5, { rpm: 6000, throttle: 1, load: 1, master: 0.6 });
+  assert.ok(stats(L).rms > 0.02);
+});
+
+test('throttle is heard at once: lifting drops the level by more than 8 dB within 0.1 s, opening restores it', () => {
+  for (const id of ['gt3', 'coupe', 'hatch', 'formula']) {
+    const s = bankSynth(id), rpm = CARS[id].engine.redline * 0.75; s.p.rpm = rpm;
+    const on = run(s, 0.6, { rpm, throttle: 1, load: 1, gear: 3, master: 0.6 }).L;
+    const off = run(s, 0.3, { throttle: 0, load: -0.15 }).L;
+    const back = run(s, 0.3, { throttle: 1, load: 1 }).L;
+    const a = db(on, SR * 0.3), b = db(off, SR * 0.1), c = db(back, SR * 0.1);
+    assert.ok(a - b > 8, `${id} lift ${(a - b).toFixed(1)} dB`);
+    assert.ok(Math.abs(c - a) < 2, `${id} back on ${(c - a).toFixed(1)} dB`);
+  }
+});
+
+test('gear changes and the limiter are audible events: cut on up-shift, blip on down-shift, limiter stutter', () => {
+  const win = (x, t0, t1) => db(x, Math.round(t0 * SR), Math.round(t1 * SR));
+  // sequential box, flat up-shift: the engine drops out for about the shift time and comes back
+  let s = bankSynth('gt3'); s.p.rpm = 8000;
+  run(s, 0.5, { rpm: 8000, throttle: 1, load: 1, gear: 3, master: 0.6 });
+  const before = db(run(s, 0.2).L);
+  let x = run(s, 0.4, { gear: 4, rpm: 7000 }).L;
+  assert.ok(before - win(x, 0.02, 0.05) > 6, `up-shift cut ${(before - win(x, 0.02, 0.05)).toFixed(1)} dB`);
+  assert.ok(Math.abs(win(x, 0.25, 0.4) - before) < 3, `drive is back after the shift: ${(win(x, 0.25, 0.4) - before).toFixed(1)} dB`);
+  // down-shift off the throttle: a blip louder than the overrun around it
+  s = bankSynth('gt3'); s.p.rpm = 5000;
+  run(s, 0.5, { rpm: 5000, throttle: 0, load: -0.15, gear: 4, master: 0.6 });
+  const coast = db(run(s, 0.2).L);
+  x = run(s, 0.5, { gear: 3, rpm: 6200 }).L;
+  assert.ok(win(x, 0.02, 0.06) - coast > 3, `blip ${(win(x, 0.02, 0.06) - coast).toFixed(1)} dB`);
+  assert.ok(win(x, 0.35, 0.5) - coast < 3, 'back to overrun after the blip');
+  // limiter: level swings by more than 6 dB at the cut rate, for the synthesis fallback as well
+  for (const voice of ['bank', 'synth']) {
+    s = voice === 'bank' ? bankSynth('gt3') : new RaceAudioSynth(SR); if (voice === 'synth') s.configure(audioConfigFor(CARS.gt3));
+    s.p.rpm = 9100; run(s, 0.4, { rpm: 9100, throttle: 1, load: 1, gear: 2, master: 0.6 });
+    x = run(s, 0.6, { limiter: 1, throttle: 0, load: 0 }).L;
+    const lv = []; for (let t = 0.1; t < 0.58; t += 0.01) lv.push(win(x, t, t + 0.01)); lv.sort((a, b) => a - b);
+    assert.ok(lv[lv.length - 3] - lv[2] > 6, `${voice} limiter swing ${(lv[lv.length - 3] - lv[2]).toFixed(1)} dB`);
+  }
+  // overrun crackle belongs to the moment after the lift: the fuel that feeds it is gone 3 s later
+  s = bankSynth('coupe'); s.p.rpm = 6500; run(s, 1, { rpm: 6500, throttle: 1, load: 1, gear: 3, master: 0.6 });
+  assert.ok(s.fuel > 0.5, `fuel under load ${s.fuel}`);
+  run(s, 3, { throttle: 0, load: -0.15 });
+  assert.ok(s.fuel < 0.05, `fuel after the lift ${s.fuel}`);
+});
+
+test('the engine has stereo width but an unchanged mono sum', () => {
+  for (const id of ['gt3', 'hatch']) {
+    const s = bankSynth(id), rpm = 5000; s.p.rpm = rpm;
+    const { L, R } = run(s, 1.5, { rpm, throttle: 1, load: 1, master: 0.6 });
+    let lr = 0, ll = 0, rr = 0; for (let i = SR / 2; i < L.length; i++) { lr += L[i] * R[i]; ll += L[i] * L[i]; rr += R[i] * R[i]; }
+    const c = lr / Math.sqrt(ll * rr);
+    assert.ok(c < 0.995 && c > 0.3, `${id} L/R correlation ${c}`);
+    assert.ok(Math.abs(10 * Math.log10(ll / rr)) < 2, `${id} channel balance ${(10 * Math.log10(ll / rr)).toFixed(1)} dB`);
+  }
+});

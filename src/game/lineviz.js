@@ -4,8 +4,8 @@
 import * as THREE from 'three';
 import { speedProfile, lineDriverOptions } from '../sim/drivers/baseline.js';
 
-export function buildLineGuide(track, spec) {
-  const L = track.line, n = track.n, opts = lineDriverOptions(track, spec);
+export function buildLineGuide(track, spec, wet = null) {
+  const L = track.line, n = track.n, opts = { ...lineDriverOptions(track, spec), wet };
   const v = speedProfile(track, spec, opts);
   const pos = [], col = [], idx = [], w = 0.22;
   for (let k = 0; k <= n; k += 2) {

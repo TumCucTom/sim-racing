@@ -2,9 +2,15 @@
 // and tracks a speed profile computed from track curvature and the car's grip
 // envelope (friction circle + aero), with a backward braking pass.
 // Deliberately simple: it does not use the track width or trail-brake.
+import { wetDriverGrip } from '../wet.js';
 const G = 9.81, RHO = 1.2;
+const SLIDE = 0.09;
+// in the wet the most aggressive dry tunes (grip > 0.95 of the limit) leave no room for puddles
+const WET_CAP = +(globalThis.process?.env?.WET_CAP || 0.95);
 
-export function speedProfile(track, spec, { grip = 0.9, brake = 0.8, line = null, trail = false } = {}) {
+export function speedProfile(track, spec, { grip = 0.9, brake = 0.8, line = null, trail = false, wet = null } = {}) {
+  // wet track: scale the whole grip envelope (opts.wet is a state from src/sim/wet.js)
+  if (wet) { const k = wetDriverGrip(wet); grip = Math.min(grip, WET_CAP) * k; brake *= k; }
   const n = track.n, v = new Float64Array(n);
   const curv = line ? line.curv : track.curv, dsA = line ? line.ds : null;
   // 0.86: nominal tyre mu -> usable axle grip after load transfer / sensitivity,
@@ -43,10 +49,11 @@ export class BaselineDriver {
   // optimised line and takes its corner speeds from that line's curvature.
   constructor(track, spec, opts = {}) {
     this.track = track; this.spec = spec;
-    this.opts = { grip: 0.9, brake: 0.8, lookBase: 5.0, lookGain: 0.42, yawDamp: 0.06, line: null, trail: false, ...opts };
+    this.opts = { grip: 0.9, brake: 0.8, lookBase: 5.0, lookGain: 0.42, yawDamp: 0.06, line: null, trail: false, wet: null, ...opts };
     this.vT = speedProfile(track, spec, this.opts);
-    this.out = { steer: 0, throttle: 0, brake: 0 };
+    this.out = { steer: 0, throttle: 0, brake: 0 }; this.thr = 0;
   }
+  reset() { this.thr = 0; }
   control(car) {
     const t = this.track, o = this.opts, n = t.n, L = o.line;
     const v = Math.max(1, car.vx);
@@ -67,6 +74,17 @@ export class BaselineDriver {
     else if (err < -0.4) brake = Math.min(1, -err * 0.35);
     // lift if the car is sliding
     if (Math.abs(car.vy) > 0.12 * v + 0.5) throttle *= 0.3;
+    if (o.wet) {
+      // wet track: feed the power in with what is left of the friction circle and
+      // back off earlier when the car starts to slide (dry behaviour is untouched)
+      const sp = this.spec, kw = wetDriverGrip(o.wet);
+      const aMax = sp.tire.muY * 0.86 * Math.min(o.grip, WET_CAP) * kw * (G + 0.5 * RHO * sp.ClA / sp.mass * v * v);
+      const use = Math.min(1, Math.abs(car.r * v) / aMax);
+      const cap = 0.12 + 0.88 * Math.pow(Math.max(0, 1 - use * use), 0.75);
+      throttle = Math.min(throttle, cap, (this.thr || 0) + 0.012);
+      if (Math.abs(car.vy) > SLIDE * v + 0.5) throttle *= 0.3;
+      this.thr = throttle;
+    }
     this.out.steer = Math.max(-1, Math.min(1, steer));
     this.out.throttle = throttle; this.out.brake = brake;
     return this.out;

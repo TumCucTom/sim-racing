@@ -18,7 +18,8 @@ export class Effects {
     this.last = [null, null, null, null];
 
     // ---- particles ----
-    this.N = 260; this.pi = 0;
+    this.N = 1100; this.pi = 0;
+    this.wet = 0; this.sprayCol = [0.7, 0.72, 0.75]; this.sprayAcc = [0, 0, 0, 0];   // set by the weather system
     this.pPos = new Float32Array(this.N * 3); this.pVel = new Float32Array(this.N * 3);
     this.pLife = new Float32Array(this.N); this.pMax = new Float32Array(this.N).fill(1);
     this.pSize = new Float32Array(this.N); this.pCol = new Float32Array(this.N * 4);
@@ -77,6 +78,25 @@ export class Effects {
       if ((sf === SURF.GRASS || sf === SURF.GRAVEL) && car.speed > 4 && this.rnd() < dt * Math.min(60, car.speed * 2)) {
         const gr = sf === SURF.GRAVEL;
         this.emit(p.x, p.y + 0.1, p.z, -hx * car.speed * 0.15 + (this.rnd() - 0.5) * 2, 1 + this.rnd() * 1.5, -hz * car.speed * 0.15 + (this.rnd() - 0.5) * 2, gr ? 1.0 : 0.6, gr ? 1.6 : 0.9, gr ? 0.72 : 0.42, gr ? 0.66 : 0.38, gr ? 0.55 : 0.25, gr ? 0.4 : 0.3);
+      }
+    }
+    // wet track: every tyre lifts a mist that hangs in the air behind the car; the rear
+    // wheels throw the tall rooster tail. Amount and height grow with speed.
+    if (this.wet > 0.05 && car.speed > 5) {
+      const v = car.speed, k = Math.min(1, v / 55), c = this.sprayCol, vx = hx * v, vz = hz * v;
+      for (let i = 0; i < 4; i++) {
+        const sf = car.surf[i]; if (sf !== SURF.ASPHALT && sf !== SURF.KERB) continue;
+        const rear = i >= 2, p = wheelWorld[i];
+        this.sprayAcc[i] += dt * this.wet * (rear ? 80 : 30) * (0.25 + 0.75 * k);
+        while (this.sprayAcc[i] >= 1) {
+          this.sprayAcc[i] -= 1;
+          const back = this.rnd() * v * dt, drag = 0.22 + 0.2 * this.rnd();       // spread along the distance covered this frame
+          const up = (rear ? 1.6 + 4.2 * k : 0.7 + 1.6 * k) * (0.5 + this.rnd());
+          this.emit(p.x - hx * (0.35 + back), p.y + 0.12 + 0.2 * this.rnd(), p.z - hz * (0.35 + back),
+            vx * drag + (this.rnd() - 0.5) * (1.2 + 2 * k), up, vz * drag + (this.rnd() - 0.5) * (1.2 + 2 * k),
+            (rear ? 0.5 : 0.35) + 0.5 * k, 0.4 + 0.55 * k * this.rnd() + (rear ? 0.3 * k : 0),
+            c[0], c[1], c[2], (0.06 + 0.12 * k) * (0.6 + 0.4 * this.rnd()) * this.wet * (rear ? 1 : 0.55));
+        }
       }
     }
     for (let i = 0; i < this.N; i++) {

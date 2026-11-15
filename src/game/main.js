@@ -8,16 +8,17 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 
-// Final grade: gentle filmic contrast, a touch of saturation, vignette.
+// Final grade: filmic contrast, saturation, tint and vignette. The defaults are the
+// clear-day look; each weather condition sets its own (see wx.js).
 const GradeShader = {
-  uniforms: { tDiffuse: { value: null }, amount: { value: 1 } },
+  uniforms: { tDiffuse: { value: null }, sat: { value: 1.2 }, contrast: { value: 0.26 }, tint: { value: new THREE.Vector3(1.015, 1.0, 0.975) }, vignette: { value: 0.42 }, lift: { value: new THREE.Vector3(0, 0, 0) } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-  fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float sat, contrast, vignette; uniform vec3 tint, lift; varying vec2 vUv;
     void main(){ vec4 c=texture2D(tDiffuse,vUv); vec3 x=c.rgb;
-      float l=dot(x,vec3(0.2126,0.7152,0.0722)); x=mix(vec3(l),x,1.2);
-      x=mix(x, x*x*(3.0-2.0*x), 0.26);
-      x*=vec3(1.015,1.0,0.975);
-      vec2 d=vUv-0.5; x*=1.0-dot(d,d)*0.42;
+      float l=dot(x,vec3(0.2126,0.7152,0.0722)); x=mix(vec3(l),x,sat);
+      x=mix(x, x*x*(3.0-2.0*x), contrast);
+      x*=tint; x+=lift*(1.0-x);
+      vec2 d=vUv-0.5; x*=1.0-dot(d,d)*vignette;
       gl_FragColor=vec4(x,c.a); }`,
 };
 import { buildTrack, nearestIndexGlobal, TRACKS, TRACK_ORDER } from '../sim/track.js';
@@ -37,6 +38,11 @@ import { Recorder, TelemetryPanel, LapTrace, BIN } from './telemetry.js';
 import { Props } from './props.js';
 import { buildLineGuide } from './lineviz.js';
 import { AudioEngine } from '../audio/audio.js';
+import { CONDITIONS, CONDITION_ORDER, patchFog } from './wx.js';
+import { Weather, LensShader } from './weather.js';
+import { wetFor } from '../sim/wet.js';
+
+patchFog();   // before any material is compiled
 import validation from '../data/car-validation.json';
 
 const policyModules = import.meta.glob('../policies/*.json', { eager: true });
@@ -80,11 +86,10 @@ class Game {
     const skyClone = this.world.sky.clone(); envScene.add(skyClone);
     this.scene.environment = pm.fromScene(envScene, 0, 1, 10000).texture; this.scene.environmentIntensity = 0.55;
     pm.dispose();
-    getSky(r).whenReady((s) => {
-      this.scene.environment = s.env; this.scene.environmentIntensity = 1; this.scene.fog.color.copy(s.fogColor);
-      r.toneMapping = { aces: THREE.ACESFilmicToneMapping, neutral: THREE.NeutralToneMapping, agx: THREE.AgXToneMapping }[params.get('tm')] ?? THREE.AgXToneMapping;
-      r.toneMappingExposure = +(params.get('ev') || 0.8);
-    });
+    // tone mapping once the photographed sky (or a weather condition) is in charge; ?tm= and ?ev= override
+    this.toneMapping = { aces: THREE.ACESFilmicToneMapping, neutral: THREE.NeutralToneMapping, agx: THREE.AgXToneMapping }[params.get('tm')] ?? THREE.AgXToneMapping;
+    this.exposureOverride = params.has('ev') ? +params.get('ev') : null;
+    this.wet = null;              // wet-track state for the sim and the AI (src/sim/wet.js); null = dry
     this.setupComposer();
     this.effects = new Effects(this.scene);
     this.props = new Props(this.scene, this.track, this.world);
@@ -95,6 +100,7 @@ class Game {
     this.tel = new TelemetryPanel(this.ui, this.rec, this.track, (s) => { this.cursorS = s; });
     this.audio = new AudioEngine();
     this.input = new Input();
+    this.wx = new Weather(this, { env: this.scene.environment });
     this.cam = 0; this.camPos = new THREE.Vector3(); this.camLook = new THREE.Vector3(); this.camInit = false;
     this.ghostMode = 'best'; this.autopilot = false; this.paused = true; this.acc = 0; this.last = performance.now();
     this.perf = { show: params.has('perf'), frames: 0, t: 0, fps: 0, simMs: 0, frameMs: 0, simAcc: 0, frameAcc: 0, worst: 0 };
@@ -103,6 +109,7 @@ class Game {
     this.bindKeys();
     this.buildMenu();
     this.setCar(params.get('car') || store.get('rr-car') || 'gt3');
+    this.setWeather(params.get('wx') || store.get('rr-wx') || 'clear', true);
     window.addEventListener('resize', () => this.resize()); this.resize();
     document.getElementById('loading').remove();
     if (params.has('autostart')) this.start(params.has('ai')); else this.showMenu(true);
@@ -132,6 +139,7 @@ class Game {
     k.on('KeyF', () => { this.perf.show = !this.perf.show; document.getElementById('perf').style.display = this.perf.show ? 'block' : 'none'; });
     k.on('KeyG', () => { this.ghostMode = { off: 'best', best: 'ai', ai: 'off' }[this.ghostMode]; this.hud.toast(`Ghost: ${{ off: 'off', best: 'your best lap', ai: 'AI lap' }[this.ghostMode]}`, 1.5); });
     k.on('KeyI', () => this.setAutopilot(!this.autopilot));
+    k.on('KeyV', () => this.setWeather(CONDITION_ORDER[(CONDITION_ORDER.indexOf(this.wxId) + 1) % CONDITION_ORDER.length]));
     k.on('KeyL', () => { this.showLine = !this.showLine; store.set('rr-line', this.showLine ? '1' : '0'); this.refreshLineGuide(); this.hud.toast(`Racing line ${this.showLine ? 'shown — green: power, red: brake' : 'hidden'}`, 1.6); });
     k.on('Escape', () => this.showMenu(document.getElementById('menu').classList.contains('hidden')));
     CAR_ORDER.forEach((id, i) => k.on('Digit' + (i + 1), () => { if (!this.paused) { this.setCar(id); this.restart(); } }));
@@ -160,6 +168,9 @@ class Game {
     this.updateTrackInfo();
     const q = document.getElementById('quality'); q.value = this.qualityName;
     q.onchange = () => this.applyQuality(q.value);
+    const ws = document.getElementById('weather');
+    for (const id of CONDITION_ORDER) { const o = document.createElement('option'); o.value = id; o.textContent = CONDITIONS[id].label; ws.appendChild(o); }
+    ws.onchange = () => this.setWeather(ws.value);
     document.getElementById('go').onclick = () => this.start(false);
     document.getElementById('watch').onclick = () => this.start(true);
   }
@@ -176,21 +187,54 @@ class Game {
     if (this.world.sunLight.shadow.map) { this.world.sunLight.shadow.map.dispose(); this.world.sunLight.shadow.map = null; }
     this.scene.traverse(o => { if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true; });
     this.setupComposer();
+    this.wx.apply();
     this.resize();
   }
 
+  // Change weather / time of day live. Wet conditions also change the physics
+  // (track grip) and the AI's speed profile; the dry default leaves both untouched.
+  setWeather(id, quiet = false) {
+    if (!CONDITIONS[id]) id = 'clear';
+    this.wxId = id; store.set('rr-wx', id);
+    const ws = document.getElementById('weather'); if (ws) ws.value = id;
+    this.wx.set(id);
+    this.setupComposer(); this.resize();
+    const c = CONDITIONS[id], wet = wetFor(c.sim);
+    if (wet !== this.wet) {
+      this.wet = wet; this.sim.setWet(wet);
+      this.ai = this.makeAI(this.spec); this.rec.hasAI = false; this.aiLap = null;
+      this.refreshLineGuide();
+      document.getElementById('aiinfo').textContent = `AI driver for this car: ${this.ai.label}`;
+      clearTimeout(this.aiTimer); this.aiTimer = setTimeout(() => this.computeAILap(this.spec), 50);
+    }
+    this.audio.setWeather?.({ rain: c.rain, wet: this.effects.wet });
+    if (!quiet) this.hud.toast(`${c.label}${wet ? ` — track grip ${(wet.grip * 100).toFixed(0)} %` : ''}`, 2.2);
+  }
+
+  // Post-processing. High quality always runs the full chain (ambient occlusion, bloom,
+  // SMAA); weather that needs the lens pass (light shafts, water on the lens) adds a
+  // short chain on medium; low never post-processes.
   setupComposer() {
-    this.composer = null;
-    if (!this.quality.bloom) return;
-    this.composer = new EffectComposer(this.renderer);
+    this.composer?.dispose(); this.composer = null; this.wx?.bindPasses(null, null);
+    const ql = this.quality, lensOn = !!this.wx?.needsLens, r = this.renderer;
+    if (!ql.bloom && !lensOn) return;
+    let rt;
+    if (!ql.bloom) { const sz = r.getDrawingBufferSize(new THREE.Vector2()); rt = new THREE.WebGLRenderTarget(sz.x, sz.y, { type: THREE.HalfFloatType, samples: 4 }); }
+    this.composer = new EffectComposer(r, rt);
+    if (rt) this.composer.setPixelRatio(r.getPixelRatio());
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    const ao = new GTAOPass(this.scene, this.camera, 1, 1);
-    ao.blendIntensity = 0.9; ao.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.4, thickness: 1.2, scale: 1.1, samples: 12 });
-    this.composer.addPass(ao);
-    this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.16, 0.5, 6.0));
+    let lens = null;          // straight after the scene: it reads the sky mask in alpha
+    if (lensOn) { lens = new ShaderPass(LensShader); this.composer.addPass(lens); }
+    if (ql.bloom) {
+      const ao = new GTAOPass(this.scene, this.camera, 1, 1);
+      ao.blendIntensity = 0.9; ao.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.4, thickness: 1.2, scale: 1.1, samples: 12 });
+      this.composer.addPass(ao);
+    }
+    if (ql.bloom) { const b = this.wx?.cond.bloom || [0.16, 6.0]; this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), b[0], 0.5, b[1])); }
     this.composer.addPass(new OutputPass());
-    this.composer.addPass(new ShaderPass(GradeShader));
-    this.composer.addPass(new SMAAPass());
+    const grade = new ShaderPass(GradeShader); this.composer.addPass(grade);
+    if (ql.bloom) this.composer.addPass(new SMAAPass());
+    this.wx?.bindPasses(lens, grade);
   }
 
   // Swap circuits in place (no page reload).
@@ -205,6 +249,7 @@ class Game {
     this.props = new Props(this.scene, this.track, this.world);
     this.rec = new Recorder(this.track); this.tel.setTrack(this.rec, this.track); this.hud.setTrack(this.track);
     this.tvPosts = this.buildTvPosts(); this.aiLap = null;
+    this.wx.apply();
     this.updateTrackInfo();
     this.setCar(this.spec.id);
   }
@@ -231,10 +276,11 @@ class Game {
 
   makeAI(spec) {
     // trained policies are specific to the circuit they were trained on
-    const pol = this.trackId === 'ravenscar' ? POLICIES[spec.id] : null;
+    // ... and to a dry track: in the wet the racing-line driver takes over with a scaled speed profile
+    const pol = this.trackId === 'ravenscar' && !this.wet ? POLICIES[spec.id] : null;
     // ignore a policy trained against a different observation layout
     if (pol && pol.policy.sizes[0] === OBS_DIM) return { driver: new PolicyDriver(this.track, pol), label: 'RL policy' };
-    return { driver: new BaselineDriver(this.track, spec, lineDriverOptions(this.track, spec)), label: 'racing-line driver' };
+    return { driver: new BaselineDriver(this.track, spec, { ...lineDriverOptions(this.track, spec), wet: this.wet }), label: this.wet ? 'racing-line driver (wet set-up)' : 'racing-line driver' };
   }
 
   setCar(id) {
@@ -242,11 +288,12 @@ class Game {
     const spec = this.spec = CARS[id];
     store.set('rr-car', id);
     document.querySelectorAll('.card').forEach(c => c.classList.toggle('sel', c.dataset.id === id));
-    this.sim = new Sim(this.track, spec);
+    this.sim = new Sim(this.track, spec); this.sim.setWet(this.wet);
     this.sim.onLap = (t, valid) => this.onLap(t, valid);
     if (this.model) { this.scene.remove(this.model.root); this.model.dispose(); this.scene.remove(this.ghost.root); this.ghost.dispose(); }
     this.model = buildCarModel(spec); this.scene.add(this.model.root);
     this.ghost = buildCarModel(spec, { ghost: true }); this.ghost.root.visible = false; this.scene.add(this.ghost.root);
+    this.wx.attachCar(this.model, spec);
     this.rec.reset(); this.rec.hasAI = false;
     this.ai = this.makeAI(spec);
     this.hud.setCar(spec);
@@ -263,11 +310,12 @@ class Game {
   refreshLineGuide() {
     if (this.lineGuide) { this.scene.remove(this.lineGuide); this.lineGuide.geometry.dispose(); this.lineGuide = null; }
     if (this.showLine === undefined) this.showLine = store.get('rr-line') === '1';
-    if (this.showLine) { this.lineGuide = buildLineGuide(this.track, this.spec); this.scene.add(this.lineGuide); }
+    if (this.showLine) { this.lineGuide = buildLineGuide(this.track, this.spec, this.wet); this.scene.add(this.lineGuide); }
   }
 
   computeAILap(spec) {
     const sim = new Sim(this.track, spec), ai = this.makeAI(spec), trace = new LapTrace(this.rec.nBins);
+    sim.setWet(this.wet);
     let done = false;
     sim.onLap = (t, valid) => { if (sim.lap === 2) { trace.seal(); trace.lapTime = t; done = true; } else trace.clear(); };
     for (let i = 0; i < 300 * 400 && !done; i++) { sim.step(ai.driver.control(sim.car)); if (sim.lap >= 1) this.rec.sample(sim, trace); if (sim.car.wallContact > 0) break; }
@@ -305,7 +353,7 @@ class Game {
   resize() {
     const w = window.innerWidth, h = window.innerHeight;
     this.renderer.setSize(w, h, false); this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
-    this.composer?.setSize(w, h);
+    this.composer?.setSize(w, h); this.wx?.resize();
   }
 
   // ------------------------------------------------------------------ frame
@@ -331,6 +379,8 @@ class Game {
     }
     this.syncVisuals(dt);
     this.updateCamera(dt);
+    this.wx.update(dt, this.sim.car, CAMS[this.cam], this.paused);
+    this.wx.renderReflection();
     if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera);
     const car = this.sim.car;
     this.audio.update(car, this.paused, CAMS[this.cam], this.camera.position.distanceTo(this.model.root.position));
@@ -339,7 +389,7 @@ class Game {
       this.hud.update(dt, this.sim, {
         delta: this.rec.delta(this.sim, ref), refLabel: this.tel.refMode === 'ai' ? 'AI' : 'best',
         ghost: this.ghost.root.visible ? this.ghostPose : null, cursorS: this.cursorS, autopilot: this.autopilot,
-        modeText: `${car.aids.autoShift ? 'AUTO' : 'MANUAL'} · ghost ${this.ghostMode}${this.autopilot ? ' · AI DRIVING' : ''}` + (this.aiLap ? `\nAI lap ${fmtTime(this.aiLap)}` : ''),
+        modeText: `${car.aids.autoShift ? 'AUTO' : 'MANUAL'} · ghost ${this.ghostMode}${this.autopilot ? ' · AI DRIVING' : ''}${this.wet ? ` · ${this.wxId.toUpperCase()} ${(this.wet.grip * 100).toFixed(0)}%` : ''}` + (this.aiLap ? `\nAI lap ${fmtTime(this.aiLap)}` : ''),
       });
       this.tel.draw(this.sim);
     }
@@ -348,7 +398,7 @@ class Game {
     if (p.t >= 0.5) {
       p.fps = p.frames / p.t; p.simMs = p.simAcc / p.frames; p.frameMs = p.frameAcc / p.frames; p.worstMs = p.worst;
       const info = this.renderer.info.render; p.calls = info.calls; p.tris = info.triangles;
-      if (p.show) document.getElementById('perf').textContent = `${p.fps.toFixed(0)} fps  worst ${p.worst.toFixed(1)} ms\nCPU ${p.frameMs.toFixed(2)} ms/frame (sim ${p.simMs.toFixed(3)})\n${info.calls} draws  ${(info.triangles / 1000).toFixed(0)}k tris\naudio: ${this.audio.mode}  q: ${this.qualityName}`;
+      if (p.show) document.getElementById('perf').textContent = `${p.fps.toFixed(0)} fps  worst ${p.worst.toFixed(1)} ms\nCPU ${p.frameMs.toFixed(2)} ms/frame (sim ${p.simMs.toFixed(3)})\n${info.calls} draws  ${(info.triangles / 1000).toFixed(0)}k tris\naudio: ${this.audio.mode}  q: ${this.qualityName}  wx: ${this.wxId}`;
       p.frames = 0; p.t = 0; p.simAcc = 0; p.frameAcc = 0; p.worst = 0;
     }
   }

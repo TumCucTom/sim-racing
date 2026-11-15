@@ -89,7 +89,7 @@ export function getSky(renderer) {
   const geo = new THREE.SphereGeometry(8000, 48, 24);
   const mat = new THREE.ShaderMaterial({ ...domeShader, uniforms: THREE.UniformsUtils.clone(domeShader.uniforms), side: THREE.BackSide, depthWrite: false, fog: false });
   const sky = singleton = {
-    ready: false, dome: null, domeMaterial: mat,
+    ready: false, dome: null, domeMaterial: mat, domeGeometry: geo,
     sunDir: new THREE.Vector3(), sunColor: new THREE.Color(1, 0.95, 0.86), sunIntensity: 4.4,
     fogColor: new THREE.Color(0.5, 0.55, 0.65), env: null, listeners: [],
     // world.js builds a dome per world from the shared geometry / material

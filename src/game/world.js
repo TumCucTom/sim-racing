@@ -8,6 +8,7 @@ import { RNG } from '../sim/rng.js';
 import * as TX from './textures.js';
 import { ASSETS, loadTexture, applyTextures } from './assets.js';
 import { getSky } from './sky.js';
+import { WX, WX_GLSL, wxUniforms } from './wx.js';
 
 const hash2 = (ix, iy) => { let h = Math.imul(ix, 374761393) + Math.imul(iy, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 function vnoise(x, y) {
@@ -73,14 +74,21 @@ float lum(vec3 c){ return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 `;
 // Extend a built-in material: `color` runs after the albedo map is sampled
 // (diffuseColor is live), `rough` after the roughness map (roughnessFactor).
-function patch(mat, key, { uniforms = {}, vpars = '', vmain = '', fpars = '', color = '', rough = '', normal = '' }) {
+// `wet: [albedo factor, roughness]` gives a simple response to rain; materials that
+// need more (asphalt, paving) write gWet / gPud themselves. `out` runs after lighting.
+function patch(mat, key, { uniforms = {}, vpars = '', vmain = '', fpars = '', color = '', rough = '', normal = '', wet = null, out = '' }) {
+  if (wet) {
+    color += `\ngWet = uWet; diffuseColor.rgb *= mix(1.0, ${wet[0].toFixed(3)}, gWet);`;
+    rough += `\nroughnessFactor = mix(roughnessFactor, ${wet[1].toFixed(3)}, gWet);`;
+  }
   mat.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, uniforms);
+    Object.assign(sh.uniforms, uniforms); wxUniforms(sh);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + vpars).replace('#include <begin_vertex>', '#include <begin_vertex>\n' + vmain);
-    let f = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + GLSL_NOISE + fpars)
+    let f = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + GLSL_NOISE + WX_GLSL + fpars)
       .replace('#include <map_fragment>', '#include <map_fragment>\n' + color)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n' + rough);
     if (normal) f = f.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + normal);
+    if (out) f = f.replace('#include <opaque_fragment>', out + '\n#include <opaque_fragment>');
     sh.fragmentShader = f;
   };
   mat.customProgramCacheKey = () => key;
@@ -88,13 +96,28 @@ function patch(mat, key, { uniforms = {}, vpars = '', vmain = '', fpars = '', co
 }
 // Alpha-cut cards and see-through meshes must not be drawn by passes that
 // replace materials (the GTAO normal pass would treat them as solid walls).
-function skipOverride(mesh) {
+export function skipOverride(mesh) {
   const own = new Set([].concat(mesh.material, mesh.customDepthMaterial || []));
   if (mesh.isInstancedMesh) { const n = mesh.count; mesh.onBeforeRender = (r, s, c, g, m) => { mesh.count = own.has(m) ? n : 0; }; mesh.onAfterRender = () => { mesh.count = n; }; }
   else { const g0 = mesh.geometry; mesh.onBeforeRender = (r, s, c, g, m) => { g0.setDrawRange(0, own.has(m) ? Infinity : 0); }; mesh.onAfterRender = () => { g0.setDrawRange(0, Infinity); }; }
   return mesh;
 }
-const ROAD_V = { vpars: 'attribute vec4 aRoad; attribute float aRub; varying vec4 vRoad; varying float vRub;', vmain: 'vRoad = aRoad; vRub = aRub;' };
+const ROAD_V = { vpars: 'attribute vec4 aRoad; attribute float aRub; varying vec4 vRoad; varying float vRub; varying vec3 vWPos;', vmain: 'vRoad = aRoad; vRub = aRub; vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;' };
+// Wet ground after lighting: the mirrored car (rendered by weather.js) shows in the water film.
+const WET_REFLECT = `
+  if (uReflOn > 0.5 && gWet > 0.02) {
+    vec4 rc = uReflMat * vec4(vWPos, 1.0);
+    vec2 ruv = rc.xy / rc.w + (normal.xy - nonPerturbedNormal.xy) * 0.22 * (1.0 - 0.85 * gPud);
+    vec2 px = vec2(0.0, 0.006);
+    vec4 r = 0.4 * texture2D(tRefl, ruv) + 0.3 * texture2D(tRefl, ruv + px) + 0.3 * texture2D(tRefl, ruv - px);
+    float nv = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
+    float fr = 0.07 + 0.93 * pow(1.0 - nv, 5.0);
+    outgoingLight = mix(outgoingLight, r.rgb, r.a * clamp(fr * 2.4, 0.0, 0.92) * clamp(0.5 * gWet + gPud, 0.0, 1.0));
+  }`;
+// Rain ripples and the flattening of the surface texture under water.
+const WET_NORMAL = `
+  normal = normalize(mix(normal, nonPerturbedNormal, clamp(0.35 * gWet + gPud, 0.0, 1.0)));
+  if (gPud * uRain > 0.01) { vec2 rp = rainRipple(vWPos.xz, uWxTime); normal = normalize(normal + mat3(viewMatrix) * vec3(rp.x, 0.0, rp.y) * 0.3 * gPud * uRain); }`;
 
 // Along-track sample list: dense where the track curves or crests, sparse on straights.
 function sampleList(track, minM, maxM, sag) {
@@ -181,10 +204,37 @@ export function buildWorld(track, renderer, qualityIn) {
   sunLight.shadow.bias = -0.0003; sunLight.shadow.normalBias = 0.06; sunLight.shadow.radius = 1.6;
   group.add(hemi, sunLight, sunLight.target);
   const fogColor = new THREE.Color(0xb9cee0);
-  skySys.whenReady((s) => {
-    sun.copy(s.sunDir); sunLight.color.copy(s.sunColor); sunLight.intensity = s.sunIntensity;
-    hemi.intensity = 0; sky.visible = false; dome.visible = true; fogColor.copy(s.fogColor);
-  });
+  // weather: a procedural sky (src/game/skygen.js) can stand in for the photographed one
+  const procDome = new THREE.Mesh(skySys.domeGeometry, skySys.domeMaterial); procDome.frustumCulled = false; procDome.renderOrder = 900; procDome.visible = false; procDome.userData.isSky = true; group.add(procDome);
+  const flash = new THREE.DirectionalLight(0xcfdcff, 0); flash.position.set(0.3, 1, 0.2); group.add(flash);   // lightning
+  let proc = null;
+  const photoLook = () => {
+    if (proc) return;
+    procDome.visible = false; sunLight.shadow.radius = 1.6;
+    if (skySys.ready) {
+      const s = skySys; sun.copy(s.sunDir); sunLight.color.copy(s.sunColor); sunLight.intensity = s.sunIntensity;
+      hemi.intensity = 0; sky.visible = false; dome.visible = true; fogColor.copy(s.fogColor);
+    } else {
+      sun.setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - 34), THREE.MathUtils.degToRad(-128));
+      sunLight.color.set(0xfff1dc); sunLight.intensity = 2.5; hemi.intensity = 0.7; sky.visible = true; dome.visible = false; fogColor.set(0xb9cee0);
+    }
+  };
+  skySys.whenReady(photoLook);
+  // p: result of proceduralSky() with the condition it was made for, or null for the photographed clear sky
+  function setSky(p, cond) {
+    proc = p;
+    if (!p) { photoLook(); return; }
+    procDome.material = p.material; procDome.rotation.y = p.azimuth; procDome.updateMatrixWorld(); procDome.visible = true;
+    dome.visible = false; sky.visible = false; hemi.intensity = 0;
+    sun.copy(p.sunDir); sunLight.color.setRGB(...cond.sun.color); sunLight.intensity = cond.sun.intensity;
+    sunLight.shadow.radius = 1.6 * (cond.shadow || 1); fogColor.setRGB(...cond.fog.color);
+  }
+  // direction of travel on the start straight as a rotation about the vertical (used to place low suns)
+  const gridYaw = track.heading[0];
+  // materials outside the shader-patched ground that should still look rained on
+  const wetList = [];
+  const wettable = (m, k = 0.5) => { wetList.push({ m, r0: m.roughness, c0: m.color.clone(), k }); return m; };
+  function setWet(w) { for (const e of wetList) { e.m.roughness = e.r0 * (1 - e.k * w); e.m.color.copy(e.c0).multiplyScalar(1 - 0.22 * w); } }
 
   // rubber build-up: everywhere on the line, heaviest through braking zones and corners
   const rub = new Float32Array(n);
@@ -202,7 +252,7 @@ export function buildWorld(track, renderer, qualityIn) {
   const oldU = { value: aspFallback.map }, avgU = { value: 0.068 };
   const asphaltMat = patch(new THREE.MeshStandardMaterial({ map: aspFallback.map, normalMap: aspFallback.normalMap, normalScale: new THREE.Vector2(0.5, 0.5), roughness: 0.86, metalness: 0 }), 'road', {
     ...ROAD_V, uniforms: { uOld: oldU, uAvg: avgU },
-    fpars: 'uniform sampler2D uOld; uniform float uAvg; varying vec4 vRoad; varying float vRub; float gRub; float gPaint;',
+    fpars: 'uniform sampler2D uOld; uniform float uAvg; varying vec4 vRoad; varying float vRub; varying vec3 vWPos; float gRub; float gPaint;',
     color: `{
       vec2 m = vRoad.xy;                                   // metres across (+left) / along
       vec3 a1 = diffuseColor.rgb;
@@ -240,10 +290,24 @@ export function buildWorld(track, renderer, qualityIn) {
       float wear = smoothstep(1.2, 1.8, lum(a1) / uAvg + 0.8 * vnoise(m * vec2(7.0, 1.2)));
       gPaint = ln * (1.0 - 0.6 * wear);
       alb = mix(alb, vec3(0.7, 0.7, 0.68) * (0.8 + 0.2 * lum(a1) / uAvg), gPaint);
+      // rain: a water film darkens the surface (the rubbered line dries first on a damp
+      // track), water stands along the edges (same function as the sim) and in low spots
+      if (uWet > 0.001) {
+        float dryL = clamp(g * 1.25, 0.0, 1.0) * uLineDry;
+        float blot = vnoise(m * vec2(0.9, 0.11) + 7.0);
+        float film = clamp(uWet * 1.35 - dryL * 0.9 - (1.0 - uWet) * blot * 0.9, 0.0, 1.0);
+        float low = vnoise(m * vec2(0.33, 0.055) + 3.0) * 0.62 + vnoise(m * vec2(1.3, 0.35)) * 0.38;
+        float pd = max(puddleDepth(m.y, m.x, vRoad.w), 0.8 * smoothstep(0.63, 0.78, low) * film) * uPuddle;
+        gWet = film; gPud = clamp(pd, 0.0, 1.0);
+        alb *= mix(1.0, 0.5 + 0.28 * gPaint, film);
+        alb = mix(alb, alb * vec3(0.5, 0.54, 0.6), gPud);
+      }
       diffuseColor.rgb = alb;
     }`,
-    rough: 'roughnessFactor = clamp(roughnessFactor - 0.3 * gRub - 0.22 * gPaint, 0.28, 1.0);',
-    normal: 'normal = normalize(mix(normal, nonPerturbedNormal, clamp(0.55 * gRub + 0.7 * gPaint, 0.0, 1.0)));',
+    rough: `roughnessFactor = clamp(roughnessFactor - 0.3 * gRub - 0.22 * gPaint, 0.28, 1.0);
+      roughnessFactor = mix(mix(roughnessFactor, 0.2 + 0.1 * roughnessFactor, gWet), 0.03, gPud);`,
+    normal: 'normal = normalize(mix(normal, nonPerturbedNormal, clamp(0.55 * gRub + 0.7 * gPaint, 0.0, 1.0)));' + WET_NORMAL,
+    out: WET_REFLECT,
   });
   photo(asphaltMat, { map: [ASSETS.asphaltDiff, { aniso }], normalMap: [ASSETS.asphaltNor, { aniso, srgb: false }], roughnessMap: [ASSETS.asphaltRough, { aniso, srgb: false }] });
   loadTexture(ASSETS.asphaltOld, { aniso }).then((t) => { if (t) oldU.value = t; });
@@ -271,6 +335,7 @@ export function buildWorld(track, renderer, qualityIn) {
         alb *= 0.6 + 0.4 * smoothstep(0.0, 0.03, min(f, 1.0 - f) * 1.6);          // joints between blocks
         diffuseColor.rgb = alb;
       }`,
+      wet: [0.66, 0.14],
     });
     photo(kerbMat, { map: [ASSETS.concrete, { aniso }] });
     const geos = [];
@@ -307,8 +372,9 @@ export function buildWorld(track, renderer, qualityIn) {
       alb = mix(alb, lum(alb) * vec3(1.75, 1.5, 0.75), dry * 0.18);
       float worn = smoothstep(1.5, 0.1, d + 1.1 * vnoise(vec2(m.x * 0.8, m.y / 5.0)));
       alb = mix(alb, vec3(0.2, 0.165, 0.11) * (0.6 + 6.0 * lum(alb)), worn * 0.7);
-      diffuseColor.rgb = alb;
+      diffuseColor.rgb = alb * mix(1.0, 0.55, worn * uWet);                       // the worn strip turns to mud
     }`,
+    wet: [0.74, 0.58],
   });
   photo(grassMat, { map: [ASSETS.grassDiff, { aniso }], normalMap: [ASSETS.grassNor, { aniso, srgb: false }] });
   const gravelMat = patch(new THREE.MeshStandardMaterial({ map: TX.gravelTexture(aniso), roughness: 0.95, color: 0xcfc3ad }), 'gravel', {
@@ -320,11 +386,14 @@ export function buildWorld(track, renderer, qualityIn) {
       // raked furrows running along the trap
       diffuseColor.rgb *= 0.94 + 0.08 * sin(m.x * 7.5 + 2.0 * vnoise(m * 0.2));
     }`,
+    wet: [0.58, 0.62],
   });
   photo(gravelMat, { map: [ASSETS.gravelDiff, { aniso }], normalMap: [ASSETS.gravelNor, { aniso, srgb: false }] });
   // street circuits: paving slabs instead of grass
   const paveMat = patch(new THREE.MeshStandardMaterial({ map: concreteFallback, roughness: 0.85 }), 'pave', {
-    ...ROAD_V, fpars: 'varying vec4 vRoad; varying float vRub;',
+    ...ROAD_V, fpars: 'varying vec4 vRoad; varying float vRub; varying vec3 vWPos;',
+    normal: WET_NORMAL, out: WET_REFLECT,
+    rough: 'roughnessFactor = mix(mix(roughnessFactor, 0.34, gWet), 0.04, gPud);',
     color: `{
       vec2 m = vRoad.xy; float d = abs(m.x) - vRoad.w;
       vec3 alb = diffuseColor.rgb * (0.62 + 0.25 * vnoise(vec2(m.x / 3.0, m.y / 9.0)));
@@ -333,6 +402,8 @@ export function buildWorld(track, renderer, qualityIn) {
       alb *= 0.9 + 0.2 * hash12(floor(sl));
       alb = mix(alb, vec3(0.5, 0.5, 0.48), smoothstep(0.32, 0.28, d) * 0.6);   // kerb stone
       alb *= 1.0 - 0.3 * smoothstep(0.5, 0.0, d) * vnoise(vec2(m.x * 4.0, m.y / 3.0));
+      gWet = uWet; gPud = uPuddle * uWet * smoothstep(0.58, 0.7, vnoise(m * vec2(0.5, 0.21) + 9.0) * 0.7 + vnoise(m * 1.7) * 0.3);
+      alb *= mix(1.0, 0.52, gWet); alb = mix(alb, alb * vec3(0.5, 0.54, 0.6), gPud);
       diffuseColor.rgb = alb;
     }`,
   });
@@ -354,8 +425,8 @@ export function buildWorld(track, renderer, qualityIn) {
 
   // ---- barriers -------------------------------------------------------------
   {
-    const armcoMat = new THREE.MeshStandardMaterial({ map: TX.armcoTexture(aniso), roughness: 0.42, metalness: 0.82, side: THREE.DoubleSide, envMapIntensity: 0.9 });
-    const tyreMat = new THREE.MeshStandardMaterial({ map: TX.tyreWallTexture(aniso), roughness: 0.88, side: THREE.DoubleSide });
+    const armcoMat = wettable(new THREE.MeshStandardMaterial({ map: TX.armcoTexture(aniso), roughness: 0.42, metalness: 0.82, side: THREE.DoubleSide, envMapIntensity: 0.9 }), 0.45);
+    const tyreMat = wettable(new THREE.MeshStandardMaterial({ map: TX.tyreWallTexture(aniso), roughness: 0.88, side: THREE.DoubleSide }), 0.6);
     const beltMat = new THREE.MeshStandardMaterial({ color: 0xd8d8d4, roughness: 0.7 });
     const fenceMat = new THREE.MeshStandardMaterial({ map: TX.fenceTexture(aniso), transparent: true, roughness: 0.5, metalness: 0.6, side: THREE.DoubleSide, depthWrite: false, alphaTest: 0.02 });
     const beams = quality.detail > 0 ? 3 : 2, bh = 0.31, top = 0.06 + beams * (bh + 0.012);
@@ -391,7 +462,7 @@ export function buildWorld(track, renderer, qualityIn) {
     const merge = (list) => { const l = list.filter(Boolean); return l.length ? mergeGeometries(l) : null; };
     add(merge(armGeo), armcoMat, { cast: true });
     add(merge(tyreGeo), tyreMat, { cast: true });
-    const wallMat = new THREE.MeshStandardMaterial({ map: concreteFallback, roughness: 0.85, color: 0xd9d9d6 }); photo(wallMat, { map: [ASSETS.concrete, { aniso }] });
+    const wallMat = wettable(new THREE.MeshStandardMaterial({ map: concreteFallback, roughness: 0.85, color: 0xd9d9d6 }), 0.55); photo(wallMat, { map: [ASSETS.concrete, { aniso }] });
     add(merge(beltGeo), wallMat, { cast: true });
     const fence = add(merge(fenceGeo), fenceMat, { receive: false }); if (fence) { fence.renderOrder = 5; skipOverride(fence); }
     void beltMat;
@@ -418,6 +489,7 @@ export function buildWorld(track, renderer, qualityIn) {
     vpars: 'varying vec2 vWxz;', vmain: 'vWxz = (modelMatrix * vec4(position, 1.0)).xz;',
     fpars: 'varying vec2 vWxz;' + GROUND_F,
     color: 'diffuseColor.rgb = groundAlbedo(map, vWxz, diffuseColor.rgb);',
+    wet: [0.76, 0.62],
   });
   photo(terrainMat, { map: [ASSETS.grassDiff, { aniso }], normalMap: [ASSETS.grassNor, { aniso, srgb: false }] });
   let groundH;
@@ -470,7 +542,7 @@ export function buildWorld(track, renderer, qualityIn) {
     if (urban) {
       const m = patch(new THREE.MeshStandardMaterial({ map: concreteFallback, vertexColors: true, roughness: 0.9 }), 'uground', {
         vpars: 'varying vec2 vWxz;', vmain: 'vWxz = (modelMatrix * vec4(position, 1.0)).xz;', fpars: 'varying vec2 vWxz;',
-        color: 'diffuseColor.rgb *= 0.75 + 0.5 * texture2D(map, vWxz / 37.0).g;' });
+        color: 'diffuseColor.rgb *= 0.75 + 0.5 * texture2D(map, vWxz / 37.0).g;', wet: [0.55, 0.3] });
       photo(m, { map: [ASSETS.concrete, { aniso }] }); add(cg, m);
     } else add(cg, terrainMat);
   }
@@ -493,6 +565,7 @@ export function buildWorld(track, renderer, qualityIn) {
     };
     const cardG = mergeGeometries(quality.detail > 0 ? [quad(0), quad(Math.PI / 2)] : [quad(0.4)]);
     const uvPatch = (m) => { m.onBeforeCompile = (sh) => {
+      wxUniforms(sh);
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aTile;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvMapUv = aTile.xy + uv * aTile.zw;');
       // keep the soft card normals on both faces, and drop cards seen edge-on
       if (!m.isMeshDepthMaterial) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>',
@@ -569,6 +642,7 @@ export function buildWorld(track, renderer, qualityIn) {
     { const idx = wallG.index.array, keep = []; for (let f = 0; f < 6; f++) if (f !== 2 && f !== 3) for (let k = 0; k < 6; k++) keep.push(idx[f * 6 + k]); wallG.setIndex(keep); }
     const roofG = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
     const repPatch = (m) => { m.onBeforeCompile = (sh) => {
+      wxUniforms(sh);
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aRep;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvMapUv = uv * aRep; vRoughnessMapUv = vMapUv;');
     }; m.customProgramCacheKey = () => 'bldg'; return m; };
     const list = [[], []];
@@ -593,10 +667,10 @@ export function buildWorld(track, renderer, qualityIn) {
       }
     }
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pv = new THREE.Vector3(), sv = new THREE.Vector3(), cc = new THREE.Color();
-    const roofMat = new THREE.MeshStandardMaterial({ color: 0x8d6a55, roughness: 0.9 });
+    const roofMat = wettable(new THREE.MeshStandardMaterial({ color: 0x8d6a55, roughness: 0.9 }), 0.6);
     list.forEach((bl, k) => {
       if (!bl.length) return;
-      const f = mkFacade(31 + k, k === 0), mat = repPatch(new THREE.MeshStandardMaterial({ map: f.map, roughnessMap: f.rough, roughness: 1, metalness: 0 }));
+      const f = mkFacade(31 + k, k === 0), mat = wettable(repPatch(new THREE.MeshStandardMaterial({ map: f.map, roughnessMap: f.rough, roughness: 1, metalness: 0 })), 0.3);
       const g = wallG.clone(), rep = new Float32Array(bl.length * 2);
       const im = new THREE.InstancedMesh(g, mat, bl.length), roofs = new THREE.InstancedMesh(roofG, roofMat, bl.length);
       bl.forEach((b, j) => {
@@ -614,6 +688,37 @@ export function buildWorld(track, renderer, qualityIn) {
     const seaN = TX.asphaltTile(aniso).normalMap; seaN.repeat.set(900, 900);
     const sea = new THREE.Mesh(new THREE.PlaneGeometry(16000, 16000).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x0a2f48, roughness: 0.16, metalness: 0, normalMap: seaN, normalScale: new THREE.Vector2(0.35, 0.35) }));
     sea.position.set(track.x[0], zs, -track.y[0]); sea.receiveShadow = false; group.add(sea);
+  }
+
+  // ---- night: floodlights along the start straight (built the first time they are needed) ----
+  const nightMats = [];
+  let night = null;
+  function setNight(k) {
+    for (const [m, e] of nightMats) m.emissiveIntensity = e * k;
+    if (k <= 0.01) { if (night) night.visible = false; return; }
+    if (!night) {
+      night = new THREE.Group(); group.add(night);
+      const steelN = new THREE.MeshStandardMaterial({ color: 0x3a3d44, roughness: 0.5, metalness: 0.6 });
+      const headMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(9, 8.2, 6.4), fog: false });
+      const poles = [], heads = [];
+      const span = Math.min(Math.round(300 / track.ds), Math.floor(n / 4)), step = Math.max(1, Math.round(46 / track.ds));
+      let k2 = 0;
+      for (let q = -span; q <= span; q += step, k2++) {
+        const i = ((q % n) + n) % n, side = k2 % 2 ? 1 : -1, h = track.heading[i], off = side * (wallAt(side, i) + 1.6);
+        const X = track.x[i] - Math.sin(h) * off, Y = track.y[i] + Math.cos(h) * off, Z = track.z[i];
+        poles.push(new THREE.CylinderGeometry(0.09, 0.14, 11, 6).translate(X, Z + 5.5, -Y));
+        // the arm reaches in over the track
+        const ax = Math.sin(h) * side * 2.2, ay = -Math.cos(h) * side * 2.2;
+        heads.push(new THREE.BoxGeometry(0.9, 0.16, 0.9).rotateY(h).translate(X + ax, Z + 10.9, -(Y + ay)));
+        poles.push(new THREE.BoxGeometry(0.12, 0.12, 2.4).rotateY(h + Math.PI / 2).translate(X + ax * 0.5, Z + 11, -(Y + ay * 0.5)));
+        if (k2 % 3 === 0 && night.children.length < 4) {
+          const L = new THREE.PointLight(0xffe2b8, 450, 95, 2); L.position.set(X + ax * 2, Z + 10.5, -(Y + ay * 2)); night.add(L);
+        }
+      }
+      night.add(new THREE.Mesh(mergeGeometries(poles), steelN), new THREE.Mesh(mergeGeometries(heads), headMat));
+    }
+    night.visible = true;
+    for (const o of night.children) if (o.isLight) o.intensity = 450 * k;
   }
 
   // ---- start/finish furniture ---------------------------------------------------
@@ -634,12 +739,12 @@ export function buildWorld(track, renderer, qualityIn) {
     const c = document.createElement('canvas'); c.width = 256; c.height = 32; const ctx = c.getContext('2d');
     for (let i = 0; i < 16; i++) for (let j = 0; j < 2; j++) { ctx.fillStyle = (i + j) % 2 ? '#eee' : '#111'; ctx.fillRect(i * 16, j * 16, 16, 16); }
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-    const line = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2 * H0), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2 }));
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2 * H0), wettable(new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2 }), 0.8));
     tex.rotation = Math.PI / 2; tex.center.set(0.5, 0.5);
     line.rotation.x = -Math.PI / 2; line.position.set(0, z0 + 0.012, 0); line.receiveShadow = true;
     sf.add(line);
     // grid slots
-    const slotMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2 });
+    const slotMat = wettable(new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2 }), 0.8);
     for (let k = 0; k < 8; k++) {
       const s = track.n - 10 - k * 9, side = k % 2 ? -1 : 1, i = ((s % track.n) + track.n) % track.n;
       const bar = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 2.6), slotMat);
@@ -660,7 +765,7 @@ export function buildWorld(track, renderer, qualityIn) {
     sf.add(gantry);
 
     // grandstand (left of the straight) and pit building (right)
-    const concrete = new THREE.MeshStandardMaterial({ map: TX.concreteTexture(aniso), roughness: 0.9 });
+    const concrete = wettable(new THREE.MeshStandardMaterial({ map: TX.concreteTexture(aniso), roughness: 0.9 }), 0.55);
     const crowdC = document.createElement('canvas'); crowdC.width = 512; crowdC.height = 64; const cx = crowdC.getContext('2d');
     const rr = new RNG(77); cx.fillStyle = '#2b2f37'; cx.fillRect(0, 0, 512, 64);
     for (let i = 0; i < 5200; i++) { cx.fillStyle = `hsl(${rr.int(360)},${8 + rr.int(26)}%,${22 + rr.int(38)}%)`; cx.fillRect(rr.int(512), rr.int(64), 2, 3); }
@@ -683,7 +788,8 @@ export function buildWorld(track, renderer, qualityIn) {
 
     const pit = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(190, 6.5, 12), new THREE.MeshStandardMaterial({ color: 0xe8e8ea, roughness: 0.7 })); body.position.y = 3.25; pit.add(body);
-    const glass = new THREE.Mesh(new THREE.BoxGeometry(190.2, 1.6, 12.2), new THREE.MeshStandardMaterial({ color: 0x1b2a3a, roughness: 0.1, metalness: 0.8 })); glass.position.y = 5.0; pit.add(glass);
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0x1b2a3a, roughness: 0.1, metalness: 0.8, emissive: 0xffd9a0, emissiveIntensity: 0 }); nightMats.push([glassMat, 1.6]);
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(190.2, 1.6, 12.2), glassMat); glass.position.y = 5.0; pit.add(glass);
     const doorMat = new THREE.MeshStandardMaterial({ color: 0x30343a, roughness: 0.6 });
     for (let k = 0; k < 16; k++) { const d = new THREE.Mesh(new THREE.BoxGeometry(8, 3.4, 0.2), doorMat); d.position.set(-84 + k * 11.2, 1.7, -6.05); pit.add(d); }
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(190.3, 0.5, 12.3), new THREE.MeshStandardMaterial({ color: 0xd22030, roughness: 0.5 })); stripe.position.y = 6.2; pit.add(stripe);
@@ -735,5 +841,5 @@ export function buildWorld(track, renderer, qualityIn) {
     sunLight.position.copy(tgt).addScaledVector(sun, 320);
   }
 
-  return { group, sky, sun, sunLight, hemi, fogColor, terrain, brakeMarkers, updateSun };
+  return { group, sky, sun, sunLight, hemi, flash, fogColor, terrain, brakeMarkers, updateSun, setSky, setWet, setNight, gridYaw };
 }

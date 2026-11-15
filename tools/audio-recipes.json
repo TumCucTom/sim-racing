@@ -1,5 +1,5 @@
 {
- "_doc": "Input for tools/audio-build.py bank. One entry per bank (public/audio/<name>.wav). Sources are file names inside the reference directory (downloaded from Wikimedia Commons, see AUDIO.md; '.opus.mp3' / '.wav.mp3' names are Commons' own MP3 transcodes of the listed file). fmin/fmax bound the firing-frequency search in Hz; rpmMin/rpmMax restrict a source to part of the range; state forces on/off-load (otherwise decided by the rpm slope); firingMul 2 = the strongest comb in the recording is half the firing frequency.",
+ "_doc": "Input for tools/audio-build.py bank. qmin = how periodic a cycle must be to be stored; qn (default 0.5) = how periodic to count for the noise statistics (raise it where much of the recording is not the engine). One entry per bank (public/audio/<name>.wav). Sources are file names inside the reference directory (downloaded from Wikimedia Commons, see AUDIO.md; '.opus.mp3' / '.wav.mp3' names are Commons' own MP3 transcodes of the listed file). fmin/fmax bound the firing-frequency search in Hz; rpmMin/rpmMax restrict a source to part of the range; state forces on/off-load (otherwise decided by the rpm slope); firingMul 2 = the strongest comb in the recording is half the firing frequency.",
  "gt3": {
   "cyl": 6,
   "rpmLo": 1300,
@@ -54,6 +54,7 @@
   "bands": 12,
   "K": 8,
   "qmin": 0.7,
+  "qn": 0.7,
   "sources": [
    {
     "file": "Ford_Mustang_GT_(S550)_-_engine_and_exhaust_sound_(YouTube_2ceiDjGgpI8).opus.mp3",
@@ -79,6 +80,7 @@
   "bands": 11,
   "K": 8,
   "qmin": 0.7,
+  "qn": 0.7,
   "sources": [
    {
     "file": "Honda_Civic_Type_R_-_engine_and_exhaust_sound_(YouTube_qxhgUfPQ4Cc).opus.mp3",

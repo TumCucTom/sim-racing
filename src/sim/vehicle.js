@@ -12,6 +12,7 @@
 // No Math.random, no wall-clock: identical inputs give bit-identical outputs.
 
 import { project, surfaceAt, SURF } from './track.js';
+import { wetMu } from './wet.js';
 
 export const SIM_HZ = 300;
 export const SIM_DT = 1 / SIM_HZ;
@@ -92,6 +93,7 @@ export class Vehicle {
     this._proj = { idx: 0, s: 0, d: 0, frac: 0 };
     this.aids = { abs: s.abs, tc: s.tc, autoShift: true };
     this.gripScale = 1;   // track-condition multiplier (domain randomisation / weather)
+    this.wet = null;      // wet-track state (src/sim/wet.js); null = dry, exactly the original behaviour
     this.reset({ x: 0, y: 0, yaw: 0, speed: 0 });
   }
 
@@ -334,7 +336,8 @@ export class Vehicle {
       const dT = (this.tireT[i] - t.tOpt) / t.tWin;
       const gT = 1 - 0.10 * Math.min(1.6, dT * dT);
       const ls = clamp(1 - t.loadSens * (fzn - 1), 0.55, 1.12);
-      const mu = SURF_MU[sf] * gT * ls * this.gripScale;
+      let mu = SURF_MU[sf] * gT * ls * this.gripScale;
+      if (this.wet !== null) mu *= wetMu(this.wet, sf, this.s + xw * che, dW, trk.hw[this.idx], trk.lineD[this.idx]);
       const Br = B * rho;
       const at = Math.atan(Br);
       const gm = Math.sin(C * at);

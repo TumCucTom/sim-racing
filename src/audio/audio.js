@@ -9,6 +9,7 @@
 // the synth's physical engine model is heard instead.
 import { RaceAudioSynth, audioConfigFor, parseBank } from './synth.js';
 import { SURF } from '../sim/track.js';
+import { WeatherAudio } from './weather.js';   // [weather] rain, spray and thunder: see the three [weather] hooks below
 
 const SOUND_SPEED = 343;
 
@@ -52,7 +53,7 @@ export class AudioEngine {
   }
 
   // master bus: Doppler/distance for the trackside camera, a short reverb of
-  // barriers and grandstands, then a compressor so nothing clips or drowns.
+  // barriers and grandstands, then a gentle compressor so nothing clips or drowns.
   _buildBus() {
     const c = this.ctx;
     try {
@@ -61,11 +62,14 @@ export class AudioEngine {
       this.send = c.createGain(); this.send.gain.value = 0.1;
       this.verb = c.createConvolver(); this.verb.buffer = this._impulse();
       this.comp = c.createDynamicsCompressor();
-      this.comp.threshold.value = -16; this.comp.knee.value = 10; this.comp.ratio.value = 4; this.comp.attack.value = 0.004; this.comp.release.value = 0.18;
+      // gentle: 4:1 from -16 dB took about 4 dB off the 11 dB between full throttle and overrun
+      this.comp.threshold.value = -12; this.comp.knee.value = 8; this.comp.ratio.value = 3; this.comp.attack.value = 0.004; this.comp.release.value = 0.18;
       this.out = c.createGain(); this.out.gain.value = 1.0;
       this.node.connect(this.delay); this.delay.connect(this.dist);
       this.dist.connect(this.comp); this.dist.connect(this.send); this.send.connect(this.verb); this.verb.connect(this.comp);
       this.comp.connect(this.out); this.out.connect(c.destination);
+      // [weather] ambient weather layer joins the bus after the camera-dependent part
+      try { this.wx = new WeatherAudio(c, this.comp); this.wx.set(this.weather); } catch (e) { this.wx = null; }
     } catch (err) {
       this.delay = null; this.out = this.node;
       try { this.node.disconnect(); } catch (e) { /* not connected yet */ }
@@ -157,11 +161,13 @@ export class AudioEngine {
       speed: v, squeal, scrub, grass: grass * vf, gravel: gravel * vf, kerb: Math.min(1, kerb) * (v > 3 ? 1 : 0),
       brake: (car.brake || 0) * (v > 2 ? 1 : 0),
       boost: car.boost, wheelRps: v / (6.2832 * spec.wheelRadius), motor: tq,
+      gear: car.gear, limiter: car.limiterOn ? 1 : 0, shifting: car.shiftTimer > 0 ? 1 : 0,   // the synth shapes shifts and the limiter itself
       cockpit: cockpit ? 1 : 0, tv: tv ? 1 : 0,
       master: this.muted || paused ? 0 : this.volume,
     };
     if (this.hold) Object.assign(set, this.hold);                // test hook (tools/audio-page-check.mjs): pin parameters
     this._send({ set });
+    this.wx?.update(v, set.master, cockpit);   // [weather]
     // camera-dependent bus: a moving delay gives the trackside camera its Doppler shift
     if (this.delay) {
       const now = this.ctx.currentTime, d = tv && camDist > 0 ? Math.min(600, camDist) : 0;
@@ -173,5 +179,8 @@ export class AudioEngine {
       this.send.gain.setTargetAtTime(tv ? 0.3 : cockpit ? 0.03 : cam === 'far' ? 0.16 : 0.1, now, 0.1);
     }
   }
+  // [weather] conditions: { rain: 0..1, wet: 0..1 }; thunder arrives `delay` seconds after the flash
+  setWeather(w) { this.weather = w; this.wx?.set(w); }
+  thunder(delay, loud) { this.wx?.thunder(delay, loud); }
   toggleMute() { this.muted = !this.muted; return this.muted; }
 }

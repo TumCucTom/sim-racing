@@ -19,6 +19,10 @@ let chromium; try { ({ chromium } = require('playwright')); } catch (e) { ({ chr
 
 const argv = process.argv.slice(2); let url = 'http://127.0.0.1:5173/';
 const ui = argv.indexOf('--url'); if (ui >= 0) { url = argv[ui + 1]; argv.splice(ui, 2); }
+// --wav <dir>: also save the master-bus capture of the AI drive (mono, 44.1 kHz) as <dir>/<car>-page.wav
+let wavDir = null; const wi = argv.indexOf('--wav'); if (wi >= 0) { wavDir = argv[wi + 1]; argv.splice(wi, 2); }
+const { writeFileSync, mkdirSync } = await import('node:fs');
+function saveWav(file, x) { const b = Buffer.alloc(44 + x.length * 2); b.write('RIFF', 0); b.writeUInt32LE(36 + x.length * 2, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(SR, 24); b.writeUInt32LE(SR * 2, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(x.length * 2, 40); for (let i = 0; i < x.length; i++) b.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(x[i] * 32767))), 44 + i * 2); writeFileSync(file, b); }
 const cars = argv.length ? argv : Object.keys(CARS);
 
 const TAP = `(async () => { const a = window.__game.audio, c = a.ctx;
@@ -55,7 +59,7 @@ for (const id of cars) {
   await page.evaluate(TAP);
   let line = `${id.padEnd(9)} mode=${st.mode} voice=${st.voice} sr=${st.sr}`;
   if (ref) {
-    const quiet = { speed: 0, squeal: 0, scrub: 0, grass: 0, gravel: 0, kerb: 0, brake: 0, boost: 0, wheelRps: 0, cockpit: 0, tv: 0, master: 0.8 };
+    const quiet = { speed: 0, squeal: 0, scrub: 0, grass: 0, gravel: 0, kerb: 0, brake: 0, boost: 0, wheelRps: 0, cockpit: 0, tv: 0, master: 0.8, gear: 0, limiter: 0, shifting: 0 };
     const caps = new Map();
     for (const b of ref.bands) {
       const on = b.state === 'on', rpm = b.rpm / (ref.rpmScale || 1);
@@ -72,10 +76,14 @@ for (const id of cars) {
   } else line += ' | no reference recording (synthesis only)';
   // free driving: level and clipping of the real mix
   await page.evaluate(() => { window.__tapOn(); });
-  await sleep(8000);
+  await sleep(12000);
   const x = decode(await page.evaluate(GRAB), st.sr);
   let pk = 0, e = 0, clip = 0; for (const v of x) { const a = Math.abs(v); if (a > pk) pk = a; if (a >= 0.999) clip++; e += v * v; }
-  line += ` | drive 8 s: rms ${(20 * Math.log10(Math.sqrt(e / x.length) + 1e-9)).toFixed(1)} dBFS peak ${pk.toFixed(2)} clipped ${clip} | errors ${errors.length}`;
+  // dynamics that survive the bus compressor: spread of the 50 ms level (95th - 10th percentile)
+  const lv = []; for (let o = 0; o + 2205 <= x.length; o += 2205) { let q = 0; for (let i = o; i < o + 2205; i++) q += x[i] * x[i]; lv.push(10 * Math.log10(q / 2205 + 1e-12)); } lv.sort((a, b) => a - b);
+  const range = lv.length ? lv[Math.floor(lv.length * 0.95)] - lv[Math.floor(lv.length * 0.1)] : 0;
+  if (wavDir) { mkdirSync(wavDir, { recursive: true }); saveWav(`${wavDir}/${id}-page.wav`, x); }
+  line += ` | drive 12 s: rms ${(20 * Math.log10(Math.sqrt(e / x.length) + 1e-9)).toFixed(1)} dBFS peak ${pk.toFixed(2)} clipped ${clip} level range ${range.toFixed(1)} dB | errors ${errors.length}`;
   console.log(line); for (const er of errors.slice(0, 3)) console.log('   ', er);
   await page.close();
   if (cfg.bankName) {

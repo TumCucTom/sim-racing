@@ -33,6 +33,9 @@ export class Sim {
     this._armGates(s);
   }
 
+  // Wet track: a state from src/sim/wet.js, or null for dry (the default). Survives reset().
+  setWet(wet) { this.car.wet = wet || null; }
+
   _armGates(s) {
     const t = this.track;
     const sm = ((s % t.length) + t.length) % t.length;

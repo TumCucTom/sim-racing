@@ -164,6 +164,26 @@ def best_shift(g, tpl):
     c = np.fft.irfft(np.fft.rfft(g[:L]) * np.conj(np.fft.rfft(tpl)), L)
     s = int(np.argmax(c)); return s, c[s] / (np.linalg.norm(g[:L]) * np.linalg.norm(tpl) + 1e-12)
 
+# ------------------------------------------------- harmonic + noise model ----
+QN = 0.5            # cycles at least this periodic count as "engine" for the noise statistics (the stored cycles need qmin)
+NB3 = 27            # noise spectrum: 1/3-octave bands 40 Hz .. 16 kHz + (edges 40 * 2^(i/3))
+NENV = 32           # noise envelope: points per engine cycle
+
+def noise_edges():
+    return 40.0 * 2 ** (np.arange(NB3 + 1) / 3.0)
+
+def res_lowpass(nbin, per_cycle, cyl):
+    """Gain per FFT bin that keeps the cycle-to-cycle variation of the low engine orders (combustion
+    variation: coherent, cycle-locked) and removes it above (turbulence: replaced by fresh noise at run
+    time). Fades between 2.5x and 5x the firing order. per_cycle = FFT bins per cycle harmonic."""
+    k = np.arange(nbin) / per_cycle
+    return np.clip(0.5 + 0.5 * np.cos(np.pi * (k - 2.5 * cyl) / (2.5 * cyl)), 0, 1) * (k < 5 * cyl) + (k < 2.5 * cyl) * 0
+
+def fft_gain(x, gain_of_bin):
+    """Zero-phase filtering of a chunk through a real gain per rfft bin (edges tapered; cut the middle afterwards)."""
+    n = len(x); w = np.ones(n); e = max(8, n // 10); r = 0.5 - 0.5 * np.cos(np.pi * np.arange(e) / e); w[:e] = r; w[-e:] = r[::-1]
+    return np.fft.irfft(np.fft.rfft(x * w) * gain_of_bin(n // 2 + 1), n)
+
 def build_bank(car, rc, refdir, outdir, refout, verbose=False):
     cyl = rc['cyl']; K = rc.get('K', 8); qmin = rc.get('qmin', 0.55)
     lo, hi, nb = rc['rpmLo'], rc['rpmHi'], rc['bands']
@@ -180,7 +200,7 @@ def build_bank(car, rc, refdir, outdir, refout, verbose=False):
             b = int(np.searchsorted(edges, c['rpm'])); L = Ls[b]
             g = extract(trk, c['k'], L)
             q = ncorr(g[:L], g[L:2 * L])
-            if q < c['src'].get('q', qmin): continue          # not periodic enough: noise, crowd, limiter, mistracking
+            if q < min(rc.get('qn', QN), c['src'].get('q', qmin)): continue  # not periodic enough: noise, crowd, limiter, mistracking
             g = g.astype(np.float32)
             force = c['src'].get('state')
             if force is not None: sts = [1] if force == 'on' else [0] if force == 'off' else [0, 1]
@@ -188,7 +208,7 @@ def build_bank(car, rc, refdir, outdir, refout, verbose=False):
             elif c['slope'] < dn: sts = [0]
             else: sts = [0, 1] if c['rpm'] < rc.get('idleBelow', lo * 1.25) else ([1] if c['src'].get('steady', 'on') == 'on' else [0])
             for st in sts: pools[(b, st)].append(dict(g=g, q=q, ti=ti, **c))
-    meta = dict(car=car, sr=SR, cyl=cyl, ov=OV, rpmScale=rc.get('rpmScale', 1.0), bands=[])
+    meta = dict(car=car, sr=SR, cyl=cyl, ov=OV, v=2, rpmScale=rc.get('rpmScale', 1.0), bands=[])
     pcm = []; pos = 0; prev_tpl = None; summary = []
     ref = dict(car=car, cyl=cyl, rpmScale=rc.get('rpmScale', 1.0), source=[s_['file'] for s_ in rc['sources']], bands=[])
     for b in range(nb):
@@ -214,7 +234,20 @@ def build_bank(car, rc, refdir, outdir, refout, verbose=False):
                 pt = np.interp(np.arange(L) / L, np.arange(len(prev_tpl)) / len(prev_tpl), prev_tpl, period=1.0)
                 s, _ = best_shift(tpl, pt); tpl = np.roll(tpl, -s)
             offs = []
-            raw = [c['g'][best_shift(c['g'], tpl)[0]:][:int(round(L * (1 + OV)))] for c in sel]
+            # ---- harmonic part: mean cycle M of the candidates, aligned to the template ----
+            sh = [best_shift(c['g'], tpl)[0] for c in cand]
+            M = np.mean([c['g'][s_:s_ + L] / (np.sqrt(np.mean(c['g'][s_:s_ + L] ** 2)) + 1e-12) for c, s_ in zip(cand, sh)], axis=0)
+            # ---- stored cycles = M + the low-order part of each real cycle's deviation from M ----
+            GL = int(round(L * (1 + OV))); mg = L // 2; chunks = []; lowres = np.zeros(L // 2 + 1)
+            for c in sel:
+                s_ = best_shift(c['g'], tpl)[0]
+                X = extract(tracks[c['ti']], c['k'] - 1, L, 4.5)[L + s_ - mg: L + s_ + GL + mg]
+                X = X / (np.sqrt(np.mean(X[mg:mg + L] ** 2)) + 1e-12)
+                Mt = np.resize(np.roll(M, mg), len(X))                           # M tiled, in phase with the chunk
+                r = fft_gain(X - Mt, lambda nb_, n_=len(X): res_lowpass(nb_, n_ / L, cyl))
+                chunks.append(Mt + r)
+                lowres += np.abs(np.fft.rfft(r[mg:mg + L])) ** 2 / L ** 2 / len(sel)
+            raw = [ch[mg:mg + GL] for ch in chunks]
             rms = np.sqrt(np.mean([np.mean(g[:L] ** 2) for g in raw]))
             for g in raw:
                 r = np.sqrt(np.mean(g[:L] ** 2)) / rms
@@ -222,6 +255,23 @@ def build_bank(car, rc, refdir, outdir, refout, verbose=False):
                 offs.append(pos); pcm.append(g); pos += len(g)
             lv = float(np.median([c['lvl'] for c in good]))
             entry[key] = dict(at=offs, n=len(offs), lvl=lv, q=float(np.mean([c['q'] for c in sel])))
+            # ---- stochastic part: what a TYPICAL good cycle has that the next cycle does not (the difference
+            # of two consecutive cycles cancels everything periodic), minus what the stored cycles keep ----
+            ne = noise_edges(); nacc = np.zeros(NB3); eacc = np.zeros(NENV); nn = 0
+            hp = 1 - res_lowpass(L // 2 + 1, 1.0, cyl) ** 2
+            typ = sorted([c for c in pools[(b, st)] if c['q'] >= min(rc.get('qn', QN), c['src'].get('q', qmin))], key=lambda c: -c['q'])
+            for c in typ[::max(1, len(typ) // 160)]:
+                g = c['g']; d = (g[:L] - g[L:2 * L]) / np.sqrt(2.0); pw = np.mean(g[:2 * L] ** 2) + 1e-12
+                D = np.fft.rfft(d); P = np.abs(D) ** 2 / L ** 2 * 2 / pw; P[0] = 0
+                Pl = np.maximum(0.0, P - 2 * lowres) * (1 - hp) + P * hp          # do not double what the stored cycles carry
+                f = np.arange(len(P)) * c['rpm'] / 120.0
+                idx = np.searchsorted(ne, f) - 1; ok = (idx >= 0) & (idx < NB3)
+                nacc += np.bincount(idx[ok], weights=Pl[ok], minlength=NB3)
+                dh = np.roll(np.fft.irfft(D * np.sqrt(hp), L), -best_shift(g, tpl)[0])
+                eacc += (dh[:(L // NENV) * NENV] ** 2).reshape(NENV, -1).mean(1) / pw; nn += 1
+            env = eacc / (eacc.mean() + 1e-20); env = np.clip((np.roll(env, 1) + 2 * env + np.roll(env, -1)) / 4, 0.1, 5.0)
+            entry[key]['nz'] = [round(float(v), 2) for v in 10 * np.log10(nacc / nn + 1e-9)]
+            entry[key]['ne'] = [round(float(v), 2) for v in env / env.mean()]
             if key == 'on' or entry['on'] is None: prev_tpl = tpl
             # reference features from cycles that did NOT go into the bank (hold-out) where enough exist
             used = {(c['ti'], c['k']) for c in sel}
