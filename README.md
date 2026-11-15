@@ -146,25 +146,36 @@ high quality. Seven of the eight cars use detailed third-party glTF models
 [ASSETS.md](ASSETS.md).
 
 ### Audio
-The engine voice is built the way the sound is physically made: each cylinder
-fires once per 720° at its own crank offset, each firing is an exhaust pulse,
-pulses are collected per bank and coloured by that bank's pipe resonances.
-Firing order therefore shapes the timbre as it does on a real engine — the
-tests check the spectra:
+Every combustion car's engine is **played from a real recording** of that
+engine type (Wikimedia Commons, CC BY / CC BY-SA; sources and authors in
+[AUDIO.md](AUDIO.md)). The recordings are rev blips and pull-aways rather than
+steady loops, so `tools/audio-build.py` tracks the firing frequency, cuts each
+recording into single 720° engine cycles, sorts them by rpm and by on/off
+load, and the AudioWorklet replays cycles at the simulated crank phase: pitch
+follows rpm exactly, and a different real cycle each revolution keeps the
+natural roughness.
 
-| Car | Layout | Dominant order (measured) |
+| Car | Recording used | Bands with real cycles (rpm) |
 |---|---|---|
-| Vanta RS | inline-4 turbo | 2×, 4×, 6× crank; turbo whistle + blow-off |
-| Brawler GT | cross-plane V8 | 4× with strong 1×, 2×, 3× sub-orders (the burble) |
-| Arrow GT3-R | flat-6 | 3× and 6× with some 1.5× (separate banks), straight-cut gear whine |
-| FX-10 | V10 | 5× crank — 1.5 kHz fundamental at 18,000 rpm |
-| Volt-R | electric | motor orders tracking motor speed, no combustion |
-| Ferrari 458 | flat-plane V8 | 4× and 8× crank, no sub-orders — a wail, not a burble |
+| Arrow GT3-R | Porsche 911 GT3 (991), flat-six | 1300–9200, all |
+| Ferrari 458 | 458 Speciale + 458 Italia | 740, 1840–9100 |
+| Brawler GT | Ford Mustang GT 5.0 + Mach 1 | 925–4000, 6080, 7500 |
+| Vanta RS | Honda Civic Type R | 1300, 2460–7100 |
+| Mini Cooper S | Mini Countryman / Clubman (same 2.0 turbo family) | 800–6600, all |
+| Aurelia LMH | Ferrari 296 (120° twin-turbo V6) + Nissan GT-R | 3030–4290 and 6075 only; rest pitch-shifted |
+| FX-10 | F1 V10s (Red Bull RB1 2005, STR1 2006) + Porsche Carrera GT below ~9000 | 14,300 and 16,500; 4000 and 4600 |
+| Volt-R | none found — synthesised motor and inverter whine | — |
 
-Plus tyre squeal, scrub, kerb rumble, wind, loose-surface noise, impacts and
-shift clunks. I could verify the audio *structurally* (spectral tests, running
-worklet in headless Chromium) but could not listen to it in this environment,
-so the mix levels are untested by ear.
+Measured against the source recordings at matched rpm (log-spectral distance,
+1/6-octave bands): the previous pure synthesiser was 11–16 dB away and almost
+perfectly periodic; the recorded-cycle engine is 2.6–6.4 dB away with
+real cycle-to-cycle variation, and about 8 dB from *different* cars of the same
+engine type (roughly the car-to-car spread). Turbo whistle and blow-off, gear
+whine, overrun pops, tyre squeal and scrub, wind, kerbs, grass and gravel are
+synthesised layers; exterior, bonnet and trackside (Doppler) cameras have
+separate mixes. **Nobody has listened to this**: this environment has no audio
+output, so everything was tuned by spectra and level meters. AUDIO.md lists
+what to listen for first and the known weak spots.
 
 ## Reinforcement learning
 
@@ -191,7 +202,7 @@ The AI driver is trained with PPO on the **same** `src/sim` code the game runs.
 
 ![Benchmark](docs/benchmark-gt3.svg)
 
-Why it is faster: the baseline follows the centre line and brakes in a straight line; the policy learned to use the full width, trail-brake and carry more apex speed. In the game, press **I** to let it drive, **G** to race its ghost, or pick "AI lap" in the telemetry panel to overlay its traces on yours.
+Why it is faster: the baseline follows the centre line and brakes in a straight line; the racing-line driver added later (64.96 s/lap, 20/20 clean on the same seeds) closes two thirds of the gap, and the policy is still 3 % quicker than that. It learned to use the full width, trail-brake and carry more apex speed. In the game, press **I** to let it drive, **G** to race its ghost, or pick "AI lap" in the telemetry panel to overlay its traces on yours.
 
 Two things that did not work first (details in the changelog): (1) the initial runs never completed a lap — agents flew off at the one significant right-hander until the policy was made mirror-symmetric; (2) the first successful policies set 62–64 s flying laps but **crashed on lap 3 of every stint** with tyres at 120–160 °C, because 60-second training episodes never showed them overheated tyres. Tyre temperature was added to the observations and to the start-state randomisation, and selection moved from one hot lap to multi-lap stints.
 
@@ -212,21 +223,40 @@ Measured in this repository's CI-like container (4 vCPU, **no GPU**: Chromium re
 | Test suite | pass 16 fail 0  |
 
 ## Known limitations
-- Visuals are well short of a commercial sim such as Assetto Corsa. The 458
-  uses a detailed third-party model; the other five car bodies are procedural
-  lofts (recognisable silhouettes, not photoreal) and all scenery is low-poly
-  and generated in code. Closing that gap needs authored 3D assets.
-- Real circuits: accurate layout/width only (see above); the in-game AI on
-  them is the conservative centre-line baseline, so its lap times are well off
-  real-world pace.
-- The RL policy is trained for one car (GT3) on one circuit (Ravenscar).
-- Single car on track (ghosts don't collide); no damage model.
-- Audio mix not validated by ear.
+- **Visuals** are roughly a decade behind a current commercial sim, not at
+  Assetto Corsa Competizione level. Lighting, surfaces and seven car models
+  are photographic or authored assets; trackside scenery is generated, trees
+  are photo cards, and no venue is a replica.
+- **Car models do not all match the car simulated.** Only openly licensed
+  models whose authorship looked genuine were used: the GT3 is a road 911
+  (no wing or race livery), the hypercar is a 2012 Audi R18 rather than a
+  499P-style car, the muscle coupe is a 1967 fastback, the formula car and R18
+  carry their authors' liveries with real sponsor logos. See ASSETS.md.
+- **Audio** has never been heard by its developers (see above); the hypercar
+  and formula banks are thin and rely on pitch-shifting, and the recordings are
+  road cars free-revving, not race cars on load.
+- **Circuits**: real layouts and (mostly) real elevation, generated
+  surroundings. Monaco has no tunnel or harbour; Silverstone's elevation is
+  approximated; width at the Nordschleife and Monaco is estimated.
+- **AI pace** on the real circuits is 10–15 % off real lap records.
+- The RL policy is trained for one car (GT3) on one circuit (Ravenscar); every
+  other combination uses the racing-line driver.
+- No suspension or vertical dynamics, tyre wear, fuel load or damage; single
+  car on track (ghosts don't collide).
+- Frame rates below were measured with software rendering; real-GPU
+  performance is unmeasured.
 
 ## Credits
-Real-circuit geometry: [TUMFTM racetrack-database](https://github.com/TUMFTM/racetrack-database)
-(LGPL-3.0). Ferrari 458 Italia 3D model by
-[vicent091036](https://sketchfab.com/models/57bf6cc56931426e87494f554df1dab6) (CC BY), via the
-three.js examples. Rendering: three.js. Prop physics: cannon-es. The other five car names are
-fictional. This is a non-commercial technical project and is not affiliated with or endorsed by
-Ferrari or the circuit owners.
+- Circuit geometry: [TUMFTM racetrack-database](https://github.com/TUMFTM/racetrack-database)
+  (LGPL-3.0); Nordschleife and Monaco © OpenStreetMap contributors (ODbL).
+- Elevation: EU-DEM (Copernicus) and SRTM (NASA) via opentopodata.org.
+- Sky, lighting and surface scans: Poly Haven and ambientCG (CC0).
+- Car models (CC BY / CC BY-SA) and engine recordings (Wikimedia Commons,
+  CC BY / CC BY-SA): full per-file credits in [ASSETS.md](ASSETS.md) and
+  [AUDIO.md](AUDIO.md). The 911 model and the 458, hypercar and formula audio
+  banks derive from ShareAlike works and are redistributed under the same terms.
+- Rendering: three.js. Prop physics: cannon-es.
+
+Fictional car names are used except for the Ferrari 458 and Mini Cooper S.
+This is a non-commercial technical project, not affiliated with or endorsed
+by any car maker, sponsor or circuit owner whose name or logo appears.

@@ -3,6 +3,36 @@
 All notable changes, newest first. Numbers quoted here were measured by the
 tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
 
+## 0.7.0 — racing line, two more circuits, two more cars, real models and recorded engines
+- **AI drives a racing line and trail-brakes.** Minimum-curvature line computed
+  for every circuit; a line-following driver with a curvature speed profile
+  replaces the centre-line driver for every car/circuit (the RL policy still
+  drives the GT3 at Ravenscar). GT3 at Ravenscar: 69.19 -> 64.96 s/lap over
+  20 fixed-seed stints (RL: 62.98). Share of braking time above 70 % of
+  cornering grip: 8 % -> 42 % (RL 60 %). **L** draws the line on the road.
+- **Nürburgring Nordschleife** (20.75 km, OpenStreetMap centreline, EU-DEM
+  elevation, 288 m relief) and **Monaco** (3.31 km, barriers at the kerb).
+  Spa and Monza elevation replaced by terrain-model data (Spa: 106 m relief).
+- **Aurelia LMH** (499P-class Le Mans Hypercar) and a stock **Mini Cooper S**;
+  both pass their real-world reference envelopes (`npm run validate`).
+  `tools/ai-laps.js`: all 8 cars complete clean flying laps on all 6 circuits.
+- **Visual overhaul:** photographed HDR sky and image-based lighting, scanned
+  PBR road/grass/gravel, rubbered racing line, tree-line cards, real armco and
+  catch-fence geometry, per-circuit themes, AgX tone mapping.
+- **Car models:** six more cars use detailed openly licensed glTF models
+  (seven of eight in total). Many obvious matches on model-sharing sites were
+  rejected as probable game rips; as a result some models are not the exact car
+  simulated (see README limitations).
+- **Engine audio from real recordings** for all seven combustion cars,
+  replayed one engine cycle at a time in phase with the simulated crank.
+  Spectral distance to the source recordings fell from 11–16 dB to 2.6–6.4 dB.
+  Fixed a bug that could silence the engine permanently if audio started
+  before the first physics step (a NaN parameter).
+- Failed along the way: the GT3 hit the wall at Spa once real elevation went
+  in (line tuning redone per car); the first Monaco import was not a closed
+  loop (rebuilt from the node graph); software-rendered performance numbers
+  taken while other jobs were running were discarded and re-measured.
+
 ## 0.6.0 — graphics pass, a real car
 - Added the Ferrari 458 Italia as a sixth car: specification from published
   figures (570 PS, 7-speed DCT ratios, 42/58 weight split), rendered with a
