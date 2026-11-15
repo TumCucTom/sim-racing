@@ -13,7 +13,7 @@ const p = await b.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleF
 const errs = [];
 p.on('console', m => { if (m.type() === 'error') errs.push(`[${m.type()}] ${m.text()}`); });
 p.on('pageerror', e => errs.push('[pageerror] ' + e.message));
-await p.goto(`http://127.0.0.1:${process.env.PORT || 5173}/?autostart&track=${track}&car=gt3&q=medium${extra ? '&' + extra : ''}`);
+await p.goto(`http://127.0.0.1:${process.env.PORT || 5173}/?autostart&track=${track}&car=gt3&q=medium${extra ? '&' + extra : ''}`, { timeout: 240000, waitUntil: 'domcontentloaded' });
 await p.waitForFunction(() => window.__game && window.__game.sim, null, { timeout: 120000 });
 await p.waitForTimeout(2500);
 const info = await p.evaluate(([s, view]) => {
