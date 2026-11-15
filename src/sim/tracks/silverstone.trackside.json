@@ -1,0 +1,22 @@
+{
+  "note": "Gravel beds and barrier lines: OpenStreetMap survey (trackside.osm in silverstone.json). Everything below is hand-authored from memory of the circuit (2020s Grand Prix layout), not surveyed: where the paved run-off is, kerb colours and aprons. Kerb positions are rule-made (apex inside, exit outside).",
+  "style": { "kerb": "red-white" },
+  "corners": [
+    { "n": "Abbey", "s": [378, 448], "src": "memory", "r": [["L", 340, 600, "asphalt", null, { "keep": true }]], "a": [["L", 430, 530, "astro", 1.2]] },
+    { "n": "Farm", "s": [586, 653], "src": "memory", "r": [["R", 560, 860, "asphalt", null, { "keep": true }]] },
+    { "n": "Village", "s": [858, 929], "src": "memory", "kc": [[850, 940, "blue-white"]], "r": [["L", 800, 960, "asphalt", null, { "keep": true }]] },
+    { "n": "The Loop", "s": [1009, 1102], "src": "memory", "kc": [[1000, 1130, "blue-white"]], "r": [["R", 960, 1120, "asphalt", null, { "keep": true }]] },
+    { "n": "Aintree", "s": [1213, 1265], "src": "memory", "r": [["R", 1200, 1440, "asphalt", null, { "keep": true }]] },
+    { "n": "Brooklands", "s": [1899, 2041], "src": "memory", "r": [["R", 1830, 2090, "asphalt", null, { "keep": true }]] },
+    { "n": "Luffield", "s": [2095, 2298], "src": "memory", "a": [["L", 2290, 2360, "astro", 1.0]] },
+    { "n": "Woodcote", "s": [2438, 2558], "src": "memory", "r": [["L", 2420, 2700, "asphalt", null, { "keep": true }]] },
+    { "n": "Copse", "s": [3019, 3158], "src": "memory", "r": [["L", 2980, 3400, "asphalt", null, { "keep": true }]], "a": [["L", 3140, 3260, "astro", 1.2]] },
+    { "n": "Maggotts", "s": [3596, 3756], "src": "memory", "r": [["L", 3690, 3800, "asphalt", null, { "keep": true }]] },
+    { "n": "Becketts", "s": [3816, 4080], "src": "memory", "r": [["R", 3800, 3960, "asphalt", null, { "keep": true }], ["L", 3950, 4110, "asphalt", null, { "keep": true }]], "a": [["R", 3930, 3990, "paint", 1.5], ["L", 4060, 4120, "paint", 1.5]] },
+    { "n": "Chapel", "s": [4155, 4222], "src": "memory", "r": [["R", 4150, 4300, "asphalt", null, { "keep": true }]], "a": [["R", 4215, 4290, "astro", 1.2]] },
+    { "n": "Stowe", "s": [4969, 5158], "src": "memory", "r": [["L", 4900, 5200, "asphalt", null, { "keep": true }]], "a": [["L", 5150, 5250, "astro", 1.2]] },
+    { "n": "Vale", "s": [5498, 5552], "src": "memory", "r": [["R", 5420, 5560, "asphalt", null, { "keep": true }]] },
+    { "n": "Club", "s": [5558, 5805], "src": "memory", "a": [["L", 5790, 5870, "astro", 1.2]] },
+    { "n": "Hamilton Straight (pit wall)", "src": "memory", "r": [["R", 5850, 260, "wall", null, { "barrier": "wall", "keep": true }]] }
+  ]
+}

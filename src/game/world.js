@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { nearestIndexGlobal } from '../sim/track.js';
+import { nearestIndexGlobal, SX, BAR, KERB_COLOURS } from '../sim/track.js';
 import { RNG } from '../sim/rng.js';
 import * as TX from './textures.js';
 import { ASSETS, loadTexture, applyTextures } from './assets.js';
@@ -103,6 +103,9 @@ export function skipOverride(mesh) {
   return mesh;
 }
 const ROAD_V = { vpars: 'attribute vec4 aRoad; attribute float aRub; varying vec4 vRoad; varying float vRub; varying vec3 vWPos;', vmain: 'vRoad = aRoad; vRub = aRub; vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;' };
+// the same plus the per-sample pair from strip()'s `aux` (flat: it carries ids as well as distances)
+const AUX_V = { vpars: ROAD_V.vpars + ' attribute vec2 aAux; varying vec2 vAux; flat varying vec2 vAuxF;', vmain: ROAD_V.vmain + ' vAux = aAux; vAuxF = aAux;' };
+const AUX_F = 'varying vec4 vRoad; varying float vRub; varying vec2 vAux; flat varying vec2 vAuxF;';
 // Wet ground after lighting: the mirrored car (rendered by weather.js) shows in the water film.
 const WET_REFLECT = `
   if (uReflOn > 0.5 && gWet > 0.02) {
@@ -138,8 +141,9 @@ function sampleList(track, minM, maxM, sag) {
 
 // Generic swept strip. `prof(i, out)` appends [lateral offset, absolute height, u] triples for
 // track sample i (same count every sample). Emits road-space attributes for the shaders.
-function strip(track, ks, prof, { mask = null, vScale = 1, flip = false, uMetric = 0, color = null, rub = null } = {}) {
-  const n = track.n, pos = [], uv = [], road = [], rb = [], col = [], idx = [], pts = [];
+// `aux(i)` returns two numbers per sample, passed to the shaders as `aAux`.
+function strip(track, ks, prof, { mask = null, vScale = 1, flip = false, uMetric = 0, color = null, rub = null, aux = null } = {}) {
+  const n = track.n, pos = [], uv = [], road = [], rb = [], col = [], idx = [], pts = [], ax = [];
   let prev = -1, P = 0;
   for (const k of ks) {
     const i = k % n;
@@ -153,6 +157,7 @@ function strip(track, ks, prof, { mask = null, vScale = 1, flip = false, uMetric
       uv.push(uMetric ? off / uMetric : pts[p * 3 + 2], s / vScale);
       road.push(off, s, track.lineD ? track.lineD[i] : 0, track.hw[i]); rb.push(rub ? rub[i] : 0);
       if (color) color(X, Y, col);
+      if (aux) { const a = aux(i); ax.push(a[0], a[1]); }
     }
     if (prev >= 0) for (let p = 0; p < P - 1; p++) {
       const a = prev + p, b = base + p;
@@ -167,21 +172,31 @@ function strip(track, ks, prof, { mask = null, vScale = 1, flip = false, uMetric
   g.setAttribute('aRoad', new THREE.Float32BufferAttribute(road, 4));
   g.setAttribute('aRub', new THREE.Float32BufferAttribute(rb, 1));
   if (color) g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('aAux', new THREE.Float32BufferAttribute(aux ? ax : new Float32Array(pos.length / 3 * 2), 2));
   g.setIndex(idx); g.computeVertexNormals();
   return g;
 }
 
-const FOREST_BIAS = { nordschleife: 0.32, spa: 0.12, monza: 0.16, silverstone: -0.14, ravenscar: 0.02 };
+const FOREST_BIAS = { nordschleife: 0.32, spa: 0.12, monza: 0.16, silverstone: -0.14, ravenscar: 0.02, laguna: -0.2 };
+// Landscape themes (track.theme). `dry`: sun-bleached Californian hills, golden grass, scattered oaks.
+const THEMES = {
+  default: { ground: [0.8, 1.0, 0.72], trees: 1, conifer: null, crop: 1 },
+  dry: { ground: [1.5, 1.22, 0.6], trees: 0.3, conifer: false, crop: 0, verge: [1.25, 1.12, 0.62] },
+};
 
 export function buildWorld(track, renderer, qualityIn) {
   const quality = { detail: 1, trees: 700, treeCap: 9000, shadowRange: 95, ...qualityIn };
   const group = new THREE.Group();
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const urban = track.id === 'monaco' || !!track.urban;
+  const theme = THEMES[track.theme] || THEMES.default;
+  const SD = { 1: { kerb: track.kerbL, col: track.kerbColL, apron: track.apronL, apronW: track.apronWL, ro: track.roL, roA: track.roAL, gA: track.gAL, gB: track.gBL, wall: track.wallL, bar: track.barL, edge: track.edgeL },
+    '-1': { kerb: track.kerbR, col: track.kerbColR, apron: track.apronR, apronW: track.apronWR, ro: track.roR, roA: track.roAR, gA: track.gAR, gB: track.gBR, wall: track.wallR, bar: track.barR, edge: track.edgeR } };
   const terrain = makeTerrainFn(track, { sea: urban });
   const HW = track.halfWidth, KW = track.kerbWidth, hwA = track.hw, n = track.n;
   const wallAt = (side, i) => (side > 0 ? track.wallL[i] : track.wallR[i]);
-  const gravelAt = (side, i) => !urban && (side > 0 ? track.gravelL[i] : track.gravelR[i]);
+  const gravelAt = (side, i) => SD[side].gB[i] > 0;
+  const barAt = (side, i) => SD[side].bar[i];
   const add = (geo, mat, { cast = false, receive = true } = {}) => { if (!geo) return null; const m = new THREE.Mesh(geo, mat); m.castShadow = cast && quality.shadows; m.receiveShadow = receive; group.add(m); return m; };
   const photo = (mat, slots) => { applyTextures(mat, slots); return mat; };
 
@@ -318,22 +333,28 @@ export function buildWorld(track, renderer, qualityIn) {
     add(g, asphaltMat);
   }
 
-  // ---- kerbs: painted concrete blocks, striped in the shader so the edges stay crisp ----
   const concreteFallback = TX.concreteTexture(aniso);
+  // ---- kerbs: painted concrete blocks, striped in the shader so the edges stay crisp ----
+  // Two types (flat painted kerb, taller serrated rumble kerb) in the circuit's colours; behind
+  // them aprons of astro-turf or green paint, and yellow sausage kerbs where the real corner has them.
   {
+    const kA = KERB_COLOURS.map(c => new THREE.Vector3(...c[1])), kB = KERB_COLOURS.map(c => new THREE.Vector3(...c[2]));
     const kerbMat = patch(new THREE.MeshStandardMaterial({ map: concreteFallback, roughness: 0.62 }), 'kerb', {
-      ...ROAD_V, fpars: 'varying vec4 vRoad; varying float vRub;',
+      ...AUX_V, uniforms: { uKA: { value: kA }, uKB: { value: kB } }, fpars: AUX_F + ` uniform vec3 uKA[${kA.length}]; uniform vec3 uKB[${kB.length}];`,
       color: `{
         vec2 m = vRoad.xy; float c = lum(diffuseColor.rgb);
-        float q = m.y / 1.6, f = fract(q), aa = fwidth(q);
+        int ki = int(vAuxF.x + 0.5); float rumble = step(${SX.RUMBLE.toFixed(1)} - 0.5, vAuxF.y);
+        float q = m.y / mix(1.6, 1.0, rumble), f = fract(q), aa = fwidth(q);
         float blk = smoothstep(0.5 - aa, 0.5 + aa, f) * (1.0 - smoothstep(1.0 - aa, 1.0, f)) + (1.0 - smoothstep(0.0, aa, f));
-        vec3 paint = mix(vec3(0.5, 0.022, 0.02), vec3(0.66, 0.66, 0.63), clamp(blk, 0.0, 1.0));
+        vec3 paint = mix(uKA[ki], uKB[ki], clamp(blk, 0.0, 1.0));
         float chip = smoothstep(0.6, 0.72, vnoise(m * vec2(46.0, 23.0)) * 0.45 + vnoise(m * vec2(9.0, 4.0)) * 0.35 + vnoise(m * vec2(1.6, 0.5)) * 0.3 - 0.06);
         vec3 alb = mix(paint, vec3(0.33, 0.32, 0.3), chip * 0.3) * (0.72 + 0.6 * c);
         float d = abs(m.x) - vRoad.w;                                            // distance onto the kerb
         float scuff = smoothstep(0.75, 0.05, d) * vnoise(vec2(m.x * 3.0, m.y / 6.0)) * (0.4 + 0.6 * vRub);
         alb *= 1.0 - 0.6 * scuff;
         alb *= 0.6 + 0.4 * smoothstep(0.0, 0.03, min(f, 1.0 - f) * 1.6);          // joints between blocks
+        // serrations of a rumble kerb: saw-tooth ridges across the direction of travel
+        float sr = fract(m.y / 0.16); alb *= 1.0 - rumble * 0.35 * smoothstep(0.55, 1.0, sr) * smoothstep(60.0, 20.0, vViewPosition.z);
         diffuseColor.rgb = alb;
       }`,
       wet: [0.66, 0.14],
@@ -341,13 +362,48 @@ export function buildWorld(track, renderer, qualityIn) {
     photo(kerbMat, { map: [ASSETS.concrete, { aniso }] });
     const geos = [];
     for (const side of [1, -1]) {
+      const A = SD[side];
       const g = strip(track, ksRoad, (i, o) => {
-        const h = hwA[i], z = track.z[i];
-        o.push(side * (h - 0.02), z + 0.003, 0, side * (h + KW * 0.45), z + 0.05, 0.5, side * (h + KW * 0.9), z + 0.035, 0.9, side * (h + KW), z - 0.01, 1);
-      }, { mask: i => track.kerb[i], vScale: 1.3, flip: side < 0, uMetric: 1.3, rub });
+        const h = hwA[i], z = track.z[i], r = A.kerb[i] === SX.RUMBLE ? 1.9 : 1;      // rumble kerbs stand taller with a steeper back
+        o.push(side * (h - 0.02), z + 0.003, 0, side * (h + KW * (r > 1 ? 0.6 : 0.45)), z + 0.05 * r, 0.5, side * (h + KW * 0.9), z + 0.035 * r, 0.9, side * (h + KW), z - 0.01, 1);
+      }, { mask: i => A.kerb[i], vScale: 1.3, flip: side < 0, uMetric: 1.3, rub, aux: i => [A.col[i], A.kerb[i]] });
       if (g) geos.push(g);
     }
     if (geos.length) add(mergeGeometries(geos), kerbMat);
+
+    // aprons: astro-turf (bright synthetic green) or green-painted asphalt behind the kerb
+    const apronMat = patch(new THREE.MeshStandardMaterial({ map: concreteFallback, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }), 'apron', {
+      ...AUX_V, fpars: AUX_F,
+      color: `{
+        vec2 m = vRoad.xy; float astro = step(${SX.ASTRO.toFixed(1)} - 0.5, vAuxF.x);
+        float fib = vnoise(m * vec2(60.0, 9.0)) * 0.6 + vnoise(m * vec2(7.0, 1.3)) * 0.4;
+        vec3 turf = vec3(0.03, 0.2, 0.045) * (0.7 + 0.6 * fib);
+        float wear = smoothstep(0.55, 0.8, vnoise(m * vec2(1.1, 0.12)) * 0.7 + vnoise(m * vec2(9.0, 2.0)) * 0.3);
+        vec3 pnt = mix(vec3(0.02, 0.15, 0.06), vec3(0.2, 0.2, 0.2) * (0.5 + lum(diffuseColor.rgb)), wear * 0.55) * (0.8 + 0.4 * lum(diffuseColor.rgb));
+        diffuseColor.rgb = mix(pnt, turf, astro);
+      }`,
+      rough: `roughnessFactor = mix(0.5, 0.98, step(${SX.ASTRO.toFixed(1)} - 0.5, vAuxF.x));`,
+      wet: [0.7, 0.2],
+    });
+    const sausMat = wettable(patch(new THREE.MeshStandardMaterial({ color: 0xe8b800, roughness: 0.55 }), 'sausage', {
+      ...ROAD_V, fpars: 'varying vec4 vRoad; varying float vRub;',
+      color: `{
+        vec2 m = vRoad.xy; float f = fract(m.y / 2.0);
+        diffuseColor.rgb *= 0.55 + 0.45 * smoothstep(0.0, 0.03, min(f, 1.0 - f));                 // joints between 2 m sections
+        diffuseColor.rgb *= 1.0 - 0.55 * smoothstep(0.45, 0.75, vnoise(m * vec2(5.0, 1.4)));       // tyre scuffs and chipped paint
+      }` }), 0.3);
+    const ap = [], sa = [];
+    for (const side of [1, -1]) {
+      const A = SD[side];
+      ap.push(strip(track, ksRoad, (i, o) => { const e = A.edge[i], z = track.z[i]; o.push(side * (e - 0.03), z - 0.006, 0, side * (e + A.apronW[i]), z - 0.012, 1); },
+        { mask: i => A.apron[i] === SX.ASTRO || A.apron[i] === SX.PAINT, vScale: 1.5, flip: side < 0, uMetric: 1.5, rub, aux: i => [A.apron[i], 0] }));
+      sa.push(strip(track, ksRoad, (i, o) => {
+        const e = A.edge[i] + 0.04, w = A.apronW[i] - 0.08, z = track.z[i] - 0.02;
+        for (let k = 0; k <= 6; k++) { const a = k / 6 * Math.PI; o.push(side * (e + w * (0.5 - 0.5 * Math.cos(a))), z + 0.02 + 0.13 * Math.pow(Math.sin(a), 0.7), k / 6); }
+      }, { mask: i => A.apron[i] === SX.SAUSAGE, vScale: 1, flip: side < 0, rub }));
+    }
+    const mg = (l) => { const k = l.filter(Boolean); return k.length ? mergeGeometries(k) : null; };
+    add(mg(ap), apronMat); add(mg(sa), sausMat, { cast: true });
   }
 
   // ---- verges: grass run-off and gravel traps ------------------------------
@@ -357,9 +413,9 @@ export function buildWorld(track, renderer, qualityIn) {
       vec3 far = texture2D(tex, uvm / 31.0 + 0.19).rgb, mid = texture2D(tex, uvm.yx / 9.0 + 0.6).rgb;
       float fade = smoothstep(25.0, 140.0, vViewPosition.z);                      // detail gives way to tone with distance
       vec3 c = mix(near, mid, 0.15 + 0.6 * fade) * mix(1.0, lum(far) / 0.075, 0.55);
-      return c * vec3(0.8, 1.0, 0.72);
+      return c * vec3(${theme.ground.map(v => v.toFixed(3)).join(', ')});
     }`;
-  const grassMat = patch(new THREE.MeshStandardMaterial({ map: grassFallback, roughness: 0.95, normalScale: new THREE.Vector2(1.2, 1.2) }), 'verge', {
+  const grassMat = patch(new THREE.MeshStandardMaterial({ map: grassFallback, roughness: 0.95, normalScale: new THREE.Vector2(1.2, 1.2) }), 'verge' + (track.theme || ''), {
     ...ROAD_V, fpars: 'varying vec4 vRoad; varying float vRub;' + GROUND_F,
     color: `{
       vec2 m = vRoad.xy; float d = abs(m.x) - vRoad.w;                           // metres outside the track edge
@@ -378,14 +434,23 @@ export function buildWorld(track, renderer, qualityIn) {
     wet: [0.74, 0.58],
   });
   photo(grassMat, { map: [ASSETS.grassDiff, { aniso }], normalMap: [ASSETS.grassNor, { aniso, srgb: false }] });
-  const gravelMat = patch(new THREE.MeshStandardMaterial({ map: TX.gravelTexture(aniso), roughness: 0.95, color: 0xcfc3ad }), 'gravel', {
-    ...ROAD_V, fpars: 'varying vec4 vRoad; varying float vRub;',
+  // Gravel beds: granular photo texture, raked furrows parallel to the road, a dark kerbed edge,
+  // a few ruts where cars have gone in. vAux = (start, end) of the bed in metres from the centreline.
+  const gravelMat = patch(new THREE.MeshStandardMaterial({ map: TX.gravelTexture(aniso), roughness: 0.95, color: 0xcfc3ad, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), 'gravel', {
+    ...AUX_V, fpars: AUX_F,
     color: `{
-      vec2 m = vRoad.xy;
+      vec2 m = vRoad.xy; float d = abs(m.x) - vAux.x, w = vAux.y - vAux.x, e = min(d, w - d);
       vec3 far = texture2D(map, m / 13.0 + 0.3).rgb;
       diffuseColor.rgb *= mix(1.0, lum(far) / 0.55, 0.5) * (0.86 + 0.24 * vnoise(vec2(m.x / 2.5, m.y / 11.0)));
-      // raked furrows running along the trap
-      diffuseColor.rgb *= 0.94 + 0.08 * sin(m.x * 7.5 + 2.0 * vnoise(m * 0.2));
+      // raked furrows running along the trap (fade out with distance: they would alias)
+      float rk = sin(d * 14.0 + 1.5 * vnoise(vec2(d * 0.7, m.y * 0.15)));
+      diffuseColor.rgb *= 1.0 - 0.11 * rk * smoothstep(70.0, 15.0, vViewPosition.z);
+      // ruts dug by cars: they enter at a shallow angle from the road side
+      float rut = smoothstep(0.86, 0.93, vnoise(vec2((m.y - d * 3.2) / 9.0, 7.3)) ) * smoothstep(0.35, 0.0, abs(fract((m.y - d * 3.2) / 1.7 + vnoise(vec2(m.y / 30.0, 1.0))) - 0.5)) * smoothstep(w * 0.75, 0.0, d);
+      diffuseColor.rgb *= 1.0 - 0.3 * rut;
+      // clean edge: a darker settled margin, then the concrete edging strip
+      diffuseColor.rgb *= 0.8 + 0.2 * smoothstep(0.0, 0.9, e);
+      diffuseColor.rgb = mix(vec3(0.42, 0.41, 0.39) * (0.7 + 0.5 * lum(far)), diffuseColor.rgb, smoothstep(0.1, 0.16, e));
     }`,
     wet: [0.58, 0.62],
   });
@@ -410,35 +475,93 @@ export function buildWorld(track, renderer, qualityIn) {
   });
   photo(paveMat, { map: [ASSETS.concrete, { aniso }] });
   const vergeMat = urban ? paveMat : grassMat;
+  // Paved run-off: older, dustier asphalt with no racing line, tyre marks from cars that ran wide;
+  // painted areas get broad coloured stripes. vAuxF.x = surface id.
+  const runoffMat = patch(new THREE.MeshStandardMaterial({ map: aspFallback.map, normalMap: aspFallback.normalMap, normalScale: new THREE.Vector2(0.5, 0.5), roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }), 'runoff', {
+    ...AUX_V, fpars: AUX_F,
+    color: `{
+      vec2 m = vRoad.xy; float d = abs(m.x) - vRoad.w;
+      vec3 a2 = texture2D(map, m.yx / 19.0 + 0.11).rgb;
+      vec3 alb = diffuseColor.rgb * mix(1.0, lum(a2) / 0.066, 0.6);
+      alb = mix(vec3(lum(alb)), alb, 0.5) * 1.22 + vec3(0.01, 0.008, 0.005);         // paler and dustier than the racing surface
+      alb *= 0.9 + 0.2 * vnoise(vec2(m.x / 5.0, m.y / 40.0));
+      // paving lanes parallel to the road and their joints
+      float lane = abs(fract(d / 4.5) - 0.5) * 4.5; alb *= 0.8 + 0.2 * smoothstep(0.0, 0.05, 2.25 - lane);
+      // black lines from locked wheels: long streaks heading away from the road at a shallow angle
+      float su = (m.y - d * (3.0 + 2.0 * vnoise(vec2(m.y / 70.0, 5.0)))) ;
+      float sk = smoothstep(0.9, 0.96, vnoise(vec2(su / 11.0, 3.1))) * smoothstep(0.12, 0.03, abs(fract(su / 1.7) - 0.5)) * (0.4 + 0.6 * vnoise(vec2(d / 6.0, su / 3.0))) * smoothstep(0.0, 3.0, d);
+      alb *= 1.0 - 0.55 * sk;
+      if (vAuxF.x > ${SX.PAINT.toFixed(1)} - 0.5 && vAuxF.x < ${SX.PAINT.toFixed(1)} + 0.5) {
+        float st = step(0.5, fract((m.y + d * 0.6) / 5.0));
+        vec3 pc = mix(vec3(0.03, 0.09, 0.4), vec3(0.45, 0.03, 0.03), step(18.0, d));
+        alb = mix(alb, pc * (0.6 + 6.0 * lum(alb)), st * 0.8);
+      }
+      // white line where the paved area meets the grass verge is left to the road's own edge line
+      diffuseColor.rgb = alb;
+    }`,
+    wet: [0.55, 0.28],
+  });
+  photo(runoffMat, { map: [ASSETS.asphaltOld, { aniso }], normalMap: [ASSETS.asphaltNor, { aniso, srgb: false }] });
   for (const side of [1, -1]) {
-    const inner = i => hwA[i] + (track.kerb[i] ? KW - 0.02 : -0.01);
-    const gStart = i => Math.min(hwA[i] + KW + 2.0, wallAt(side, i));
-    const outer = i => (gravelAt(side, i) ? gStart(i) : wallAt(side, i));
-    // grass from the track edge to the wall (or to the start of the gravel)
+    const A = SD[side];
+    const inner = i => A.edge[i] - (A.kerb[i] ? 0.02 : 0.01);
+    // base layer: grass (paving on street circuits) from the track edge to the barrier
     add(strip(track, ksEdge, (i, o) => {
-      const z = track.z[i], a = inner(i), b = outer(i), mid = a + Math.min(1.2, (b - a) * 0.5);
+      const z = track.z[i], a = inner(i), b = Math.max(a + 0.2, wallAt(side, i)), mid = a + Math.min(1.2, (b - a) * 0.5);
       if (urban) o.push(side * a, z - 0.004, 0, side * (a + 0.03), z + 0.11, 0, side * b, z + 0.11, 0);      // raised pavement
-      else o.push(side * a, z - 0.004, 0, side * mid, z - 0.012, 0, side * b, z - 0.03, 0);
+      else o.push(side * a, z - 0.004, 0, side * mid, z - 0.018, 0, side * b, z - 0.05, 0);
     }, { uMetric: 2.3, vScale: 2.3, flip: side < 0, rub }), vergeMat);
-    add(strip(track, ksEdge, (i, o) => { const z = track.z[i] - 0.03; o.push(side * gStart(i), z, 0, side * wallAt(side, i), z, 0); },
-      { uMetric: 1.7, vScale: 1.7, flip: side < 0, mask: i => gravelAt(side, i), rub }), gravelMat);
+    // paved run-off from roA to the barrier (level with the pavement on street circuits)
+    const up = urban ? 0.125 : 0;
+    add(strip(track, ksEdge, (i, o) => { const z = track.z[i] + up, a = A.roA[i], b = Math.max(a + 0.1, wallAt(side, i)); o.push(side * a, z - 0.008, 0, side * (a + b) / 2, z - 0.016, 0, side * b, z - 0.03, 0); },
+      { uMetric: 4.2, vScale: 4.2, flip: side < 0, mask: i => A.ro[i] && wallAt(side, i) - A.roA[i] > 0.6, rub, aux: i => [A.ro[i], 0] }), runoffMat);
+    // gravel bed gA..gB, slightly dished
+    add(strip(track, ksEdge, (i, o) => { const z = track.z[i], a = A.gA[i], b = A.gB[i]; o.push(side * a, z - 0.012, 0, side * (a + Math.min(1.5, (b - a) / 3)), z - 0.05, 0, side * (b - Math.min(1.5, (b - a) / 3)), z - 0.05, 0, side * b, z - 0.02, 0); },
+      { uMetric: 1.7, vScale: 1.7, flip: side < 0, mask: i => A.gB[i] > 0, rub, aux: i => [A.gA[i], A.gB[i]] }), gravelMat);
   }
 
   // ---- barriers -------------------------------------------------------------
+  // Per sample and side (track.barL/R): armco, a conveyor-belted tyre wall in front of a
+  // concrete wall, a bare concrete wall, or TecPro blocks.
   {
     const armcoMat = wettable(new THREE.MeshStandardMaterial({ map: TX.armcoTexture(aniso), roughness: 0.42, metalness: 0.82, side: THREE.DoubleSide, envMapIntensity: 0.9 }), 0.45);
     const tyreMat = wettable(new THREE.MeshStandardMaterial({ map: TX.tyreWallTexture(aniso), roughness: 0.88, side: THREE.DoubleSide }), 0.6);
-    const beltMat = new THREE.MeshStandardMaterial({ color: 0xd8d8d4, roughness: 0.7 });
     const fenceMat = new THREE.MeshStandardMaterial({ map: TX.fenceTexture(aniso), transparent: true, roughness: 0.5, metalness: 0.6, side: THREE.DoubleSide, depthWrite: false, alphaTest: 0.02 });
+    // conveyor belting bolted across the face of the tyres: dark rubber sheets, seams, a painted band
+    const beltMat = wettable(patch(new THREE.MeshStandardMaterial({ color: 0x1b1b1c, roughness: 0.8, side: THREE.DoubleSide }), 'belt', {
+      vpars: ROAD_V.vpars + ' varying float vU;', vmain: ROAD_V.vmain + ' vU = uv.x;', fpars: 'varying vec4 vRoad; varying float vRub; varying float vU;',
+      color: `{
+        float y = vU, sl = vRoad.y / 3.2, f = fract(sl);
+        vec3 c = vec3(0.045) * (0.75 + 0.5 * vnoise(vec2(vRoad.y * 0.7, y * 9.0)));
+        c *= 0.45 + 0.55 * smoothstep(0.0, 0.012, min(f, 1.0 - f));                                   // seam between sheets
+        c = mix(c, vec3(0.62, 0.62, 0.6), step(0.68, y) * step(y, 0.86) * (0.75 + 0.25 * vnoise(vec2(vRoad.y * 2.0, 3.0))));   // white band
+        float bolt = step(length(vec2(fract(vRoad.y / 0.8) - 0.5, (y - 0.93) * 1.2)) , 0.045) + step(length(vec2(fract(vRoad.y / 0.8) - 0.5, (y - 0.08) * 1.2)), 0.045);
+        c = mix(c, vec3(0.3), clamp(bolt, 0.0, 1.0));
+        c *= 1.0 - 0.5 * smoothstep(0.55, 0.8, vnoise(vec2(vRoad.y / 2.3, y * 2.0 + 4.0))) * step(y, 0.66);    // scrapes
+        diffuseColor.rgb = c;
+      }` }), 0.4);
+    // TecPro: interlocking plastic blocks, red and grey
+    const tecMat = wettable(patch(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, side: THREE.DoubleSide }), 'tecpro', {
+      vpars: ROAD_V.vpars + ' varying float vU;', vmain: ROAD_V.vmain + ' vU = uv.x;', fpars: 'varying vec4 vRoad; varying float vRub; varying float vU;',
+      color: `{
+        float q = vRoad.y / 1.5, f = fract(q), y = vU;
+        vec3 c = mix(vec3(0.5, 0.03, 0.03), vec3(0.42, 0.43, 0.45), step(0.5, fract(floor(q) * 0.5)));
+        c *= 0.35 + 0.65 * smoothstep(0.0, 0.03, min(f, 1.0 - f));                                    // gaps between blocks
+        c *= 0.8 + 0.2 * smoothstep(0.0, 0.06, abs(y - 0.5));                                         // strap groove
+        c *= 0.85 + 0.25 * vnoise(vec2(vRoad.y * 1.3, y * 5.0));
+        diffuseColor.rgb = c;
+      }` }), 0.3);
     const beams = quality.detail > 0 ? 3 : 2, bh = 0.31, top = 0.06 + beams * (bh + 0.012);
-    const armGeo = [], tyreGeo = [], fenceGeo = [], beltGeo = [];
+    const armGeo = [], tyreGeo = [], fenceGeo = [], beltGeo = [], wallGeo = [], tecGeo = [];
+    const tyresOn = (side, i) => barAt(side, i) === BAR.TYRES, wallOn = (side, i) => barAt(side, i) === BAR.WALL || barAt(side, i) === BAR.TYRES;
     // debris fence where spectators would be: around the pits and on the outside of fast corners
     const fenceOn = (side, i) => {
       const dPit = Math.min(i, n - i) * track.ds;
-      if (dPit < 330 || urban) return true;
+      if (dPit < 330 || urban || barAt(side, i) === BAR.WALL) return true;
       if (quality.detail < 1) return false;
       return vnoise(i * track.ds / 420 + (side > 0 ? 17 : 91), 0.5) > 0.56;
     };
+    const TH = 1.02;      // height of a tyre stack
     for (const side of [1, -1]) {
       armGeo.push(strip(track, ksEdge, (i, o) => {
         const w = wallAt(side, i), z = track.z[i] - 0.04;
@@ -448,25 +571,81 @@ export function buildWorld(track, renderer, qualityIn) {
           o.push(side * w, y, u0 + 0.02 * du, side * (w - 0.075), y + 0.085, u0 + 0.28 * du, side * (w - 0.075), y + bh - 0.085, u0 + 0.72 * du, side * w, y + bh, u0 + 0.98 * du);
         }
         o.push(side * (w + 0.11), z + top, 1, side * (w + 0.11), z, 1);     // posts side: closes the section from behind
-      }, { mask: i => !gravelAt(side, i), vScale: 4, flip: side > 0 }));
-      tyreGeo.push(strip(track, ksEdge, (i, o) => {
-        const w = wallAt(side, i), z = track.z[i] - 0.04, rows = 5, rh = 0.21;
-        for (let r = 0; r < rows; r++) { const y = z + r * rh, u0 = r / rows * 0.86, du = 0.86 / rows; o.push(side * (w - 0.5), y, u0, side * (w - 0.62), y + rh * 0.3, u0 + du * 0.3, side * (w - 0.62), y + rh * 0.7, u0 + du * 0.7); }
-        o.push(side * (w - 0.5), z + rows * rh, 0.86, side * (w + 0.1), z + rows * rh, 1);
-      }, { mask: i => gravelAt(side, i), vScale: 1.24, flip: side > 0 }));
-      // concrete wall behind the tyres
-      beltGeo.push(strip(track, ksEdge, (i, o) => { const w = wallAt(side, i), z = track.z[i]; o.push(side * (w + 0.1), z - 0.05, 0, side * (w + 0.1), z + 1.25, 0.5, side * (w + 0.35), z + 1.25, 0.6, side * (w + 0.35), z - 0.3, 1); },
-        { mask: i => gravelAt(side, i), vScale: 3, flip: side > 0 }));
+      }, { mask: i => barAt(side, i) === BAR.ARMCO, vScale: 4, flip: side > 0 }));
+      // belting: the face of the tyre wall up to just below the top tyres, folded back over them
+      beltGeo.push(strip(track, ksEdge, (i, o) => { const w = wallAt(side, i), z = track.z[i] - 0.05; o.push(side * (w - 0.74), z, 0, side * (w - 0.74), z + TH * 0.82, 0.9, side * (w - 0.7), z + TH * 0.86, 1); },
+        { mask: i => tyresOn(side, i), vScale: 1, flip: side > 0 }));
+      if (quality.detail < 1) {
+        // low detail: the tyres are a textured strip
+        tyreGeo.push(strip(track, ksEdge, (i, o) => {
+          const w = wallAt(side, i), z = track.z[i] - 0.04, rows = 5, rh = TH / 5;
+          for (let r = 0; r < rows; r++) { const y = z + r * rh, u0 = r / rows * 0.86, du = 0.86 / rows; o.push(side * (w - 0.5), y, u0, side * (w - 0.62), y + rh * 0.3, u0 + du * 0.3, side * (w - 0.62), y + rh * 0.7, u0 + du * 0.7); }
+          o.push(side * (w - 0.5), z + rows * rh, 0.86, side * (w + 0.1), z + rows * rh, 1);
+        }, { mask: i => tyresOn(side, i), vScale: 1.24, flip: side > 0 }));
+      }
+      // concrete wall: behind the tyres, or on its own (pit walls, street circuits)
+      wallGeo.push(strip(track, ksEdge, (i, o) => { const w = wallAt(side, i), z = track.z[i], t = tyresOn(side, i) ? 0.1 : -0.12; o.push(side * (w + t), z - 0.05, 0, side * (w + t), z + 1.2, 0.5, side * (w + t + 0.28), z + 1.2, 0.6, side * (w + t + 0.28), z - 0.3, 1); },
+        { mask: i => wallOn(side, i), vScale: 3, flip: side > 0 }));
+      tecGeo.push(strip(track, ksEdge, (i, o) => { const w = wallAt(side, i), z = track.z[i] - 0.05; o.push(side * (w - 0.3), z, 0, side * (w - 0.34), z + 0.5, 0.5, side * (w - 0.3), z + 1.0, 1, side * (w + 0.3), z + 1.0, 1, side * (w + 0.3), z, 0); },
+        { mask: i => barAt(side, i) === BAR.TECPRO, vScale: 1, flip: side > 0 }));
       fenceGeo.push(strip(track, ksEdge, (i, o) => { const w = wallAt(side, i) + 0.75, z = track.z[i]; o.push(side * w, z + 0.2, 0, side * w, z + 3.3, 0.86, side * (w - 0.55), z + 3.85, 1); },
         { mask: i => fenceOn(side, i), vScale: 3, flip: side > 0 }));
     }
     const merge = (list) => { const l = list.filter(Boolean); return l.length ? mergeGeometries(l) : null; };
     add(merge(armGeo), armcoMat, { cast: true });
     add(merge(tyreGeo), tyreMat, { cast: true });
+    add(merge(beltGeo), beltMat, { cast: true });
+    add(merge(tecGeo), tecMat, { cast: true });
     const wallMat = wettable(new THREE.MeshStandardMaterial({ map: concreteFallback, roughness: 0.85, color: 0xd9d9d6 }), 0.55); photo(wallMat, { map: [ASSETS.concrete, { aniso }] });
-    add(merge(beltGeo), wallMat, { cast: true });
+    add(merge(wallGeo), wallMat, { cast: true });
     const fence = add(merge(fenceGeo), fenceMat, { receive: false }); if (fence) { fence.renderOrder = 5; skipOverride(fence); }
-    void beltMat;
+
+    // the tyres themselves: instanced stacks standing behind the belting (the top two tyres show above it)
+    if (quality.detail > 0) {
+      const prof = []; for (const y0 of [TH - 0.42, TH - 0.21]) prof.push(new THREE.Vector2(0.2, y0), new THREE.Vector2(0.3, y0 + 0.015), new THREE.Vector2(0.325, y0 + 0.105), new THREE.Vector2(0.3, y0 + 0.195), new THREE.Vector2(0.2, y0 + 0.21));
+      const stackG = new THREE.LatheGeometry(prof, quality.detail > 1 ? 12 : 8);
+      const rubber = wettable(new THREE.MeshStandardMaterial({ color: 0x9a9a9a, map: TX.tyreWallTexture(aniso), roughness: 0.9 }), 0.5);
+      const CH = 360, nCh = Math.max(1, Math.ceil(track.length / CH)), chunks = Array.from({ length: nCh }, () => []);
+      const pitch = 0.66;
+      for (const side of [1, -1]) {
+        let carry = 0;
+        for (let i = 0; i < n; i++) {
+          if (!tyresOn(side, i)) { carry = 0; continue; }
+          const j = (i + 1) % n, h = track.heading[i];
+          for (; carry < track.ds; carry += pitch) {
+            const f = carry / track.ds, off = side * ((wallAt(side, i) + (wallAt(side, j) - wallAt(side, i)) * f) - 0.4);
+            chunks[Math.min(nCh - 1, Math.floor(i * track.ds / CH))].push(track.x[i] + (track.x[j] - track.x[i]) * f - Math.sin(h) * off, track.z[i] + (track.z[j] - track.z[i]) * f - 0.05, track.y[i] + (track.y[j] - track.y[i]) * f + Math.cos(h) * off);
+          }
+          carry -= track.ds;
+        }
+      }
+      const m4 = new THREE.Matrix4(), cc = new THREE.Color();
+      for (const list of chunks) {
+        if (!list.length) continue;
+        const im = new THREE.InstancedMesh(stackG, rubber, list.length / 3);
+        for (let k = 0; k < list.length / 3; k++) {
+          im.setMatrixAt(k, m4.makeRotationY(hash2(k, 7) * 6.28).setPosition(list[k * 3], list[k * 3 + 1], -list[k * 3 + 2]));
+          const v = 0.75 + 0.5 * hash2(k, 3); im.setColorAt(k, cc.setRGB(v, v, v));
+        }
+        im.castShadow = false; im.receiveShadow = true; im.computeBoundingSphere(); im.computeBoundingBox(); group.add(im);
+      }
+    }
+  }
+
+  // ---- bridges over the track (visual only) ----------------------------------------
+  if (track.bridges?.length) {
+    const steelB = wettable(new THREE.MeshStandardMaterial({ color: 0x8a8f96, roughness: 0.55, metalness: 0.5 }), 0.4), deckB = wettable(new THREE.MeshStandardMaterial({ color: 0xcfd2d6, roughness: 0.8 }), 0.4);
+    for (const br of track.bridges) {
+      const i = Math.round(br.s / track.ds) % n, h = track.heading[i], z = track.z[i], l = track.wallL[i] + 2.5, r = track.wallR[i] + 2.5, span = l + r, mid = (l - r) / 2;
+      const g = new THREE.Group(); g.position.set(track.x[i] - Math.sin(h) * mid, z, -(track.y[i] + Math.cos(h) * mid)); g.rotation.y = h;
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.5, span + 3), deckB); deck.position.y = 6.2; g.add(deck);
+      for (const e of [1.5, -1.5]) { const rail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.5, span + 3), steelB); rail.position.set(e, 7.2, 0); g.add(rail); }
+      for (const e of [1, -1]) { const tw = new THREE.Mesh(new THREE.BoxGeometry(3.6, 7.6, 3), steelB); tw.position.set(0, 3.3, e * (span / 2 + 0.6)); g.add(tw); }
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(span - 2, 22), 1.5), new THREE.MeshStandardMaterial({ map: TX.labelTexture((track.name.split(' ').slice(-2).join(' ')).toUpperCase(), { w: 1024, h: 96, bg: '#12324f', fg: '#f4f4f4', font: 'bold 64px sans-serif' }), roughness: 0.6 }));
+      sign.rotation.y = -Math.PI / 2; sign.position.set(-1.62, 6.9, 0); g.add(sign);
+      g.traverse(o => { if (o.isMesh) { o.castShadow = quality.shadows; o.receiveShadow = true; } });
+      group.add(g);
+    }
   }
 
   // ---- terrain ---------------------------------------------------------------
@@ -479,14 +658,14 @@ export function buildWorld(track, renderer, qualityIn) {
     const n1 = vnoise(X / 60, Y / 60), n2 = vnoise(X / 9, Y / 9), fld = vnoise(X / 190 + 9, Y / 190 + 4), f = forestAt(X, Y);
     const rock = smooth(70, 150, h - zMean) * (0.5 + 0.5 * n1);
     const dry = 0.78 + 0.34 * n1 + 0.12 * n2;
-    const crop = smooth(0.58, 0.63, fld) * (1 - f);                                   // cut hay / crop fields
+    const crop = smooth(0.58, 0.63, fld) * (1 - f) * theme.crop;                                   // cut hay / crop fields
     let r = dry * (1 + 0.75 * crop), g = dry * (1 + 0.38 * crop), b = dry * (1 - 0.25 * crop);
     const fd = 1 - 0.62 * f; r *= fd * (1 - 0.1 * f); g *= fd; b *= fd * (1 - 0.15 * f);     // forest floor / canopy tone
     out.push(r * (1 - rock) + 1.9 * rock, g * (1 - rock) + 1.5 * rock, b * (1 - rock) + 2.2 * rock);
   };
   const tintUrban = (X, Y, h, out) => { const v = 0.5 + 0.25 * vnoise(X / 23, Y / 23) + 0.12 * vnoise(X / 4, Y / 4); out.push(v, v, v * 0.98); };
   let zMean = 0; for (let i = 0; i < n; i++) zMean += track.z[i] / n;
-  const terrainMat = patch(new THREE.MeshStandardMaterial({ map: grassFallback, vertexColors: true, roughness: 0.96 }), 'terrain', {
+  const terrainMat = patch(new THREE.MeshStandardMaterial({ map: grassFallback, vertexColors: true, roughness: 0.96 }), 'terrain' + (track.theme || ''), {
     vpars: 'varying vec2 vWxz;', vmain: 'vWxz = (modelMatrix * vec4(position, 1.0)).xz;',
     fpars: 'varying vec2 vWxz;' + GROUND_F,
     color: 'diffuseColor.rgb = groundAlbedo(map, vWxz, diffuseColor.rgb);',
@@ -554,7 +733,7 @@ export function buildWorld(track, renderer, qualityIn) {
       [0.179, 0.984, 19, 1], [0.22, 0.984, 17, 1], [0.254, 0.984, 15, 1], [0.344, 0.984, 9, 1],
       [0.385, 0.984, 11, 0], [0.465, 0.984, 9, 0], [0.492, 0.741, 9, 0], [0.492, 0.937, 16, 1]];
     const rng = new RNG(4242);
-    const N = Math.round(Math.min(quality.treeCap, quality.trees * track.length / 1000 * (1 + 1.2 * Math.max(0, fbias))) * (urban ? 0.1 : 1));
+    const N = Math.round(Math.min(quality.treeCap, quality.trees * track.length / 1000 * (1 + 1.2 * Math.max(0, fbias))) * (urban ? 0.1 : 1) * theme.trees);
     const gap = track.narrow ? 2.4 : 4.5;
     // two crossed quads with soft, outward-leaning normals
     const quad = (ang) => {
@@ -591,7 +770,7 @@ export function buildWorld(track, renderer, qualityIn) {
       if (urban && off < wallAt(side, i) + 60) continue;
       // keep the main-straight facilities clear
       { const dx = X - track.x[0], dy = Y - track.y[0], lx = dx * c0 + dy * s0, ly = -dx * s0 + dy * c0; if (lx > -230 && lx < 190 && ly > -75 && ly < 75) continue; }
-      const conifer = !urban && vnoise(X / 210 + 1.5, Y / 210 + 6.5) + (track.id === 'nordschleife' || track.id === 'spa' ? 0.12 : -0.08) > 0.5;
+      const conifer = theme.conifer ?? (!urban && vnoise(X / 210 + 1.5, Y / 210 + 6.5) + (track.id === 'nordschleife' || track.id === 'spa' ? 0.12 : -0.08) > 0.5);
       let k; do { k = rng.int(TILES.length); } while ((TILES[k][3] === 1) !== conifer && rng.next() < 0.82);
       const T = TILES[k], hgt = T[2] * rng.uniform(0.75, 1.3) * (0.8 + 0.35 * f);
       chunks[Math.min(nCh - 1, Math.floor(i * track.ds / CH))].push({ X, Y, y: groundH(X, Y, t) - 0.25, k, hgt, w: hgt * T[0] / T[1], rot: rng.uniform(0, Math.PI), shade: rng.uniform(0.8, 1.12) * (1 - 0.18 * f), hue: rng.uniform(-0.035, 0.035) });

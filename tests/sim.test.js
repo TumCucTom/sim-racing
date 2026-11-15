@@ -116,7 +116,7 @@ test('walls contain the car', () => {
 
 test('real circuits: lengths match official figures and geometry is sane', async () => {
   const { TRACK_ORDER } = await import('../src/sim/track.js');
-  const official = { silverstone: 5891, spa: 7004, monza: 5793, nordschleife: 20832, monaco: 3337 };
+  const official = { silverstone: 5891, spa: 7004, monza: 5793, nordschleife: 20832, monaco: 3337, laguna: 3602 };
   for (const id of TRACK_ORDER) {
     const t = buildTrack(id);
     if (official[id]) assert.ok(Math.abs(t.length - official[id]) / official[id] < 0.01, `${id} length ${t.length}`);

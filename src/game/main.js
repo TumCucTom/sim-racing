@@ -29,7 +29,7 @@ import { BaselineDriver, lineDriverOptions } from '../sim/drivers/baseline.js';
 import { PolicyDriver } from '../sim/drivers/policy-driver.js';
 import { OBS_DIM } from '../sim/drivers/rl-interface.js';
 import { buildWorld, trackHeight } from './world.js';
-import { viewAnchors, buildSteeringWheel } from './cockpit.js';
+import { inCar } from './cockpit.js';
 import { buildCarModel } from './carmodel.js';
 import { getSky } from './sky.js';
 import { Input } from './input.js';
@@ -40,6 +40,7 @@ import { Recorder, TelemetryPanel, LapTrace, BIN } from './telemetry.js';
 import { Props } from './props.js';
 import { buildLineGuide } from './lineviz.js';
 import { AudioEngine } from '../audio/audio.js';
+import { RaceMode } from './racemode.js';
 import { CONDITIONS, CONDITION_ORDER, patchFog } from './wx.js';
 import { Weather, LensShader } from './weather.js';
 import { wetFor } from '../sim/wet.js';
@@ -111,6 +112,7 @@ class Game {
     this.tvPosts = this.buildTvPosts();
     this.bindKeys();
     this.buildMenu();
+    this.raceMode = new RaceMode(this, params, CAMS);   // race against AI cars (racemode.js); ?race=12&laps=3...
     this.setCar(params.get('car') || store.get('rr-car') || 'gt3');
     this.setWeather(params.get('wx') || store.get('rr-wx') || 'clear', true);
     window.addEventListener('resize', () => this.resize()); this.resize();
@@ -219,6 +221,7 @@ class Game {
       this.refreshLineGuide();
       document.getElementById('aiinfo').textContent = `AI driver for this car: ${this.ai.label}`;
       clearTimeout(this.aiTimer); this.aiTimer = setTimeout(() => this.computeAILap(this.spec), 50);
+      this.raceMode?.onWet();
     }
     this.audio.setWeather?.({ rain: c.rain, wet: this.effects.wet });
     if (!quiet) this.hud.toast(`${c.label}${wet ? ` — track grip ${(wet.grip * 100).toFixed(0)} %` : ''}`, 2.2);
@@ -281,6 +284,7 @@ class Game {
   }
 
   async start(ai) {
+    this.raceMode.stop(true);
     this.showMenu(false);
     this.audio.start().then(() => this.audio.setCar(this.spec));
     this.restart();
@@ -311,6 +315,7 @@ class Game {
   }
 
   setCar(id) {
+    this.raceMode?.stop(true);
     if (!CARS[id]) id = 'gt3';
     const spec = this.spec = CARS[id];
     store.set('rr-car', id);
@@ -350,6 +355,7 @@ class Game {
   }
 
   restart() {
+    if (this.raceMode.active) return this.raceMode.restart();
     this.sim.reset(); const a = this.sim.car.aids; a.abs = this.spec.abs; a.tc = this.spec.tc; a.autoShift = true;
     this.rec.cur.clear(); this.effects.clear(); this.props.reset(); this.ai.driver.reset?.();
     this.input.steerPos = 0; this.camInit = false; this.acc = 0;
@@ -358,6 +364,7 @@ class Game {
   }
 
   recover() {
+    if (this.raceMode.active) return this.raceMode.recover();
     const car = this.sim.car, t = this.track, i = nearestIndexGlobal(t, car.x, car.y);
     car.reset({ x: t.x[i], y: t.y[i], yaw: t.heading[i], speed: 0, idxHint: i });
     this.sim.prevS = car.s; this.sim.lapValid = false; this.camInit = false;
@@ -390,7 +397,8 @@ class Game {
     let dt = (now - this.last) / 1000; this.last = now;
     if (dt > 0.1) dt = 0.1;
     const f0 = performance.now();
-    if (!this.paused) {
+    if (!this.paused && this.raceMode.active) this.raceMode.advance(dt);
+    else if (!this.paused) {
       this.acc += dt;
       const s0 = performance.now();
       let n = 0;
@@ -406,6 +414,7 @@ class Game {
       this.perf.simAcc += performance.now() - s0;
     }
     this.syncVisuals(dt);
+    this.raceMode.sync(dt);
     this.updateCamera(dt);
     this.wx.update(dt, this.sim.car, CAMS[this.cam], this.paused);
     this.wx.renderReflection();
@@ -433,6 +442,7 @@ class Game {
 
   // Test / tooling hook: advance the simulation without rendering.
   fastForward(seconds) {
+    if (this.raceMode.active) return this.raceMode.fastForward(seconds);
     const n = Math.round(seconds / SIM_DT);
     for (let i = 0; i < n; i++) {
       const car = this.sim.car;
@@ -494,14 +504,18 @@ class Game {
     let dyaw = travel - car.yaw; while (dyaw > Math.PI) dyaw -= 2 * Math.PI; while (dyaw < -Math.PI) dyaw += 2 * Math.PI;
     const yaw = car.yaw + THREE.MathUtils.clamp(dyaw, -0.6, 0.6) * (car.vx > 0 ? 0.55 : 0);
     const fx = Math.cos(yaw), fz = -Math.sin(yaw);
+    // in-car cameras (src/game/cockpit.js): sets the pose for 'cockpit' / 'bonnet', shows or hides the cockpit kit
+    const inFov = inCar.update({ renderer: this.renderer, scene: this.scene, composer: this.composer, camera: cam, model: this.model, spec: this.spec, car, mode: this.paused ? 'menu' : mode, dt,
+      info: { lapTime: this.sim.lapStart === null ? null : this.sim.lapTime, lastLap: this.sim.lastLap } });
+    if (this.hudCockpit !== (inFov !== null && mode === 'cockpit')) { this.hudCockpit = !this.hudCockpit; const cl = this.hud.cl.style; cl.transformOrigin = '100% 100%'; cl.transform = this.hudCockpit ? 'scale(0.62)' : ''; cl.opacity = this.hudCockpit ? 0.85 : 1; }
     if (this.paused) {
       // showroom orbit behind the menu
       const a = performance.now() * 0.00012;
       cam.position.set(pos.x + Math.cos(a) * 7.5, pos.y + 2.1, pos.z + Math.sin(a) * 7.5);
       cam.lookAt(pos.x, pos.y + 0.6, pos.z); cam.fov = 42; cam.updateProjectionMatrix();
-      if (this.model.wheelRig) this.model.wheelRig.group.visible = false;
       return;
     }
+    if (this.raceMode.camera(dt, car, pos)) return;   // race mode's extra cameras
     let fov = 58;
     if (mode === 'chase' || mode === 'far') {
       const dist = mode === 'chase' ? 6.4 : 11, hgt = mode === 'chase' ? 2.15 : 4.2;
@@ -513,19 +527,7 @@ class Game {
       cam.lookAt(pos.x + fx * 4.5, pos.y + 1.0, pos.z + fz * 4.5);
       fov = 56 + Math.min(18, spd * 0.2);
     } else if (mode === 'bonnet' || mode === 'cockpit') {
-      // anchors are measured from the car's real geometry (re-measured once the detailed model has loaded)
-      const m = this.model, key = m.glb ? 2 : 1;
-      if (m.viewKey !== key) { m.viewKey = key; m.view = viewAnchors(m, this.spec); }
-      const p = mode === 'cockpit' ? m.view.eye : m.view.bonnet;
-      const cy = Math.cos(car.yaw), sy = Math.sin(car.yaw);
-      // head leans a little with g-forces in the cockpit; model +Z (right) is world (sin yaw, 0, cos yaw)
-      const sway = mode === 'cockpit' ? THREE.MathUtils.clamp(-(car.ayF || 0) * 0.0016, -0.035, 0.035) : 0, surge = mode === 'cockpit' ? THREE.MathUtils.clamp(-(car.axF || 0) * 0.0012, -0.03, 0.04) : 0;
-      const px = p.x + surge, pz = p.z + sway;
-      cam.position.set(pos.x + cy * px + sy * pz, pos.y + p.y, pos.z - sy * px + cy * pz);
-      const look = car.yaw + THREE.MathUtils.clamp(car.r * (mode === 'cockpit' ? 0.2 : 0.12), -0.3, 0.3);
-      const drop = mode === 'cockpit' ? 0.55 : 0.6;
-      cam.lookAt(cam.position.x + Math.cos(look) * 10, cam.position.y - drop + Math.atan(this.track.grade[car.idx]) * 10 * Math.cos(car.headErr), cam.position.z - Math.sin(look) * 10);
-      fov = mode === 'cockpit' ? 64 + Math.min(8, spd * 0.08) : 68 + Math.min(10, spd * 0.1);
+      fov = inFov;
     } else {
       let best = this.tvPosts[0], bd = Infinity;
       for (const p of this.tvPosts) { const d = p.distanceToSquared(pos); if (d < bd) { bd = d; best = p; } }
@@ -536,17 +538,9 @@ class Game {
       // engine / road vibration grows with speed; kerbs and grass rattle the camera
       const t = performance.now() * 0.001, k = Math.min(1, spd / 75), off = car.surf && (car.surf[0] || car.surf[1] || car.surf[2] || car.surf[3]) ? Math.min(1, spd / 25) : 0;
       const inCar = mode === 'bonnet' || mode === 'cockpit';
-      const amp = (inCar ? 0.007 : 0.0035) * k * k + off * (inCar ? 0.016 : 0.008);
+      const amp = (mode === 'cockpit' ? 0.0025 : inCar ? 0.007 : 0.0035) * k * k + off * (mode === 'cockpit' ? 0.008 : inCar ? 0.016 : 0.008);
       cam.position.y += amp * (Math.sin(t * 61) + 0.6 * Math.sin(t * 37.3));
       cam.rotation.z += amp * 0.35 * Math.sin(t * 29.1); cam.rotation.x += amp * 0.25 * Math.sin(t * 43.7);
-    }
-    { // steering wheel and hands: only exist in the driver's-eye view
-      const m = this.model, show = mode === 'cockpit' && !this.paused;
-      if (show && !m.wheelRig && m.view) { const w = buildSteeringWheel(this.spec), e = m.view.eye; w.group.position.set(e.x + 0.56, e.y - 0.31, e.z); m.chassis.add(w.group); m.wheelRig = w; }
-      // from inside, tinted glass must not black out the view
-      if (m.glassIn !== show) { m.glassIn = show; for (const g of m.glassMats || []) { if (g.userData.op0 === undefined) { g.userData.op0 = g.opacity; g.userData.tr0 = g.transparent; } g.transparent = show ? true : g.userData.tr0; g.opacity = show ? 0.1 : g.userData.op0; g.depthWrite = !show; g.needsUpdate = true; } }
-      if (m.wheelRig) { m.wheelRig.group.visible = show; if (show) m.wheelRig.spin.rotation.z = car.steer * m.wheelRig.lock; }
-      const near = mode === 'cockpit' || mode === 'bonnet' ? 0.06 : 0.3; if (cam.near !== near) { cam.near = near; cam.updateProjectionMatrix(); }
     }
     if (Math.abs(cam.fov - fov) > 0.05) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 6); cam.updateProjectionMatrix(); }
   }

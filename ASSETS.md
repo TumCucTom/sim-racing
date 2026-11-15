@@ -31,7 +31,7 @@ rain, puddles, spray, lens droplets and the rain / spray / thunder sounds are al
 ## Car models
 
 Detailed car bodies loaded by `attachGLB` in `src/game/carmodel.js` (per-car settings in `GLB_MODELS` there). Each car keeps
-its procedural body as the loading stand-in, the ghost and the fallback. All six new files came from Sketchfab uploads whose
+its procedural body as the loading stand-in, the ghost and the fallback. All nine files below came from Sketchfab uploads whose
 licence is recorded both on the model page and inside the downloaded file (`asset.extras`: author, license, source, title —
 kept in the shipped `.glb`). Sketchfab's download API needs a login, so the files were fetched from the Objaverse 1.0 mirror
 (Allen Institute for AI, `https://huggingface.co/datasets/allenai/objaverse`, path `glbs/<group>/<sketchfab uid>.glb`), which
@@ -45,6 +45,9 @@ redistributes them under the same licences.
 | `models/formula.glb` | FX-10 | "RaceCar RC-09 (Re-imagined model)" — https://sketchfab.com/3d-models/racecar-rc-09-re-imagined-model-a56b6fdcf3b742758b7c37f1e181004d | Dahie (original model and tyres based on work by Enzojz, as credited by the author) | CC BY 4.0 | 1.14 MB, 91k |
 | `models/lmp1.glb` | Audi R18 e-tron quattro | "AUDI R18" — https://sketchfab.com/3d-models/audi-r18-3a5f4938e662429b8633120aa62805a4 | Godheim | CC BY 4.0 | 0.32 MB, 44k |
 | `models/ev.glb` | Volt-R Quad | "Generic Electric sedan vector" — https://sketchfab.com/3d-models/generic-electric-sedan-95f32d0d23bf4db48b1b28843385685f | Antonis_zks | CC BY 4.0 | 0.44 MB, 144k |
+| `models/r8lms.glb` | Audi R8 LMS GT3 | "Audi R8" (second-generation road car) — https://sketchfab.com/3d-models/audi-r8-57c798d774004b38a1a08f62f9c76651 | jasonjliang | CC BY 4.0 | 0.43 MB, 48k |
+| `models/huracan.glb` | Lamborghini Huracán GT3 | "Lamborghini huracan" (road car) — https://sketchfab.com/3d-models/lamborghini-huracan-dc5d8c922ada44cc87d4bd4f7d147929 | jkazulyblanco | CC BY 4.0 | 0.71 MB, 96k |
+| `models/amggt3.glb` | Mercedes-AMG GT3 | "Mercedes Benz AMG GT" (road car) — https://sketchfab.com/3d-models/mercedes-benz-amg-gt-661dcab94455463784651a3ebc63cfb9 | Yan Carvalho (carvalhoyan) | CC BY 4.0 | 0.61 MB, 115k |
 
 Changes made to every file (`tools/models-build.mjs`; `tools/models-preview.mjs` renders a quick check): node transforms baked
 and the car re-oriented to the game's axes (+X forward, +Y up, metres, on the ground, origin at mid-wheelbase); the four wheels
@@ -56,9 +59,42 @@ glass and tyre materials on the 911 (white), Civic (blue), Mustang (red) and ele
 the simulated wheelbase and adds brake lamps. The RC-09 and R18 keep the liveries their authors painted (including the sponsor
 names on them). Brand names and badges on these models belong to their owners; the cars keep fictional names in the game.
 
+**GT3 cars added in 0.9.0.** The three files above are road cars, not the GT3 race versions: the game bolts a
+code-generated race kit onto them (front splitter, side skirts, diffuser strakes, a swan-neck rear wing in the car's accent
+colour; `raceKit` in `src/game/carmodel.js`, `kit` in `GLB_MODELS`). Changes by `tools/models-build.mjs`: the R8 lost its
+ground plane, its two blended materials were made opaque (so the windows are dark, not see-through) and, because tyres and
+trim share one material, its wheels were found from four hand-measured cylinders (`tyre.cyl`); the AMG GT sat at an angle in
+its file and was turned by 12.65° (`yaw`), its ground plane dropped, and at run time its paint (silver), glass, tyres and
+tail lights are re-materialled; the Huracán's body material was made opaque and it keeps the orange its author painted. All
+three had their steered front wheels straightened and are scaled at run time to the simulated wheelbases (2.65 / 2.645 /
+2.665 m). The author, licence, source and title are in each file's `asset.extras` and were checked against the Sketchfab
+model pages' API records (description "My first time completing a full car"; "made in maya and substance painter" with Maya
+`lambertNSG` material names; "feito no Blender" with Blender `Material.NNN` names).
+
+The **Ferrari 296 GT3 and McLaren 720S GT3 are procedural** (lofted mid-engined body `gtmid` plus the same race kit, red
+with a yellow stripe / papaya with a blue stripe): Objaverse 1.0 predates the 296, and the only openly licensed 720S found
+there (888k faces, no description, nothing to show the uploader made it) did not meet the bar. Rejected for the same reason:
+two uploads titled "Audi R8 LMS GT3" with identical 476,358-face meshes under different user names (a rip), an "Audi R8 Lms"
+with a real team's sponsor livery whose low-poly, texture-mapped style looks like a racing-game mod (origin not provable
+either way), and an "AMG GT Black Series" that its own description calls an edit of an existing free model. Other GT3-titled
+uploads in the search results were not examined further once a credible road-car model had been found.
+
 The Mini Cooper S is still procedural, with its own body builder (`src/game/minibody.js`, original code, no third-party
 asset). No openly licensed F56 model with a credible origin was found: the candidates on Sketchfab are game rips or
 NonCommercial, the Mini files indexed by Objaverse-XL sit in GitHub repositories with no licence or are a CGTrader purchase,
 and BlenderKit has none.
 
-Car models add about 3.9 MB (`public/models/*.glb` is 5.6 MB including the existing Ferrari).
+Car models add about 5.6 MB (`public/models/*.glb` is 7.3 MB including the existing Ferrari; the three GT3 files are 1.75 MB).
+
+## Trackside data (kerbs, run-off, gravel, barriers) and Laguna Seca
+No image or model files were added for the trackside work: kerb paint, astro-turf, paved run-off,
+gravel furrows, belting, TecPro blocks and tyre stacks are drawn procedurally in `src/game/world.js`
+on top of the existing CC0 textures above.
+
+| Data | Source | Licence | Notes |
+|---|---|---|---|
+| `trackside.osm` in `src/sim/tracks/{silverstone,spa,monza,nordschleife,laguna}.json` (gravel beds, barrier lines) | OpenStreetMap contributors, extracted with `api/0.6/map` in November 2026 and processed by `tools/trackside-osm.mjs` | ODbL 1.0 | Derived database: ray-cast offsets from the centreline, not the original geometry. |
+| `src/sim/tracks/laguna.json` centreline | OpenStreetMap contributors: `highway=raceway` ways 10464852 and 1315957502–1315957508 | ODbL 1.0 | Resampled every 5 m. |
+| `src/sim/tracks/laguna.json` elevation | USGS 3D Elevation Program 1/3 arc-second DEM (`ned10m`) via opentopodata.org | US public domain | Sampled every 10 m along the lap. |
+| `src/sim/tracks/*.trackside.json` | Written by hand from memory of the venues | project licence | Not surveyed; see README "Trackside". |
+

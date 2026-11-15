@@ -20,7 +20,7 @@ export const GRID_GAP = 8;            // metres between consecutive grid slots (
 const GRID_FIRST = 4;                 // pole position: car centre this far behind the line
 const BIN = 25, BIN0 = 400;           // gap timing: time stamps every 25 m of race distance
 const RESTITUTION = 0.18, FRICTION = 0.35, SLOP = 0.01, CORRECT = 0.6;
-const WAKE_LEN = 70, WAKE_DRAG = 0.30, WAKE_DOWN = 0.10;
+const WAKE_LEN = 90, WAKE_DRAG = 0.40, WAKE_DOWN = 0.12;
 const HOLD = { steer: 0, throttle: 0, brake: 1 };
 const COAST = { steer: 0, throttle: 0, brake: 0 };
 
@@ -251,8 +251,8 @@ export class Race {
         if (dx * dx + dy * dy > WAKE_LEN * WAKE_LEN) continue;
         const cy = Math.cos(l.yaw), sy = Math.sin(l.yaw);
         const back = -(dx * cy + dy * sy); if (back < 1.5 || back > WAKE_LEN) continue;
-        const lat = -dx * sy + dy * cy, sg = 0.9 + 0.035 * back, q = 1 - back / WAKE_LEN;
-        let w = q * Math.sqrt(q) * Math.exp(-(lat * lat) / (sg * sg)) * Math.min(1, (v - 15) / 25);
+        const lat = -dx * sy + dy * cy, sg = 1.2 + 0.045 * back, q = 1 - back / WAKE_LEN;
+        let w = q * Math.pow(q, 0.25) * Math.exp(-(lat * lat) / (sg * sg)) * Math.min(1, (v - 15) / 25);
         w *= Math.min(1, Math.sqrt(Ld.spec.CdA / F.spec.CdA));
         if (w > k) k = w;
       }
@@ -336,7 +336,9 @@ export class Race {
       c.finished = true; c.finishLaps = c.sim.lap; c.finishTime = c.sim.lapStart + lt - this.greenTime; c.finishOrder = this.finishers++;
       if (!this.leaderFinished) {
         this.leaderFinished = true; this.leaderFinishTime = c.finishTime;
-        this.finishWindow = Math.max(45, 0.6 * (c.bestLap ?? 90));
+        // everybody still running gets to complete the lap they are on
+        let slow = c.bestLap ?? 90; for (const o of this.cars) if (!o.retired && o.bestLap !== null && o.bestLap > slow) slow = o.bestLap;
+        this.finishWindow = Math.max(60, 1.15 * slow);
       }
       this.onEvent?.('finish', c);
       this._positions();

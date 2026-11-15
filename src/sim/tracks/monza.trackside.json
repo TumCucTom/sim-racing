@@ -1,0 +1,14 @@
+{
+  "note": "Gravel beds and barrier lines: OpenStreetMap survey (trackside.osm in monza.json). Hand-authored from memory, not surveyed: chicane escape areas and their sausage kerbs, the paved strip in front of the Parabolica (Alboreto) gravel, kerb types.",
+  "style": { "kerb": "red-white" },
+  "corners": [
+    { "n": "Rettifilo", "s": [917, 997], "src": "memory", "r": [["L", 840, 965, "asphalt", 42, { "barrier": "tecpro", "keep": false }]], "kc": [[905, 1010, "red-white", "rumble"]], "a": [["R", 921, 946, "sausage"], ["L", 966, 993, "sausage"]] },
+    { "n": "Curva Grande", "s": [1250, 1760], "src": "memory" },
+    { "n": "Roggia", "s": [2128, 2206], "src": "memory", "r": [["R", 2060, 2165, "asphalt", 26, { "barrier": "tecpro" }]], "kc": [[2118, 2216, "red-white", "rumble"]], "a": [["L", 2135, 2160, "sausage"], ["R", 2181, 2204, "sausage"]] },
+    { "n": "Lesmo 1", "s": [2490, 2629], "src": "memory" },
+    { "n": "Lesmo 2", "s": [2856, 2915], "src": "memory" },
+    { "n": "Ascari", "s": [3937, 4168], "src": "memory", "a": [["L", 4150, 4230, "astro", 1.2], ["R", 4105, 4150, "paint", 1.5]] },
+    { "n": "Parabolica (Alboreto)", "s": [5119, 5426], "src": "memory", "r": [["L", 5060, 5560, "asphalt", null, { "keep": true }]] },
+    { "n": "Rettilineo tribune (pit wall)", "src": "memory", "r": [["R", 5560, 520, "wall", null, { "barrier": "wall", "keep": true }]] }
+  ]
+}

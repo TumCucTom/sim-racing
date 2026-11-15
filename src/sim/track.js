@@ -9,12 +9,25 @@
 //    left/right track-width data from the open TUMFTM racetrack-database
 //    (LGPL-3.0). That data has no height channel, so their elevation is a
 //    hand-approximated profile — see each JSON's `source` note.
+//  * The Nordschleife, Monaco and Laguna Seca centrelines are OpenStreetMap geometry (ODbL).
+//  * What lies beside the road (kerb types, run-off surfaces, gravel beds, barriers) is built
+//    by src/sim/trackside.js from each circuit's `trackside` data.
 import { computeRacingLine } from './racing-line.js';
 import silverstone from './tracks/silverstone.json' with { type: 'json' };
 import spa from './tracks/spa.json' with { type: 'json' };
 import monza from './tracks/monza.json' with { type: 'json' };
 import nordschleife from './tracks/nordschleife.json' with { type: 'json' };
 import monaco from './tracks/monaco.json' with { type: 'json' };
+import laguna from './tracks/laguna.json' with { type: 'json' };
+import ravenscarSide from './tracks/ravenscar.trackside.json' with { type: 'json' };
+import silverstoneSide from './tracks/silverstone.trackside.json' with { type: 'json' };
+import spaSide from './tracks/spa.trackside.json' with { type: 'json' };
+import monzaSide from './tracks/monza.trackside.json' with { type: 'json' };
+import nordschleifeSide from './tracks/nordschleife.trackside.json' with { type: 'json' };
+import monacoSide from './tracks/monaco.trackside.json' with { type: 'json' };
+import lagunaSide from './tracks/laguna.trackside.json' with { type: 'json' };
+import { buildTrackside, finishTrackside, SX, SX_CLASS } from './trackside.js';
+export { SX, SX_CLASS, SX_NAME, SX_MU, SX_ROLL, SX_WET, SX_RUMBLE, GRAVEL, BAR, KERB_COLOURS } from './trackside.js';
 
 export const SURF = { ASPHALT: 0, KERB: 1, GRASS: 2, GRAVEL: 3 };
 
@@ -38,14 +51,15 @@ const KERB_WIDTH = 1.5;
 const DS = 1.0;
 
 export const TRACKS = {
-  ravenscar: { id: 'ravenscar', name: 'Ravenscar Ridge', country: 'Original circuit', real: false },
-  silverstone: { ...silverstone, real: true },
-  spa: { ...spa, real: true },
-  monza: { ...monza, real: true },
-  nordschleife: { ...nordschleife, real: true },
-  monaco: { ...monaco, real: true },
+  ravenscar: { id: 'ravenscar', name: 'Ravenscar Ridge', country: 'Original circuit', real: false, trackside: ravenscarSide },
+  silverstone: { ...silverstone, real: true, trackside: { ...silverstone.trackside, ...silverstoneSide } },
+  spa: { ...spa, real: true, trackside: { ...spa.trackside, ...spaSide } },
+  monza: { ...monza, real: true, trackside: { ...monza.trackside, ...monzaSide } },
+  nordschleife: { ...nordschleife, real: true, trackside: { ...nordschleife.trackside, ...nordschleifeSide } },
+  monaco: { ...monaco, real: true, trackside: { ...monaco.trackside, ...monacoSide } },
+  laguna: { ...laguna, real: true, trackside: { ...laguna.trackside, ...lagunaSide } },
 };
-export const TRACK_ORDER = ['ravenscar', 'silverstone', 'spa', 'monza', 'nordschleife', 'monaco'];
+export const TRACK_ORDER = ['ravenscar', 'silverstone', 'spa', 'monza', 'nordschleife', 'monaco', 'laguna'];
 
 function catmullRomClosed(pts, perSeg = 40) {
   const n = pts.length;
@@ -175,7 +189,7 @@ export function buildTrack(id = 'ravenscar') {
     let lo = Infinity, hi = -Infinity; for (let i = 0; i < n; i++) { lo = Math.min(lo, z[i]); hi = Math.max(hi, z[i]); }
     // surveyed profiles on hilly circuits keep their detail; on near-flat ones the
     // terrain model's noise (trees, buildings) is larger than the real gradients
-    z = def.elevation.length > 100 && hi - lo > 40 ? smoothClosed(z, 3, 22) : smoothClosed(z, 3, 45);
+    z = def.elevSmooth ? smoothClosed(z, 3, def.elevSmooth) : def.elevation.length > 100 && hi - lo > 40 ? smoothClosed(z, 3, 22) : smoothClosed(z, 3, 45);
   }
   // terrain models pick up buildings and cuttings: keep smoothing until no
   // gradient exceeds what a circuit road can have (~20 %)
@@ -197,9 +211,11 @@ export function buildTrack(id = 'ravenscar') {
   for (let i = 0; i < n; i++) kerb[i] = kerbSm[i] > 0.02 ? 1 : 0;
 
   // Gravel traps on the outside of slow corners, starting in the braking zone.
+  // (Only where a circuit has no trackside data of its own, or keeps the legacy layout.)
+  const tsDef = def.trackside || null, legacySide = !tsDef || !!tsDef.keepKerbs;
   const gravelL = new Uint8Array(n), gravelR = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
-    if (Math.abs(curvS[i]) > 0.011) {
+    if (legacySide && Math.abs(curvS[i]) > 0.011) {
       const outsideLeft = curvS[i] < 0; // right-hander -> outside is left
       for (let k = -90; k <= 35; k++) {
         const q = (i + k + n) % n;
@@ -242,10 +258,35 @@ export function buildTrack(id = 'ravenscar') {
   wallL = smoothClosed(wallL, 2, real ? 8 : 14); wallR = smoothClosed(wallR, 2, real ? 8 : 14);
   for (let i = 0; i < n; i++) { wallL[i] = Math.max(wallL[i], hw[i] + 1.5); wallR[i] = Math.max(wallR[i], hw[i] + 1.5); }
 
+  // Trackside bands (kerb types, aprons, run-off, gravel, barriers) from rules, OSM and hand data.
+  const urban = id === 'monaco' || !!def.urban;
+  const wall0L = Float64Array.from(wallL), wall0R = Float64Array.from(wallR);
+  const side = buildTrackside(tsDef, { n, ds, x, y, heading, curv: curvS, hw, kerbWidth: KERB_WIDTH, urban, legacy: { kerb, gravelL, gravelR, wallL, wallR } });
+  if (tsDef) {
+    // barrier lines that the data moved: keep them off the inside of tight corners and out of neighbouring track
+    for (let i = 0; i < n; i++) for (const sg of [1, -1]) {
+      const w = sg > 0 ? wallL : wallR, w0 = sg > 0 ? wall0L : wall0R;
+      if (w[i] === w0[i]) continue;
+      const R = Math.abs(curvS[i]) > 1e-4 ? 1 / Math.abs(curvS[i]) : 1e4;
+      let lim = w[i];
+      if (curvS[i] * sg > 0) lim = Math.min(lim, Math.max(hw[i] + 2.5, 0.62 * R));
+      const nx = -Math.sin(heading[i]), ny = Math.cos(heading[i]);
+      for (let o = hw[i] + 3; o < lim + 14; o += 3) {
+        const px = x[i] + nx * o * sg, py = y[i] + ny * o * sg, q = nearestCoarse(pre, px, py);
+        let gap = Math.abs(q - i); gap = Math.min(gap, n - gap);
+        if (gap > 60) { const dq = Math.hypot(x[q] - px, y[q] - py), mid = (o + dq - hw[q] + hw[i]) / 2; lim = Math.min(lim, Math.max(hw[i] + 1.6, mid - 0.5)); break; }
+      }
+      w[i] = Math.max(lim, hw[i] + 1.5);
+    }
+  }
+  finishTrackside(side, { n, hw, kerbWidth: KERB_WIDTH });
+  for (let i = 0; i < n; i++) { gravelL[i] = side.gBL[i] > 0 ? 1 : 0; gravelR[i] = side.gBR[i] > 0 ? 1 : 0; }
+
   const t = {
-    id, name: def.name, country: def.country, real, narrow: !!def.runoff, source: def.source || null,
+    id, name: def.name, country: def.country, real, narrow: !!def.runoff, urban, source: def.source || null, theme: tsDef?.theme || null, sections: tsDef?.sections || null,
     n, ds, length, halfWidth: HALF_WIDTH, hw, kerbWidth: KERB_WIDTH,
-    x, y, z, grade, heading, curv: curvS, s: sArr, kerb, gravelL, gravelR, wallL, wallR,
+    x, y, z, grade, heading, curv: curvS, s: sArr, gravelL, gravelR, wallL, wallR,
+    ...side, verge: urban ? SX.PAVE : SX.GRASS,
     sectors: [0, Math.round(n * 0.33), Math.round(n * 0.67)],
   };
   buildGrid(t);
@@ -356,22 +397,39 @@ export function project(t, px, py, hint, out) {
   return out;
 }
 
-// Surface under a point with lateral offset d at sample idx.
-export function surfaceAt(t, idx, d) {
+// Detailed surface (an SX id) under a point with lateral offset d at sample idx.
+export function surfaceXAt(t, idx, d) {
   const ad = d < 0 ? -d : d;
-  const h = t.hw[idx];
-  if (ad <= h) return SURF.ASPHALT;
-  if (t.kerb[idx] && ad <= h + t.kerbWidth) return SURF.KERB;
-  if (d > 0 ? t.gravelL[idx] : t.gravelR[idx]) {
-    if (ad > h + t.kerbWidth + 2.0) return SURF.GRAVEL;
+  let e = t.hw[idx];
+  if (ad <= e) return 0;
+  if (d > 0) {
+    const k = t.kerbL[idx];
+    if (k) { e += t.kerbWidth; if (ad <= e) return k; }
+    const ap = t.apronL[idx];
+    if (ap && ad <= e + t.apronWL[idx]) return ap;
+    if (ad > t.gAL[idx] && ad <= t.gBL[idx]) return 3;
+    const r = t.roL[idx];
+    if (r && ad > t.roAL[idx]) return r;
+  } else {
+    const k = t.kerbR[idx];
+    if (k) { e += t.kerbWidth; if (ad <= e) return k; }
+    const ap = t.apronR[idx];
+    if (ap && ad <= e + t.apronWR[idx]) return ap;
+    if (ad > t.gAR[idx] && ad <= t.gBR[idx]) return 3;
+    const r = t.roR[idx];
+    if (r && ad > t.roAR[idx]) return r;
   }
-  return SURF.GRASS;
+  return t.verge;
 }
 
+// Surface class (asphalt / kerb / grass / gravel) under a point: the detailed surface folded
+// onto the four original SURF ids.
+export function surfaceAt(t, idx, d) { return SX_CLASS[surfaceXAt(t, idx, d)]; }
+
 // The outermost lateral offset that still counts as "on track" for track
-// limits (kerbs count as track).
-export function trackEdge(t, idx) {
-  return t.hw[idx] + (t.kerb[idx] ? t.kerbWidth : 0);
+// limits (kerbs count as track). Pass d to get the edge on that side of the road.
+export function trackEdge(t, idx, d = 0) {
+  return d > 0 ? t.edgeL[idx] : d < 0 ? t.edgeR[idx] : Math.max(t.edgeL[idx], t.edgeR[idx]);
 }
 
 export function wrapIdx(t, i) { return ((i % t.n) + t.n) % t.n; }

@@ -8,16 +8,21 @@
 
 function sweepLevel(track, step, alpha, margin, sweeps, kerbUse) {
   const n = track.n, m = Math.floor(n / step);
-  const cx = new Float64Array(m), cy = new Float64Array(m), nx = new Float64Array(m), ny = new Float64Array(m), lim = new Float64Array(m);
+  const cx = new Float64Array(m), cy = new Float64Array(m), nx = new Float64Array(m), ny = new Float64Array(m), lim = new Float64Array(m), limR = new Float64Array(m);
   const px = new Float64Array(m), py = new Float64Array(m);
   for (let k = 0; k < m; k++) {
     const i = k * step, h = track.heading[i];
     cx[k] = track.x[i]; cy[k] = track.y[i]; nx[k] = -Math.sin(h); ny[k] = Math.cos(h);
     // narrowest usable half-width over the span this node represents
-    let w = Infinity;
-    for (let q = -step; q <= step; q++) { const j = ((i + q) % n + n) % n; w = Math.min(w, track.hw[j] + (track.kerb[j] ? kerbUse : 0)); }
-    lim[k] = Math.max(0.2, w - margin);
-    if (alpha[k] > lim[k]) alpha[k] = lim[k]; else if (alpha[k] < -lim[k]) alpha[k] = -lim[k];
+    // (per side: kerbs differ left and right; serrated kerbs are used less than flat ones)
+    let w = Infinity, wr = Infinity;
+    for (let q = -step; q <= step; q++) {
+      const j = ((i + q) % n + n) % n, kl = track.kerbL[j], kr = track.kerbR[j];
+      w = Math.min(w, track.hw[j] + (kl ? (kl === 1 ? kerbUse : kerbUse * 0.6) : 0));
+      wr = Math.min(wr, track.hw[j] + (kr ? (kr === 1 ? kerbUse : kerbUse * 0.6) : 0));
+    }
+    lim[k] = Math.max(0.2, w - margin); limR[k] = Math.max(0.2, wr - margin);
+    if (alpha[k] > lim[k]) alpha[k] = lim[k]; else if (alpha[k] < -limR[k]) alpha[k] = -limR[k];
     px[k] = cx[k] + alpha[k] * nx[k]; py[k] = cy[k] + alpha[k] * ny[k];
   }
   const omega = 1.6; // over-relaxation
@@ -29,7 +34,7 @@ function sweepLevel(track, step, alpha, margin, sweeps, kerbUse) {
       const Cx = cx[k] - 2 * px[c] + px[d], Cy = cy[k] - 2 * py[c] + py[d];
       const An = Ax * nx[k] + Ay * ny[k], Bn = Bx * nx[k] + By * ny[k], Cn = Cx * nx[k] + Cy * ny[k];
       let al = alpha[k] + omega * ((-An + 2 * Bn - Cn) / 6 - alpha[k]);
-      if (al > lim[k]) al = lim[k]; else if (al < -lim[k]) al = -lim[k];
+      if (al > lim[k]) al = lim[k]; else if (al < -limR[k]) al = -limR[k];
       alpha[k] = al; px[k] = cx[k] + al * nx[k]; py[k] = cy[k] + al * ny[k];
     }
   }

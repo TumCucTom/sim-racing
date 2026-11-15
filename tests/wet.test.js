@@ -50,3 +50,15 @@ test('racing-line driver laps cleanly in rain and storm, slower than in the dry'
     assert.ok(storm.times[1].t > rain.times[1].t, `${id}: storm slower than rain`);
   }
 });
+
+test('every GT3 car laps Ravenscar cleanly in the dry and in rain, inside a tight class window', () => {
+  const ids = ['gt3', 'r8lms', 'huracan', 'amggt3', 'f296gt3', 'mc720s'], dryT = [];
+  for (const id of ids) {
+    const dry = lap(CARS[id], null), rain = lap(CARS[id], WET.rain);
+    for (const [n, r] of [['dry', dry], ['rain', rain]]) assert.ok(!r.crash && r.times.length === 2 && r.times[1].v, `${id} ${n}: clean flying lap`);
+    assert.ok(rain.times[1].t > dry.times[1].t * 1.08, `${id}: rain slower than dry`);
+    dryT.push(dry.times[1].t);
+  }
+  // balance of performance: the class stays within 1.5 % of the benchmark car
+  for (let i = 1; i < ids.length; i++) assert.ok(Math.abs(dryT[i] / dryT[0] - 1) < 0.015, `${ids[i]}: ${dryT[i].toFixed(2)} vs gt3 ${dryT[0].toFixed(2)}`);
+});

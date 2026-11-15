@@ -1,0 +1,19 @@
+{
+  "note": "Barrier lines and the Corkscrew gravel: OpenStreetMap survey (trackside.osm in laguna.json). Hand-authored from memory, not surveyed: the other gravel beds (which corners have them; their depth follows the surveyed barrier line), kerbs (rule-made placement), the footbridges.",
+  "style": { "kerb": "red-white", "wallMax": 60 },
+  "theme": "dry",
+  "corners": [
+    { "n": "Turn 1", "s": [69, 84], "src": "memory", "bridge": [[20, "foot"]] },
+    { "n": "Andretti Hairpin", "s": [456, 594], "src": "memory", "r": [["R", 380, 640, "gravel", null, { "keep": true, "verge": 2.0 }]] },
+    { "n": "Turn 3", "s": [782, 865], "src": "memory", "r": [["L", 760, 900, "gravel", null, { "keep": true, "verge": 2.0 }]] },
+    { "n": "Turn 4", "s": [1044, 1130], "src": "memory", "r": [["L", 1030, 1170, "gravel", null, { "keep": true, "verge": 2.0 }]], "bridge": [[1330, "foot"]] },
+    { "n": "Turn 5", "s": [1527, 1658], "src": "memory", "r": [["R", 1490, 1690, "gravel", null, { "keep": true, "verge": 2.0 }]] },
+    { "n": "Turn 6", "s": [1964, 1998], "src": "memory", "r": [["R", 1940, 2040, "gravel", null, { "keep": true, "verge": 1.5 }]] },
+    { "n": "Rahal Straight", "s": [2100, 2460], "src": "memory" },
+    { "n": "The Corkscrew", "s": [2469, 2576], "src": "memory", "r": [["L", 2525, 2610, "gravel", null, { "keep": true, "verge": 1.5 }]], "kc": [[2460, 2590, "red-white", "rumble"]] },
+    { "n": "Rainey Curve", "s": [2694, 2817], "src": "memory", "r": [["R", 2670, 2860, "gravel", null, { "keep": true, "verge": 2.0 }]] },
+    { "n": "Turn 10", "s": [2993, 3069], "src": "memory", "r": [["L", 2975, 3100, "gravel", null, { "keep": true, "verge": 2.0 }]] },
+    { "n": "Turn 11", "s": [3295, 3345], "src": "memory", "r": [["R", 3240, 3370, "gravel", null, { "keep": true, "verge": 2.0 }]] },
+    { "n": "Pit straight (pit wall)", "src": "memory", "r": [["L", 3380, 230, "wall", null, { "barrier": "wall", "keep": true }]] }
+  ]
+}

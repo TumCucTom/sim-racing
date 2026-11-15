@@ -152,14 +152,18 @@ for (let k = 0; k < m; k++) {
     const sg = side === 'L' ? 1 : -1, u = [-Math.sin(h) * sg, Math.cos(h) * sg], lim = ownReach(i, u), edge = track.hw[i];
     const rec = { gravel: null, paved: null, wall: null, kerb: null };
     for (const kind of ['gravel', 'paved']) {
-      let lo = Infinity, hi = -Infinity;
+      // intervals of this ray inside any polygon of the kind; keep the bed nearest the road
+      // (merging pieces less than 4 m apart) and ignore anything that starts far away
+      const iv = [];
       for (const p of P2) {
         if (p.kind !== kind || !inBB(p.bb, o, u)) continue;
         const t = []; hits(o, u, p.pts, true, t); t.sort((a, b) => a - b);
-        // inside intervals are [t0,t1], [t2,t3], ... (origin on the road is outside a trap; if it is inside a paved area the count is odd)
         if (t.length % 2) t.unshift(0);
-        for (let q = 0; q + 1 < t.length; q += 2) { const a = Math.max(t[q], edge), b = Math.min(t[q + 1], lim); if (b - a > 1.5 && a < edge + 45) { lo = Math.min(lo, a); hi = Math.max(hi, b); } }
+        for (let q = 0; q + 1 < t.length; q += 2) { const a = Math.max(t[q], edge), b = Math.min(t[q + 1], lim); if (b - a > 1.5) iv.push([a, b]); }
       }
+      iv.sort((a, b) => a[0] - b[0]);
+      let lo = Infinity, hi = -Infinity;
+      for (const [a, b] of iv) { if (lo === Infinity) { if (a < edge + 45) { lo = a; hi = b; } else break; } else if (a < hi + 4) hi = Math.max(hi, b); else break; }
       if (hi > lo) rec[kind] = [lo, hi];
     }
     let wd = Infinity, kd = Infinity;

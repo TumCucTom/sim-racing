@@ -491,6 +491,7 @@ export class RaceAudioSynth {
 
 // Sound-design presets per car (layout comes from the spec's engine.layout).
 // `bankName` names the recorded-cycle bank in public/audio/ (see AUDIO.md).
+const V10_GT = { formants: [[170, 2.5, 0.8], [620, 3.2, 1.0], [2400, 3, 0.6]], pipe: [3.1, 3.4], bright: 1.3, popHz: 600, intakeHz: 560, limHz: 20, gain: 1.05 };
 export function audioConfigFor(spec) {
   const eng = (spec && spec.engine) || {};
   const all = RaceAudioSynth.layouts();
@@ -508,6 +509,13 @@ export function audioConfigFor(spec) {
     lmp1: { turbo: true, gearWhine: 1.0, squealGain: 0.45, whineTeeth: 37, turboGain: 1.0, bright: 0.5, intake: 4, gain: 0.75 },
     formula: { gearWhine: 0.7, squealGain: 0.35, bankName: 'formula', loadLow: 0.2, loadHi: 0.35, edge: 0.6 },
     ev: { gearWhine: 0, squealGain: 1.0 },
+    // GT3 class: straight-cut sequential gearbox whine, slicks. The V10 layout preset is voiced for a 19,000 rpm
+    // grand-prix engine, so the 5.2 road-derived V10 gets its own (lower) formants, pipe length and limiter rate.
+    r8lms: { gearWhine: 1.0, squealGain: 0.55, bankName: 'r8lms', ...V10_GT },
+    huracan: { gearWhine: 1.0, squealGain: 0.55, bankName: 'huracan', ...V10_GT, bright: 1.45, pops: 0.4 },
+    amggt3: { gearWhine: 1.0, squealGain: 0.55, bankName: 'amggt3', pops: 0.6, bright: 0.85 },
+    f296gt3: { turbo: true, gearWhine: 1.0, squealGain: 0.55, whineTeeth: 37, turboGain: 1.15, bankName: 'hypercar' },
+    mc720s: { turbo: true, gearWhine: 1.0, squealGain: 0.55, turboGain: 1.1, bankName: 'mc720s' },
   }[id] || {};
   if (eng.turbo && extra.turbo === undefined) extra.turbo = true;
   const out = Object.assign({}, base, extra, { id, redline: eng.redline || 7000 });

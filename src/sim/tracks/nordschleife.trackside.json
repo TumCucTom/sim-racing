@@ -1,0 +1,10 @@
+{
+  "note": "Barrier lines and the few gravel beds: OpenStreetMap survey (trackside.osm in nordschleife.json). Section names: OpenStreetMap way names. Kerbs are rule-made (low red-white kerbs on the inside of corners, exit kerbs on the outside of the tighter ones). The entries marked memory are hand-authored and approximate. The Karussell banking is not modelled.",
+  "style": { "kerb": "red-white", "kerbs": "both", "wallMin": 3.2, "wallMax": 30 },
+  "corners": [
+    { "n": "Adenauer Forst", "s": [4880, 5052], "src": "memory", "r": [["R", 4885, 4990, "gravel", 12, { "verge": 1.5 }]] },
+    { "n": "Bergwerk", "s": [8600, 8723], "src": "memory", "r": [["L", 8615, 8745, "gravel", 9, { "verge": 1.2 }]] },
+    { "n": "T13 link", "s": [20405, 20449], "src": "memory", "r": [["L", 20370, 20540, "asphalt", null, { "keep": true }]] }
+  ],
+  "sections": [[0, "Hatzenbogen"], [467, "Hatzenbach"], [1060, "Hocheichen"], [1653, "Quiddelbacher Höhe"], [1989, "Flugplatz"], [2685, "Schwedenkreuz"], [3440, "Aremberg"], [3823, "Fuchsröhre"], [4684, "Adenauer Forst"], [5186, "Metzgesfeld"], [5894, "Kallenhard"], [6410, "Spiegelkurve"], [6596, "Dreifach-Rechts"], [6934, "Wehrseifen"], [7332, "Breidscheid"], [7824, "Exmühle"], [8222, "Lauda-Links"], [8580, "Bergwerk"], [8984, "Senkenlinks"], [9651, "Kesselchen"], [10434, "Mutkurve"], [10812, "Klostertal"], [11161, "Steilstrecke"], [11693, "Karussell"], [11846, "Hohe Acht"], [12963, "Hedwigshöhe"], [13119, "Wippermann"], [13434, "Eschbach"], [13856, "Brünnchen"], [14343, "Eiskurve"], [14528, "Pflanzgarten"], [15291, "Sprunghügel"], [15554, "Stefan-Bellof-S"], [15989, "Schwalbenschwanz"], [16479, "Mini-Karussell"], [16859, "Galgenkopf"], [17575, "Döttinger Höhe"], [18810, "Antoniusbuche"], [19711, "Tiergarten"], [20001, "Hohenrain"], [20409, "T13"], [20636, "Sabine-Schmitz-Kurve"]]
+}

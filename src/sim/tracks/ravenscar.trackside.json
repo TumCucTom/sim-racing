@@ -1,0 +1,14 @@
+{
+  "note": "Ravenscar Ridge is fictional. Its kerbs and the first 2 m of verge are the original rule-made layout (keepKerbs) so the RL benchmark physics is unchanged; the run-off beyond is designed, not surveyed.",
+  "keepKerbs": true,
+  "corners": [
+    { "n": "Anvil", "s": [633, 795], "src": "designed", "r": [["R", 540, 810, "asphalt", 30, { "verge": 2.0, "gravel": 12 }]] },
+    { "n": "Switchback", "s": [803, 901], "src": "designed", "r": [["L", 835, 935, "gravel", 17, { "verge": 2.0 }]] },
+    { "n": "Longbow", "s": [912, 1136], "src": "designed", "r": [["R", 905, 1170, "gravel", 21, { "verge": 2.0, "shape": "flat" }]] },
+    { "n": "Crow's Nest", "s": [1573, 1782], "src": "designed", "r": [["R", 1480, 1800, "asphalt", 27, { "verge": 2.0, "gravel": 11, "barrier": "tecpro" }]] },
+    { "n": "Quarry", "s": [1938, 2167], "src": "designed", "r": [["L", 1900, 2200, "gravel", 21, { "verge": 2.0 }]] },
+    { "n": "Kestrel", "s": [2512, 2640], "src": "designed", "r": [["R", 2500, 2700, "gravel", 19, { "verge": 2.0, "shape": "flat" }]] },
+    { "n": "Home", "s": [2700, 2849], "src": "designed", "r": [["R", 2700, 2880, "asphalt", 22, { "verge": 2.0, "gravel": 8 }]] },
+    { "n": "Pit straight", "src": "designed", "r": [["R", 2890, 300, "wall", null, { "barrier": "wall", "keep": true }]] }
+  ]
+}

@@ -172,5 +172,116 @@
     "firingMul": 2
    }
   ]
+ },
+ "r8lms": {
+  "cyl": 10,
+  "rpmLo": 1500,
+  "rpmHi": 8650,
+  "bands": 11,
+  "K": 8,
+  "qmin": 0.7,
+  "sources": [
+   {
+    "file": "Audi_R8_42_with_Ragazzon_exhaust_-_engine_and_exhaust_sound_(YouTube_W8Ii1a8dSNw).opus.mp3",
+    "t0": 15.5,
+    "t1": 24.5,
+    "fmin": 80,
+    "fmax": 420,
+    "floor": 30
+   },
+   {
+    "file": "Audi_R8_LMS_(2010).ogg",
+    "t0": 0.4,
+    "t1": 7.2,
+    "fmin": 100,
+    "fmax": 420,
+    "state": "on"
+   }
+  ],
+  "_note": "Ragazzon clip: six stationary rev blips of a road R8 5.2 FSI V10 (15.5-24.5 s; the rest is silence and titles). R8 LMS (2010): the GT3 race car pulling away at Goodwood, 2,300-3,700 rpm (crank-order spacing 57 Hz at 3,400 rpm)."
+ },
+ "huracan": {
+  "cyl": 10,
+  "rpmLo": 1500,
+  "rpmHi": 8650,
+  "bands": 11,
+  "K": 8,
+  "qmin": 0.7,
+  "sources": [
+   {
+    "file": "Lamborghini_Huracan_Performante_with_modified_exhaust_-_engine_and_exhaust_sound_(YouTube_2kZ3XTsrgbA).opus.mp3",
+    "t0": 0,
+    "t1": 40.5,
+    "fmin": 60,
+    "fmax": 720,
+    "floor": 30
+   }
+  ],
+  "_note": "Street drive with a straight-piped exhaust: idle, short-shifted pulls and overrun up to about 3,700 rpm (checked against the crank-order spacing of the spectrum, 59 Hz at 3,550 rpm). Music from 41 s on is cut off with t1. The Gallardo LP570-4 pull-away (Commons, Edvvc) was left out: its octave could not be settled (2,550 or 5,100 rpm)."
+ },
+ "amggt3": {
+  "cyl": 8,
+  "rpmLo": 1100,
+  "rpmHi": 7450,
+  "bands": 10,
+  "K": 8,
+  "qmin": 0.7,
+  "qn": 0.7,
+  "_note": "The only open recording of the 6.2 M159 found (SLS AMG pulling away, 9 s) yields one clean band, 4,400-5,400 rpm on load. The other bands come from the Mustang 5.0 recordings of the coupe bank (also a naturally aspirated DOHC cross-plane V8), kept out of the SLS band with rpmMax / rpmMin.",
+  "sources": [
+   {
+    "file": "Mercedes-Benz_SLS_AMG.ogg.mp3",
+    "t0": 0.6,
+    "t1": 7.6,
+    "fmin": 70,
+    "fmax": 500,
+    "halfpen": 0.5,
+    "state": "on",
+    "floor": 30,
+    "q": 0.6
+   },
+   {
+    "file": "Ford_Mustang_GT_(S550)_-_engine_and_exhaust_sound_(YouTube_2ceiDjGgpI8).opus.mp3",
+    "fmin": 40,
+    "fmax": 500,
+    "halfpen": 0.5,
+    "floor": 30,
+    "rpmMax": 4370
+   },
+   {
+    "file": "Ford_Mustang_GT_(S550)_-_engine_and_exhaust_sound_(YouTube_2ceiDjGgpI8).opus.mp3",
+    "fmin": 40,
+    "fmax": 500,
+    "halfpen": 0.5,
+    "floor": 30,
+    "rpmMin": 5420
+   },
+   {
+    "file": "Ford_Mustang_Mach_1_(2021)_-_engine_and_exhaust_sound_(YouTube_HydyGJGAOrw).opus",
+    "t0": 9.5,
+    "t1": 30,
+    "fmin": 50,
+    "fmax": 200,
+    "state": "both"
+   }
+  ]
+ },
+ "mc720s": {
+  "cyl": 8,
+  "rpmLo": 1500,
+  "rpmHi": 8100,
+  "bands": 10,
+  "K": 8,
+  "qmin": 0.7,
+  "qn": 0.6,
+  "sources": [
+   {
+    "file": "McLaren_720S_with_Novitec_exhaust_-_engine_and_exhaust_sound_(YouTube_XfgP-gX7KNg).opus.mp3",
+    "fmin": 50,
+    "fmax": 560,
+    "floor": 30
+   }
+  ],
+  "_note": "Road drive of a 720S (the GT3's M840T 4.0 twin-turbo flat-plane V8) with a Novitec exhaust: pulls and lifts from 1,800 to 8,000 rpm, wind and road noise underneath. Octave checked against crank-order lines (133 / 265 / 401 / 533 / 665 Hz at 8,000 rpm)."
  }
 }

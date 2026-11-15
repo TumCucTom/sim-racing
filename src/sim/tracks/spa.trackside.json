@@ -1,0 +1,20 @@
+{
+  "note": "Gravel beds and barrier lines: OpenStreetMap survey (trackside.osm in spa.json; it reflects the 2022 rebuild that brought gravel back at several corners). Hand-authored from memory, not surveyed: the paved run-off areas, kerb colours, the chicane sausage kerbs.",
+  "style": { "kerb": "red-yellow" },
+  "corners": [
+    { "n": "La Source", "s": [360, 430], "src": "memory", "r": [["L", 290, 440, "asphalt", 38, { "barrier": "tecpro" }]], "kc": [[340, 470, "red-white"]] },
+    { "n": "Eau Rouge", "s": [1044, 1103], "src": "memory", "r": [["R", 1010, 1110, "asphalt", 14]], "a": [["L", 1040, 1085, "paint", 1.6]] },
+    { "n": "Raidillon", "s": [1120, 1310], "src": "memory", "r": [["L", 1095, 1330, "asphalt", 32, { "shape": "flat" }]], "a": [["R", 1125, 1200, "paint", 1.6], ["L", 1230, 1330, "astro", 1.2]] },
+    { "n": "Les Combes", "s": [2389, 2545], "src": "memory", "r": [["L", 2320, 2490, "asphalt", 45, { "barrier": "tecpro" }]] },
+    { "n": "Malmedy", "s": [2623, 2700], "src": "memory" },
+    { "n": "Bruxelles", "s": [2984, 3157], "src": "memory", "r": [["L", 2960, 3220, "asphalt", null, { "keep": true }]] },
+    { "n": "Speaker's Corner", "s": [3266, 3350], "src": "memory" },
+    { "n": "Pouhon", "s": [3778, 4143], "src": "memory", "r": [["R", 3760, 4380, "asphalt", null, { "keep": true, "verge": 0 }]], "a": [["R", 4090, 4200, "astro", 1.2]] },
+    { "n": "Fagnes", "s": [4453, 4735], "src": "memory" },
+    { "n": "Stavelot", "s": [4920, 5008], "src": "memory" },
+    { "n": "Paul Frère", "s": [5111, 5250], "src": "memory", "a": [["L", 5230, 5330, "astro", 1.2]] },
+    { "n": "Blanchimont", "s": [6148, 6253], "src": "memory", "r": [["R", 6050, 6480, "asphalt", null, { "keep": true }]] },
+    { "n": "Bus Stop", "s": [6732, 6841], "src": "memory", "r": [["L", 6650, 6795, "asphalt", 34, { "barrier": "tecpro" }]], "kc": [[6720, 6860, "red-yellow", "rumble"]], "a": [["R", 6744, 6772, "sausage"], ["L", 6790, 6816, "sausage"]] },
+    { "n": "Pit straight (pit wall)", "src": "memory", "r": [["R", 6860, 330, "wall", null, { "barrier": "wall", "keep": true }]] }
+  ]
+}

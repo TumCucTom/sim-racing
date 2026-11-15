@@ -50,6 +50,14 @@ export class Effects {
   // wheelWorld: array of 4 Vector3 contact points; car: sim vehicle
   update(dt, car, wheelWorld, heading, pixelScale) {
     this.points.material.uniforms.scale.value = pixelScale;
+    this.emitFor(dt, car, wheelWorld, heading);
+    this.integrate(dt);
+  }
+
+  // Skid marks, smoke, dust and spray for one car. `st` = { last, sprayAcc } keeps the per-wheel
+  // state of a second (third, ...) car, so several cars can share the one particle system (race mode).
+  emitFor(dt, car, wheelWorld, heading, st = null) {
+    if (st) { const l = this.last, a = this.sprayAcc; this.last = st.last; this.sprayAcc = st.sprayAcc; try { this.emitFor(dt, car, wheelWorld, heading); } finally { st.last = this.last; this.last = l; this.sprayAcc = a; } return; }
     const spec = car.spec, hx = Math.cos(heading), hz = -Math.sin(heading);
     for (let i = 0; i < 4; i++) {
       const sf = car.surf[i], p = wheelWorld[i], slip = car.slipV[i];
@@ -99,6 +107,10 @@ export class Effects {
         }
       }
     }
+  }
+
+  // age and move every particle (once per frame)
+  integrate(dt) {
     for (let i = 0; i < this.N; i++) {
       if (this.pLife[i] <= 0) { if (this.pCol[i * 4 + 3] !== 0) this.pCol[i * 4 + 3] = 0; continue; }
       this.pLife[i] -= dt;

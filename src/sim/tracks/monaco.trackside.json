@@ -1,0 +1,20 @@
+{
+  "note": "Monaco has no run-off: barriers stand at the kerb all the way round. Only the centreline is OpenStreetMap geometry. Hand-authored from memory, not surveyed: the three escape roads (modelled as short paved spurs straight on), kerb placement and the chicane / swimming-pool sausage kerbs.",
+  "style": { "kerb": "red-white", "exitKerbCurv": 1, "kerbCurv": 0.02 },
+  "corners": [
+    { "n": "Sainte Dévote", "s": [226, 262], "src": "memory", "spur": [["L", 222, 60, 9, 0]] },
+    { "n": "Beau Rivage", "s": [512, 666], "src": "memory" },
+    { "n": "Massenet", "s": [686, 871], "src": "memory" },
+    { "n": "Casino", "s": [895, 965], "src": "memory" },
+    { "n": "Mirabeau Haut", "s": [1138, 1200], "src": "memory", "spur": [["L", 1132, 42, 8, 0]] },
+    { "n": "Grand Hotel hairpin", "s": [1267, 1319], "src": "memory" },
+    { "n": "Mirabeau Bas", "s": [1351, 1402], "src": "memory" },
+    { "n": "Portier", "s": [1424, 1482], "src": "memory" },
+    { "n": "Nouvelle Chicane", "s": [2102, 2189], "src": "memory", "spur": [["R", 2096, 80, 9, 0]], "kc": [[2095, 2195, "red-white", "rumble"]], "a": [["L", 2108, 2126, "sausage"], ["R", 2131, 2160, "sausage"]] },
+    { "n": "Tabac", "s": [2386, 2424], "src": "memory" },
+    { "n": "Piscine (Louis Chiron)", "s": [2532, 2612], "src": "memory" },
+    { "n": "Piscine (second chicane)", "s": [2712, 2779], "src": "memory", "kc": [[2705, 2785, "red-white", "rumble"]], "a": [["R", 2716, 2738, "sausage"], ["L", 2745, 2768, "sausage"]] },
+    { "n": "La Rascasse", "s": [2914, 2971], "src": "memory" },
+    { "n": "Anthony Noghès", "s": [2987, 3052], "src": "memory" }
+  ]
+}

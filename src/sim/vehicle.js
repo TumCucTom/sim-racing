@@ -11,15 +11,15 @@
 //
 // No Math.random, no wall-clock: identical inputs give bit-identical outputs.
 
-import { project, surfaceAt, SURF } from './track.js';
+import { project, surfaceXAt, SURF, SX_CLASS, SX_MU, SX_ROLL, SX_WET, SX_RUMBLE, GRAVEL } from './track.js';
 import { wetMu } from './wet.js';
 
 export const SIM_HZ = 300;
 export const SIM_DT = 1 / SIM_HZ;
 const G = 9.81, RHO = 1.2;
 
-const SURF_MU = [1.0, 0.93, 0.45, 0.40];
-const SURF_ROLL = [0.013, 0.016, 0.07, 0.30];
+// Per-surface grip and rolling resistance live in src/sim/trackside.js (SX_MU, SX_ROLL):
+// asphalt, kerb and grass are 1.0 / 0.93 / 0.45 and 0.013 / 0.016 / 0.07 as they always were.
 
 export function interpCurve(curve, x) {
   if (x <= curve[0][0]) return curve[0][1];
@@ -88,7 +88,9 @@ export class Vehicle {
     this.absF = new Float64Array(4);
     this.muEff = new Float64Array(4).fill(s.tire.muX);
     this.latUse = new Float64Array(4).fill(1);
-    this.surf = new Uint8Array(4);
+    this.surf = new Uint8Array(4);     // surface class per wheel (SURF: asphalt / kerb / grass / gravel)
+    this.surfX = new Uint8Array(4);    // detailed surface per wheel (SX: also run-off, paint, astro-turf, rumble and sausage kerbs)
+    this.rumble = 0;                   // 0..1 vibration from kerbs and loose surfaces, for audio and camera (output only)
     this.wheelD = new Float64Array(4);
     this._proj = { idx: 0, s: 0, d: 0, frac: 0 };
     this.aids = { abs: s.abs, tc: s.tc, autoShift: true };
@@ -311,7 +313,7 @@ export class Vehicle {
     const he = wrapPi(this.yaw - trk.heading[this.idx]);
     const che = Math.cos(he), she = Math.sin(he);
     let Fx = 0, Fy = 0, Mz = 0;
-    let maxDrvSlip = 0, rollF = 0;
+    let maxDrvSlip = 0, rollF = 0, rumble = 0;
     const B = this.B, C = t.C;
     for (let i = 0; i < 4; i++) {
       const xw = this.wx[i], yw = this.wy[i];
@@ -321,8 +323,8 @@ export class Vehicle {
       else { vl = vxw; vt = vyw; }
       const dW = this.d + xw * she + yw * che;
       this.wheelD[i] = dW;
-      const sf = surfaceAt(trk, this.idx, dW);
-      this.surf[i] = sf;
+      const su = surfaceXAt(trk, this.idx, dW), sf = SX_CLASS[su];
+      this.surf[i] = sf; this.surfX[i] = su;
 
       const avl = vl < 0 ? -vl : vl;
       const vden = avl > 2.0 ? avl : 2.0;
@@ -338,8 +340,8 @@ export class Vehicle {
       const dT = (this.tireT[i] - t.tOpt) / t.tWin;
       const gT = 1 - 0.10 * Math.min(1.6, dT * dT);
       const ls = clamp(1 - t.loadSens * (fzn - 1), 0.55, 1.12);
-      let mu = SURF_MU[sf] * gT * ls * this.gripScale;
-      if (this.wet !== null) mu *= wetMu(this.wet, sf, this.s + xw * che, dW, trk.hw[this.idx], trk.lineD[this.idx]);
+      let mu = SX_MU[su] * gT * ls * this.gripScale;
+      if (this.wet !== null) mu *= SX_WET[su] * wetMu(this.wet, sf, this.s + xw * che, dW, trk.hw[this.idx], trk.lineD[this.idx]);
       const Br = B * rho;
       const at = Math.atan(Br);
       const gm = Math.sin(C * at);
@@ -354,7 +356,14 @@ export class Vehicle {
         stiff = fz[i] * mu * t.muX * C * B / t.peakKappa * R * R / vden;
       }
       // rolling resistance (opposes wheel travel)
-      const roll = SURF_ROLL[sf] * fz[i] * clamp(vl / 0.5, -1, 1);
+      let cr = SX_ROLL[su];
+      if (su === 3) {
+        // gravel bed: the wheel sinks further the deeper into the trap it is, and ploughs at speed
+        const dep = (dW < 0 ? -dW - trk.gAR[this.idx] : dW - trk.gAL[this.idx]) / GRAVEL.depthFull;
+        cr += GRAVEL.depthGain * (dep > 1 ? 1 : dep < 0 ? 0 : dep) + GRAVEL.speedGain * (avl > GRAVEL.speedFull ? 1 : avl / GRAVEL.speedFull);
+      }
+      const roll = cr * fz[i] * clamp(vl / 0.5, -1, 1);
+      rumble += SX_RUMBLE[su];
       rollF += roll;
       this.kappa[i] = kap; this.alpha[i] = Math.atan(tanA);
       this.muEff[i] = mu * t.muX;
@@ -407,6 +416,7 @@ export class Vehicle {
     }
 
     this.drvSlip = maxDrvSlip;
+    this.rumble = rumble * 0.25 * (v2 > 900 ? 1 : v2 / 900);
 
     // --- aero, gravity ----------------------------------------------------
     const spd = Math.sqrt(v2);
@@ -464,9 +474,9 @@ export class Vehicle {
   // Number of wheels beyond the track-limit line.
   wheelsOff() {
     const trk = this.track;
-    const edge = trk.hw[this.idx] + (trk.kerb[this.idx] ? trk.kerbWidth : 0);
+    const eL = trk.edgeL[this.idx], eR = trk.edgeR[this.idx];
     let n = 0;
-    for (let i = 0; i < 4; i++) if (Math.abs(this.wheelD[i]) > edge) n++;
+    for (let i = 0; i < 4; i++) { const d = this.wheelD[i]; if (d > eL || -d > eR) n++; }
     return n;
   }
 

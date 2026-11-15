@@ -1,10 +1,12 @@
 # Racing Simulator
 
-A browser racing simulator with a deterministic vehicle-dynamics core, nine
-cars from different classes (GT3, Ferrari 458, Le Mans hypercar, Audi R18 LMP1, stock Mini
-Cooper S, hot hatch, muscle coupe, V10 single-seater, electric saloon), six
-circuits (one original; Silverstone, Spa, Monza, the Nürburgring Nordschleife
-and Monaco from real survey / map data), engine audio played from real
+A browser racing simulator with a deterministic vehicle-dynamics core, fourteen
+cars from different classes (a six-car GT3 field: 911-style Arrow GT3-R, Audi R8 LMS,
+Lamborghini Huracán, Mercedes-AMG GT3, Ferrari 296 and McLaren 720S; Ferrari 458, Le Mans hypercar, Audi R18 LMP1, stock Mini
+Cooper S, hot hatch, muscle coupe, V10 single-seater, electric saloon), seven
+circuits (one original; Silverstone, Spa, Monza, the Nürburgring Nordschleife,
+Monaco and Laguna Seca from real survey / map data, with gravel beds and barrier lines
+from OpenStreetMap), engine audio played from real
 recordings, an interactive telemetry overlay, AI drivers that follow a computed
 racing line and trail-brake — and an AI driver trained with reinforcement
 learning on the same physics code the browser runs.
@@ -23,7 +25,7 @@ Controls: **WASD / arrows** drive (gamepad supported) · **Q / E** shift ·
 **M** auto/manual · **R** recover · **Enter** restart · **C** camera ·
 **T** telemetry · **G** ghost (best / AI) · **I** AI autopilot · **Z** ABS ·
 **X** TC · **H** driving difficulty · **L** racing-line guide · **V** weather · **F** perf stats · **N** mute ·
-**1–9** car · **Esc** menu.
+**1–9, 0** first ten cars · **[ ]** previous / next car (all fourteen) · **Esc** menu.
 
 **Driving difficulty** (menu or **H**; affects only the human driver, never the AI, tests or RL):
 *Simulation* is the car as specified. *Assisted* adds ABS, traction and stability control to
@@ -40,7 +42,7 @@ Mini ran out of test time).
 src/sim/      deterministic core, no DOM — shared by browser, tests and RL
   track.js      circuits -> typed arrays (centreline, width, curvature, elevation, walls)
   vehicle.js    vehicle dynamics (300 Hz fixed step)
-  cars.js       nine car specifications + real-world reference envelopes
+  cars.js       fourteen car specifications + real-world reference envelopes
   racing-line.js minimum-curvature racing line for any circuit
   sim.js        car + track + lap/sector timing + track limits
   drivers/      line-following driver, RL observation/action interface, policy runner
@@ -84,6 +86,11 @@ checks the result against a published range for that class of car:
 | car | hp | kg | 0-100 s | 100-0 m | lat g (R60) | top km/h |
 |---|---|---|---|---|---|---|
 | Arrow GT3-R | 531 | 1320 | 2.93 [2.9,3.6] ok | 24.2 [22,29] ok | 1.54 [1.45,1.75] ok | 283 [270,295] ok |
+| Audi R8 LMS GT3 | 535 | 1315 | 2.91 [2.9,3.6] ok | 24.1 [22,29] ok | 1.56 [1.45,1.75] ok | 289 [270,295] ok |
+| Lamborghini Huracán GT3 | 536 | 1310 | 2.98 [2.9,3.6] ok | 24.2 [22,29] ok | 1.59 [1.45,1.75] ok | 291 [270,295] ok |
+| Mercedes-AMG GT3 | 542 | 1345 | 3.44 [2.9,3.6] ok | 24.4 [22,29] ok | 1.59 [1.45,1.75] ok | 286 [270,295] ok |
+| Ferrari 296 GT3 | 525 | 1325 | 2.99 [2.9,3.6] ok | 24.1 [22,29] ok | 1.58 [1.45,1.75] ok | 290 [270,295] ok |
+| McLaren 720S GT3 | 521 | 1315 | 2.90 [2.9,3.6] ok | 24.1 [22,29] ok | 1.57 [1.45,1.75] ok | 288 [270,295] ok |
 | Ferrari 458 Italia | 562 | 1565 | 3.40 [3.2,3.7] ok | 31.8 [30,35] ok | 1.07 [1,1.15] ok | 335 [315,335] ok |
 | Aurelia LMH | 671 | 1110 | 2.53 [2.4,3.1] ok | 22.0 [17,23] ok | 2.01 [1.9,2.8] ok | 329 [325,350] ok |
 | Audi R18 e-tron quattro | 503 | 1000 | 2.72 [2.6,3.4] ok | 21.7 [17,23] ok | 1.97 [1.9,2.8] ok | 318 [315,340] ok |
@@ -101,17 +108,34 @@ road tyres). The Audi R18 e-tron quattro is the 2012 LMP1 (3.7 V6 turbodiesel,
 ~500 hp, rear-drive only here: its front hybrid axle is not modelled). Flying-lap times of the in-game AI (racing-line driver, shipped
 tuning, all laps inside track limits; `node tools/ai-laps.js`):
 
-| car | Ravenscar | Silverstone | Spa | Monza | Nordschleife | Monaco |
-|---|---|---|---|---|---|---|
-| FX-10 | 0:53.54 | 1:58.42 | 2:08.93 | 1:37.46 | 5:49.00 | 1:34.11 |
-| Aurelia LMH | 0:56.23 | 2:02.39 | 2:15.14 | 1:43.94 | 6:31.97 | 1:40.37 |
-| Audi R18 | 0:57.86 | 2:06.55 | 2:19.84 | 1:48.09 | 6:45.41 | 1:42.55 |
-| Arrow GT3-R | 1:04.49 | 2:19.78 | 2:34.87 | 1:57.27 | 7:27.74 | 1:46.91 |
-| Ferrari 458 | 1:15.95 | 2:43.20 | 2:59.27 | 2:11.55 | 8:47.63 | 2:03.42 |
-| Volt-R | 1:19.09 | 2:49.34 | 3:05.59 | 2:14.41 | 8:44.79 | 2:01.37 |
-| Vanta RS | 1:20.83 | 2:52.82 | 3:12.09 | 2:23.72 | 9:30.78 | 2:11.01 |
-| Brawler GT | 1:21.50 | 2:54.68 | 3:12.90 | 2:22.70 | 9:34.15 | 2:11.70 |
-| Mini Cooper S | 1:28.97 | 3:07.44 | 3:29.80 | 2:38.57 | 10:28.72 | 2:23.31 |
+| car | Ravenscar | Silverstone | Spa | Monza | Nordschleife | Monaco | Laguna Seca |
+|---|---|---|---|---|---|---|---|
+| FX-10 | 0:53.54 | 1:58.43 | 2:08.80 | 1:37.48 | 5:48.97 | 1:34.20 | 1:19.12 |
+| Aurelia LMH | 0:56.23 | 2:02.39 | 2:15.02 | 1:43.96 | 6:31.97 | 1:40.48 | 1:22.23 |
+| Audi R18 | 0:57.86 | 2:06.56 | 2:19.69 | 1:48.11 | 6:45.41 | 1:42.65 | 1:24.75 |
+| Arrow GT3-R | 1:04.49 | 2:19.78 | 2:34.69 | 1:57.29 | 7:27.72 | 1:47.06 | 1:32.31 |
+| Audi R8 LMS GT3 | 1:04.17 | 2:19.13 | 2:33.82 | 1:56.62 | 7:25.35 | 1:46.66 | 1:31.87 |
+| Lamborghini Huracán GT3 | 1:04.39 | 2:19.07 | 2:33.47 | 1:56.33 | 7:25.09 | 1:46.55 | 1:31.78 |
+| Mercedes-AMG GT3 | 1:04.82 | 2:19.21 | 2:34.02 | 1:57.12 | 7:26.17 | 1:46.92 | 1:32.17 |
+| Ferrari 296 GT3 | 1:04.22 | 2:18.97 | 2:33.33 | 1:56.29 | 7:24.95 | 1:46.56 | 1:31.70 |
+| McLaren 720S GT3 | 1:04.20 | 2:19.05 | 2:33.47 | 1:56.29 | 7:25.27 | 1:46.57 | 1:31.74 |
+| Ferrari 458 | 1:15.95 | 2:43.17 | 2:59.10 | 2:11.57 | 8:47.63 | 2:03.63 | 1:47.17 |
+| Volt-R | 1:19.09 | 2:49.31 | 3:05.36 | 2:14.34 | 8:44.77 | 2:01.51 | 1:51.02 |
+| Vanta RS | 1:20.83 | 2:52.81 | 3:11.85 | 2:23.73 | 9:30.78 | 2:11.42 | 1:53.98 |
+| Brawler GT | 1:21.50 | 2:54.68 | 3:12.67 | 2:22.71 | 9:34.15 | 2:11.90 | 1:55.00 |
+| Mini Cooper S | 1:28.97 | 3:07.43 | 3:29.63 | 2:38.57 | 10:28.72 | 2:23.46 | 2:04.50 |
+
+**GT3 class.** The five real GT3 cars added in 0.9.0 are specified from published homologation
+figures (wheelbase, dimensions, engine type and rev range, homologated weight) at typical
+balance-of-performance power, and share one class envelope with the Arrow GT3-R. They differ where
+the real cars do: the R8 and Huracán share the 5.2 V10 (peaky, 8,500 rpm) but the Lamborghini has more front
+aero, less front roll stiffness and a looser differential; the front-mid-engined AMG carries 49.5 % of its
+weight on the nose, has the highest yaw inertia and the most drag, and 650 Nm from 3,500 rpm to a
+7,300 rpm redline; the turbo Ferrari and McLaren have a boost-limited torque plateau, the lowest
+centres of gravity and the least drag. Track widths, CG heights and aero coefficients are estimates.
+With the same AI driver settings the six cars cover 1.0 % at Ravenscar (1:04.17–1:04.82)
+and 0.9 % at Spa (2:33.33–2:34.69), every new car within 1 % of the Arrow GT3-R; in rain the five new cars lap Spa in 3:01.4–3:01.9 and Ravenscar in 1:17.2–1:17.4, all inside track limits
+(`node tools/wet-laps.js ravenscar,spa r8lms,huracan,amggt3,f296gt3,mc720s rain`).
 
 The class order is what it should be everywhere. Absolute pace on the real
 circuits is 10-15 % off real-world lap records for the class (e.g. GT3 at Spa:
@@ -127,16 +151,69 @@ model has no suspension, so kerb-riding and crest behaviour are missing.
 | Monza | 5.79 km | same | EU-DEM 25 m |
 | Nürburgring Nordschleife | 20.75 km | OpenStreetMap centreline (ODbL) | EU-DEM 25 m, 288 m relief |
 | Monaco | 3.31 km | OpenStreetMap street centrelines (ODbL), official 3.337 km | SRTM 30 m, ~53 m relief, noisy between buildings so gradient is capped at 11 % |
+| Laguna Seca | 3.60 km | OpenStreetMap raceway centreline (ODbL), official 3.602 km, anticlockwise | USGS 3DEP 10 m (`ned10m`), 57 m relief; the Corkscrew drops 17.3 m in 140 m (peak gradient 16 %) |
 
 What "real" means here, precisely: the **plan-view layout is real survey or
 map data** (lap lengths within 1 % of official figures — tested), and elevation
-on four of the five real circuits is sampled from public terrain models and
+on five of the six real circuits is sampled from public terrain models and
 smoothed. Track width is surveyed for the TUMFTM circuits and estimated for
-the Nordschleife and Monaco. **Kerbs, run-off, barriers, buildings and scenery
-are generated**, themed per circuit (forest and close armco at the
-Nordschleife, barriers at the kerb and apartment blocks at Monaco) but not
-replicas of the real venues: no Monaco tunnel or harbour, no Eau Rouge
-grandstands. Laser-scan-grade recreations need licensed scan data.
+the Nordschleife, Monaco and Laguna Seca. Buildings and scenery are generated,
+themed per circuit (forest at the Nordschleife, apartment blocks at Monaco, dry
+golden hills with scattered oaks at Laguna Seca) but not replicas: no Monaco
+tunnel or harbour, no Eau Rouge grandstands.
+
+#### Trackside: kerbs, run-off, gravel, barriers
+What lies beside the road is data per circuit, per corner and per side
+(`src/sim/trackside.js`), used by the physics and the renderer alike. It comes
+from two sources that the data keeps apart:
+
+- **Surveyed from OpenStreetMap** (`trackside.osm` inside each circuit's JSON,
+  produced by `tools/trackside-osm.mjs`): gravel / sand polygons and barrier
+  ways, ray-cast from the centreline every 4 m. The TUMFTM circuits are in
+  local metres with an unknown origin, so the tool first fits a rotation and
+  translation against OSM's `highway=raceway` geometry (ICP) and stores the
+  residual. OSM polygons are traced from aerial imagery of unknown date.
+- **Hand-authored from memory** (`src/sim/tracks/<id>.trackside.json`, every
+  entry tagged `src: memory`): which corners have paved run-off, kerb colours
+  and types, astro-turf and painted strips, sausage kerbs, escape roads, pit
+  walls. These are *not surveyed* and some are certainly wrong in detail.
+- Kerb *placement* is rule-made everywhere (apex kerb on the inside, exit kerb
+  on the outside), not copied from the venue.
+
+| Circuit | From OSM | Hand-authored (memory) | Not modelled |
+|---|---|---|---|
+| Silverstone | 29 gravel beds, barrier lines over 88 % of the lap (fit: 2.0 m mean residual, 94 % of samples within 6 m) | paved run-off in front of the gravel at 13 corners, astro-turf behind six exit kerbs, blue/white kerbs at Village and The Loop (colour is a guess), pit wall | painted run-off graphics, real kerb positions |
+| Spa | 13 gravel beds (the 2022 layout with gravel back at Les Combes, Bruxelles, Pouhon, Fagnes, Stavelot, Blanchimont), barriers over 98 % (fit 1.6 m) | paved run-off at La Source, Eau Rouge / Raidillon, Les Combes, Bus Stop; red/yellow kerbs; yellow sausage kerbs and serrated kerbs at the Bus Stop; TecPro at the escape areas | endurance pit lane, Raidillon's exact new run-off shape |
+| Monza | 11 gravel beds (Curva Grande, Roggia exit, both Lesmos, Ascari, behind the Parabolica asphalt), barriers on 44 % of the lap (fit 1.4 m) | paved escape areas at the Rettifilo and Roggia with TecPro, sausage and serrated kerbs at both chicanes, paved strip in front of the Parabolica gravel, pit wall | polystyrene boards / escape-road slalom, the old banking |
+| Nordschleife | barrier lines for 97 % of the lap (clamped to 3.2–30 m from the road edge), 7 gravel beds (Hatzenbach entry, Aremberg, Brünnchen, Pflanzgarten, GP link), section names | small gravel beds at Adenauer Forst and Bergwerk | the Karussell's concrete banking; kerbs still stand on both sides of every corner (the AI tuning depends on that layout) |
+| Monaco | centreline only | barriers at the kerb everywhere; three escape roads as short paved spurs (Sainte Dévote, Mirabeau, Nouvelle Chicane) closed by TecPro; sausage kerbs at the chicane and the swimming pool | real street widths (uniform 9.4 m), tunnel, the Rascasse and Noghès escape pockets |
+| Laguna Seca | centreline, barrier lines for 97 % of the lap, the Corkscrew gravel | gravel at Turns 2, 3, 4, 5, 6, 9, 10 and 11 (which corners have it; depth follows the surveyed barrier), serrated Corkscrew kerbs, two footbridges (positions approximate) | widths per section are estimates |
+| Ravenscar (fictional) | — | designed: paved run-off with a gravel band at Anvil, Crow's Nest and Home, gravel wedges elsewhere, pit wall. Kerbs and the first 2 m of verge are untouched so the RL benchmark is bit-identical | — |
+
+Surface physics (`SX_MU`, `SX_ROLL` in `src/sim/trackside.js`; grip is a
+fraction of the tyre's own friction, rolling resistance a fraction of wheel load):
+
+| Surface | Grip | Rolling resistance | Wet (extra factor) | Notes |
+|---|---|---|---|---|
+| asphalt | 1.00 | 0.013 | — | unchanged |
+| flat painted kerb | 0.93 | 0.016 | — | unchanged; counts as track |
+| serrated rumble kerb | 0.90 | 0.024 | 0.95 | counts as track; the racing line uses 0.3 m of it instead of 0.5 m; full `rumble` signal |
+| sausage kerb | 0.50 | 0.12 | 0.90 | 0.55 m hump behind the kerb, off track: drags and yaws the car |
+| paved run-off | 0.95 | 0.015 | 0.97 | dusty, off the rubbered line; lap still invalid (four wheels over the edge) |
+| painted run-off / green paint | 0.86 | 0.015 | 0.80 | |
+| astro-turf | 0.62 | 0.035 | 0.82 | |
+| grass | 0.45 | 0.07 | per weather | unchanged |
+| gravel | 0.42 | 0.17 + 0.09 × depth + 0.30 × speed | per weather | depth saturates 6 m into the bed, speed at 90 km/h: 0.56 when ploughing in deep at speed (a GT3 coasting at 162 km/h loses about 8 m/s² against 3 m/s² on grass), 0.17–0.26 when crawling out, which a rear-driven car only just manages |
+| Monaco paving | 0.80 | 0.02 | 0.92 | was treated as grass before |
+
+`car.surfX[i]` holds the detailed surface under each wheel (`car.surf[i]` still
+the four original classes) and `car.rumble` (0–1) is a vibration signal for
+audio and camera; the audio's kerb layer uses the kerb type. Barriers are
+armco, concrete walls, TecPro blocks or conveyor-belted tyre walls per corner
+(`track.barL/R`); they differ in looks only — every barrier is the same rigid
+wall to the physics. `node tools/trackside-map.mjs <track> out.png [s0 s1]`
+draws the trackside exactly as the physics sees it, and
+`tools/trackside-shot.mjs` takes screenshots with a free camera.
 
 ### AI racing line
 `src/sim/racing-line.js` computes a minimum-curvature line inside the track
@@ -152,7 +229,7 @@ line on the road, coloured by throttle (green), coast (amber) and brake (red).
 Three.js r187 with image-based lighting from a photographed HDR sky (Poly
 Haven), scanned PBR asphalt, grass, gravel and concrete (Poly Haven,
 ambientCG), rubbered-in racing line, AgX tone mapping, GTAO, bloom and SMAA on
-high quality. Seven of the nine cars use detailed third-party glTF models
+high quality. Ten of the fourteen cars use detailed third-party glTF models
 (Draco-compressed, wheels cut out and re-rigged offline by
 `tools/models-build.mjs`); every asset, author and licence is listed in
 [ASSETS.md](ASSETS.md).
@@ -206,6 +283,11 @@ natural roughness.
 | Car | Recording used | Bands with real cycles (rpm) |
 |---|---|---|
 | Arrow GT3-R | Porsche 911 GT3 (991), flat-six | 1300–9200, all |
+| Audi R8 LMS GT3 | Audi R8 LMS GT3 (2010) pulling away + road R8 5.2 V10 | 2130–3600; rest pitch-shifted |
+| Lamborghini Huracán GT3 | Huracán Performante 5.2 V10, straight pipes | 1500–3600; rest pitch-shifted |
+| Mercedes-AMG GT3 | SLS AMG 6.2 V8 (one band) + Ford Mustang GT 5.0 | 4870 Mercedes; 1100–3940, 6020, 7450 Mustang |
+| Ferrari 296 GT3 | shares the Aurelia LMH bank (Ferrari 296, the same V6) | 3030–4290 and 6075 only |
+| McLaren 720S GT3 | McLaren 720S 4.0 twin-turbo V8 | 1810–8100, nearly all |
 | Ferrari 458 | 458 Speciale + 458 Italia | 740, 1840–9100 |
 | Brawler GT | Ford Mustang GT 5.0 + Mach 1 | 925–4000, 6080, 7500 |
 | Vanta RS | Honda Civic Type R | 1300, 2460–7100 |
@@ -276,20 +358,30 @@ GPU has not been measured.
 
 ## Known limitations
 - **Visuals** are roughly a decade behind a current commercial sim, not at
-  Assetto Corsa Competizione level. Lighting, surfaces and seven car models
+  Assetto Corsa Competizione level. Lighting, surfaces and ten car models
   are photographic or authored assets; trackside scenery is generated, trees
   are photo cards, and no venue is a replica.
 - **Car models do not all match the car simulated.** Only openly licensed
-  models whose authorship looked genuine were used: the GT3 is a road 911
-  (no wing or race livery), the 499P-class hypercar and the Mini have
+  models whose authorship looked genuine were used: the Arrow GT3-R is a road 911
+  (no wing or race livery); the Audi R8, Huracán and AMG GT are road-car models wearing a
+  code-generated race kit (splitter, skirts, diffuser, wing), not the GT3 bodies; the Ferrari 296 GT3
+  and McLaren 720S GT3 have simple code-generated bodies that only suggest the real shapes; the 499P-class hypercar and the Mini have
   code-generated bodies (visibly simpler than the rest), the muscle coupe is a 1967 fastback, the formula car and R18
   carry their authors' liveries with real sponsor logos. See ASSETS.md.
-- **Audio** has never been heard by its developers (see above); the hypercar
-  and formula banks are thin and rely on pitch-shifting, and the recordings are
+- **GT3 class** differences in track width, CG height, aero and differential are informed estimates,
+  not homologation data, and the balance of performance was set with the AI driver, not by people.
+- **Audio** has never been heard by its developers (see above); the hypercar (also used by the 296 GT3),
+  formula and both GT3 V10 banks are thin and rely on pitch-shifting (the V10s have no real cycles
+  above 3,600 rpm), the AMG GT3 is mostly a Mustang recording, and the recordings are
   road cars free-revving, not race cars on load.
 - **Circuits**: real layouts and (mostly) real elevation, generated
-  surroundings. Monaco has no tunnel or harbour; Silverstone's elevation is
-  approximated; width at the Nordschleife and Monaco is estimated.
+  scenery. Monaco has no tunnel or harbour; Silverstone's elevation is
+  approximated; width at the Nordschleife, Monaco and Laguna Seca is estimated.
+- **Trackside**: gravel beds and barrier lines are OpenStreetMap geometry of unknown date;
+  paved run-off, kerb types and colours are from memory and kerb positions are rule-made, so
+  individual corners differ from the real venue (see the table under Circuits). Sausage kerbs
+  have no vertical dynamics (the sim has none): they are a low-grip, high-drag strip. All barrier
+  types behave as the same rigid wall. Monaco's road is a uniform 9.4 m wide.
 - **AI pace** on the real circuits is 10–15 % off real lap records.
 - The RL policy is trained for one car (GT3) on one circuit (Ravenscar); every
   other combination uses the racing-line driver.
@@ -305,15 +397,17 @@ GPU has not been measured.
 
 ## Credits
 - Circuit geometry: [TUMFTM racetrack-database](https://github.com/TUMFTM/racetrack-database)
-  (LGPL-3.0); Nordschleife and Monaco © OpenStreetMap contributors (ODbL).
-- Elevation: EU-DEM (Copernicus) and SRTM (NASA) via opentopodata.org.
+  (LGPL-3.0); Nordschleife, Monaco and Laguna Seca centrelines, and the gravel beds and barrier
+  lines of every real circuit, © OpenStreetMap contributors (ODbL).
+- Elevation: EU-DEM (Copernicus), SRTM (NASA) and USGS 3DEP via opentopodata.org.
 - Sky, lighting and surface scans: Poly Haven and ambientCG (CC0).
 - Car models (CC BY / CC BY-SA) and engine recordings (Wikimedia Commons,
   CC BY / CC BY-SA): full per-file credits in [ASSETS.md](ASSETS.md) and
-  [AUDIO.md](AUDIO.md). The 911 model and the 458, hypercar and formula audio
+  [AUDIO.md](AUDIO.md). The 911 model and the 458, hypercar, formula, R8 LMS and AMG GT3 audio
   banks derive from ShareAlike works and are redistributed under the same terms.
 - Rendering: three.js. Prop physics: cannon-es.
 
-Fictional car names are used except for the Ferrari 458 and Mini Cooper S.
+Fictional car names are used except for the Ferrari 458, Mini Cooper S, Audi R18 and the five
+GT3 cars added in 0.9.0 (Audi, Lamborghini, Mercedes-AMG, Ferrari, McLaren).
 This is a non-commercial technical project, not affiliated with or endorsed
 by any car maker, sponsor or circuit owner whose name or logo appears.

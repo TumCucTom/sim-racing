@@ -47,8 +47,8 @@ STYLES.proto = [[-0.50, 0.95, 0.22, 0.60, 0.50, 0.50, 0.30], [-0.465, 1.00, 0.11
   [0.31, 1.00, 0.06, 0.84, 0.40, 0.41, 0.30], [0.42, 0.99, 0.07, 0.70, 0.31, 0.32, 0.30], [0.485, 0.94, 0.09, 0.40, 0.24, 0.25, 0.30], [0.50, 0.88, 0.11, 0.30, 0.22, 0.23, 0.30]];
 // GT3 race cars. Mid-engined wedge: cab forward, low nose, long engine deck.
 STYLES.gtmid = [[-0.50, 0.86, 0.34, 0.80, 0.82, 0.50], [-0.47, 0.97, 0.22, 0.88, 0.90, 0.52], [-0.38, 1.00, 0.12, 0.92, 0.95, 0.54], [-0.24, 1.00, 0.09, 0.90, 1.02, 0.52],
-  [-0.10, 0.97, 0.08, 0.86, 1.15, 0.54], [-0.02, 0.96, 0.08, 0.84, 1.19, 0.56], [0.08, 0.96, 0.08, 0.80, 1.14, 0.56], [0.20, 0.97, 0.08, 0.74, 0.78, 0.54],
-  [0.33, 1.00, 0.08, 0.66, 0.68, 0.52], [0.44, 0.98, 0.09, 0.54, 0.56, 0.48], [0.495, 0.88, 0.13, 0.42, 0.44, 0.42], [0.50, 0.80, 0.17, 0.36, 0.38, 0.38]];
+  [-0.10, 0.97, 0.08, 0.86, 1.15, 0.54], [-0.02, 0.96, 0.08, 0.84, 1.19, 0.56], [0.08, 0.96, 0.08, 0.84, 1.14, 0.56], [0.19, 0.98, 0.08, 0.82, 0.86, 0.54],
+  [0.29, 1.00, 0.08, 0.80, 0.82, 0.52], [0.41, 0.99, 0.09, 0.70, 0.72, 0.50], [0.485, 0.90, 0.12, 0.50, 0.52, 0.44], [0.50, 0.80, 0.17, 0.40, 0.42, 0.38]];
 // Front-mid engine: long bonnet, cabin over the rear axle, short tail.
 STYLES.gtfront = [[-0.50, 0.84, 0.36, 0.78, 0.80, 0.50], [-0.47, 0.96, 0.24, 0.88, 0.92, 0.52], [-0.40, 1.00, 0.14, 0.92, 1.00, 0.54], [-0.30, 1.00, 0.10, 0.92, 1.14, 0.56],
   [-0.20, 0.98, 0.09, 0.90, 1.24, 0.58], [-0.10, 0.97, 0.09, 0.88, 1.22, 0.58], [0.00, 0.97, 0.09, 0.86, 0.92, 0.56], [0.20, 0.99, 0.09, 0.84, 0.86, 0.54],
@@ -60,7 +60,7 @@ const GT_LIVERY = {
   huracan: { num: '63', stripe: 0x101012, accent: 0x101012, rim: 0x1c1c1e },
   amg: { num: '4', stripe: 0xe8d400, accent: 0xe8d400, rim: 0x1c1c1e },
   f296: { num: '51', stripe: 0xf2c200, accent: 0xf4f4f0, rim: 0xc9a227 },
-  mc720: { num: '59', stripe: 0xff7a00, accent: 0xff7a00, rim: 0x1c1c1e },
+  mc720: { num: '59', stripe: 0x0d2a5c, accent: 0x0d2a5c, rim: 0x1c1c1e },
 };
 
 function sampleStations(keys, n) {
@@ -252,7 +252,7 @@ function box(w, h, d, mat, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeom
 // GT3 aero kit: front splitter with end fences, side skirts, rear diffuser with strakes, and a
 // full-width rear wing on swan-neck pylons. Positions in the car's root frame (metres).
 // Used by the procedural GT bodies and bolted onto detailed road-car models (GLB_MODELS `kit`).
-function raceKit(g, { front, rear, width, wingY, deckY, carbon, accentM, legacy = false, tailMat = null, skirts = true, splitter = true, wingX = 0.12, span = 0.94 }) {
+function raceKit(g, { front, rear, width, wingY, deckY, carbon, accentM, legacy = false, tailMat = null, skirts = true, splitter = true, canards = true, wingX = 0.12, span = 0.94 }) {
   const add = (m) => { g.add(m); return m; };
   if (legacy) {
     add(box(0.5, 0.025, width * 0.98, carbon, front - 0.12, 0.075, 0));
@@ -266,17 +266,17 @@ function raceKit(g, { front, rear, width, wingY, deckY, carbon, accentM, legacy 
     return;
   }
   if (splitter) {
-    add(box(0.5, 0.022, width * 0.9, carbon, front - 0.2, 0.062, 0));
-    for (const sgn of [1, -1]) {
+    add(box(0.4, 0.022, width * 0.8, carbon, front - 0.3, 0.062, 0));
+    if (canards) for (const sgn of [1, -1]) {
       add(box(0.36, 0.08, 0.016, carbon, front - 0.24, 0.1, sgn * width * 0.448));                       // splitter end fences
       const dive = add(box(0.24, 0.012, 0.13, carbon, front - 0.44, 0.38, sgn * (width * 0.5 - 0.06))); dive.rotation.z = -0.3;   // dive planes
       const dive2 = add(box(0.2, 0.012, 0.11, carbon, front - 0.42, 0.27, sgn * (width * 0.5 - 0.05))); dive2.rotation.z = -0.22;
     }
   }
-  if (skirts) for (const sgn of [1, -1]) add(box((front - rear) * 0.4, 0.028, 0.07, carbon, (front + rear) / 2, 0.07, sgn * (width * 0.5 - 0.06)));
+  if (skirts) for (const sgn of [1, -1]) add(box((front - rear) * 0.4, 0.028, 0.05, carbon, (front + rear) / 2, 0.07, sgn * (width * 0.5 - 0.1)));
   // diffuser: floor exit and strakes
-  add(box(0.5, 0.02, width * 0.74, carbon, rear + 0.3, 0.15, 0)).rotation.z = 0.2;
-  for (let k = -3; k <= 3; k++) add(box(0.46, 0.12, 0.012, carbon, rear + 0.27, 0.13, k * width * 0.105));
+  add(box(0.44, 0.02, width * 0.74, carbon, rear + 0.46, 0.15, 0)).rotation.z = 0.2;
+  for (let k = -3; k <= 3; k++) add(box(0.4, 0.12, 0.012, carbon, rear + 0.42, 0.13, k * width * 0.105));
   // wing: cambered main plane (three slats), gurney, end plates, swan necks
   const wx = rear + wingX, sp = width * span;
   for (const [dx, dy, ch, rot] of [[0.1, 0.018, 0.14, -0.05], [0, 0, 0.16, 0.08], [-0.11, 0.022, 0.12, 0.26]]) { const m = add(box(ch, 0.022, sp, carbon, wx + dx, wingY + dy, 0)); m.rotation.z = rot; }
@@ -480,8 +480,8 @@ const GLB_MODELS = {
     paint: ['body'], glass: ['glass'], rim: ['rim_fl', 'rim_fr', 'rim_rr', 'rim_rl', 'trim'], tyre: ['tire*'], tail: ['lights_red'],
     paintProps: { metalness: 0.9, roughness: 0.45, clearcoatRoughness: 0.03 }, ao: { url: 'models/ferrari_ao.png', w: 0.655 * 4, l: 1.3 * 4 },
   },
-  // Porsche 911 Carrera 4S (991) by Karol Miklas, CC BY-SA 4.0 — stands in for the GT3 car
-  gt3: { url: 'models/gt3.glb', paint: ['paint'], glass: ['window'], tyre: ['rubber'], color: 0xe9ecef, lamps: [[-2.15, 0.742, -0.56, 0.3, 0.03], [-2.15, 0.742, 0.56, 0.3, 0.03]] },
+  // Porsche 911 Carrera 4S (991) by Karol Miklas, CC BY-SA 4.0 — stands in for the GT3 car, with the race kit
+  gt3: { url: 'models/gt3.glb', paint: ['paint'], glass: ['window'], tyre: ['rubber'], color: 0xe9ecef, kit: { wingY: 1.26, deckY: 0.88, wingX: 0.02 }, lamps: [[-2.15, 0.742, -0.56, 0.3, 0.03], [-2.15, 0.742, 0.56, 0.3, 0.03]] },
   // Audi R8 (second generation road car) by jasonjliang, CC BY 4.0 — carries the GT3 race kit
   r8lms: { url: 'models/r8lms.glb', kit: { wingY: 1.2, deckY: 0.98, wingX: 0.02 }, lamps: [[-2.1, 0.8, -0.6, 0.34, 0.035], [-2.1, 0.8, 0.6, 0.34, 0.035]] },
   // Lamborghini Huracán (road car) by jkazulyblanco, CC BY 4.0 — carries the GT3 race kit
@@ -564,7 +564,7 @@ function attachGLB(model, spec, cfg, { a, bb, color }) {
       const lv = GT_LIVERY[spec.body.shape] || {}, X0 = mid - x0 * k, H = box.max.y * k;
       const carbon = new THREE.MeshStandardMaterial({ color: 0x16171a, roughness: 0.45, metalness: 0.4 });
       const accentM = lv.accent != null ? new THREE.MeshStandardMaterial({ color: lv.accent, roughness: 0.4 }) : carbon;
-      raceKit(model.chassis, { front: X0 + box.max.x * k, rear: X0 + box.min.x * k, width: (box.max.z - box.min.z) * k * (cfg.kit.widthK ?? 0.93), wingY: H * 0.97, deckY: H * 0.75, carbon, accentM, ...cfg.kit });
+      raceKit(model.chassis, { front: X0 + box.max.x * k, rear: X0 + box.min.x * k, width: (box.max.z - box.min.z) * k * (cfg.kit.widthK ?? 0.93), wingY: H * 0.97, deckY: H * 0.75, carbon, accentM, canards: false, ...cfg.kit });
     }
     if (gw) {
       // each wheel moves out of the body into a steer > spin pair on the root, so it stays on the

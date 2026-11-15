@@ -3,6 +3,82 @@
 All notable changes, newest first. Numbers quoted here were measured by the
 tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
 
+## Unreleased — trackside from data, and Laguna Seca
+- **Kerbs, run-off, gravel and barriers are now data per circuit, per corner and per side**
+  (`src/sim/trackside.js`), shared by physics and renderer, instead of one curvature rule and a uniform
+  run-off width. Two sources, kept apart in the data: **OpenStreetMap** gravel / sand polygons and barrier
+  ways, ray-cast from the centreline by `tools/trackside-osm.mjs` (the TUMFTM circuits are georeferenced
+  against OSM's raceway geometry first: mean residual 2.0 m Silverstone, 1.6 m Spa, 1.4 m Monza) and stored
+  as `trackside.osm` in each circuit JSON; and **hand-authored corner entries from memory**
+  (`src/sim/tracks/<id>.trackside.json`, each tagged `src: memory`): paved run-off, kerb colours and types,
+  astro-turf, sausage kerbs, escape roads, pit walls. Kerb placement itself is still rule-made (apex inside,
+  exit outside). README "Trackside" has the per-circuit table of what is surveyed, remembered or missing.
+  Silverstone 29 OSM gravel beds, Spa 13, Monza 11, Nordschleife 7, Laguna Seca 1 (+8 by hand); Monaco has
+  none, barriers at the kerb, and three escape roads modelled as paved spurs.
+- **New surfaces with their own physics**: paved run-off (grip 0.95), painted run-off (0.86, 0.80 more in
+  the wet), astro-turf (0.62), serrated rumble kerbs (0.90, the racing line uses less of them), sausage
+  kerbs (0.50 grip, 0.12 rolling resistance: a strip that drags and yaws the car), Monaco paving (0.80; it
+  was grass before). **Gravel is deep**: rolling resistance 0.17 + 0.09 by depth into the bed + 0.30 by
+  speed (was a flat 0.30) — a GT3 coasting into gravel at 162 km/h loses about 8 m/s² against 3 m/s² on
+  grass, and can only just crawl out. `car.surfX[]` is the detailed surface per wheel (`car.surf[]` keeps
+  the four old classes, so HUD, audio and effects work unchanged) and `car.rumble` is a 0–1 vibration
+  signal; the audio's kerb layer is louder on serrated and sausage kerbs. Track limits are per side
+  (`track.edgeL/R`); asphalt, flat kerb and grass values are untouched.
+- **Ravenscar's RL benchmark is bit-identical**: its kerbs and the first 2 m of verge are the original
+  layout (`keepKerbs`), only what lies beyond was redesigned (paved run-off with a gravel band at Anvil,
+  Crow's Nest and Home, gravel wedges elsewhere). The shipped GT3 policy over seeds 1–20, six-lap stints:
+  20/20 clean, stint pace 62.9775 s, and the SHA-256 over the car state sampled every second of all 20
+  stints is unchanged (`0a96c6a35cb4143c0982fe1e`). Largest wheel excursion of the policy beyond the kerb
+  edge anywhere: 0.99 m.
+- **AI laps** (`tools/ai-laps.js`, all 14 cars, all 7 circuits clean): lap times moved by at most 0.31 %
+  (Monaco, kerbs now only on the inside; Spa 0.06–0.12 % quicker, the rest within 0.05 %). The Nordschleife
+  keeps kerbs on both sides of every corner because four cars crashed with one-sided kerbs under the
+  existing per-car tuning; no driver table was changed.
+- **Rendering**: kerbs in circuit colours (red/white, red/yellow at Spa, blue/white) with a taller
+  serrated profile for rumble kerbs, yellow sausage humps, astro-turf and painted aprons, paved run-off
+  with tyre marks, gravel with raked furrows, ruts and a kerbed edge, conveyor-belted tyre walls with
+  instanced tyre stacks, TecPro blocks, concrete pit walls, footbridges. All procedural: no new texture
+  files. A `dry` landscape theme (golden grass, sparse oaks) for Laguna Seca.
+- **Laguna Seca** (`laguna`): OpenStreetMap centreline (ODbL), 3,598 m against the official 3,602 m,
+  anticlockwise, start line on the pit straight; USGS 3DEP 10 m elevation with light smoothing: 57.2 m
+  relief, the Corkscrew drops 17.3 m in 140 m with a peak gradient of 16.3 %. Widths are estimates.
+  Every car laps it cleanly (GT3 1:32.3 dry, 1:49.2 in rain).
+- Tools: `tools/trackside-map.mjs` (top-down PNG of the trackside as the physics sees it),
+  `tools/trackside-shot.mjs` (screenshots with a free camera). 5 new tests (`tests/trackside.test.js`),
+  49 in all.
+- Not done: real kerb positions, vertical kerb dynamics, the Karussell banking, barrier types that differ
+  in a crash, Monaco's real widths. Version number not bumped (other work is in flight).
+
+## 0.9.0 — a GT3 field
+- **Five more GT3 cars**, each with its own physics, body, engine sound and AI tuning: Audi R8 LMS GT3
+  (5.2 V10), Lamborghini Huracán GT3 (5.2 V10), Mercedes-AMG GT3 (6.2 front-mid V8), Ferrari 296 GT3
+  (3.0 twin-turbo V6), McLaren 720S GT3 (4.0 twin-turbo V8). Wheelbase, dimensions, engine type, rev
+  range and homologated weight are published figures; power is at typical balance-of-performance levels
+  (521–542 hp, 1,310–1,345 kg with driver); track widths, CG heights, aero and differential settings are
+  estimates chosen to reflect what the cars are known for (AMG: 49.5 % front weight, highest yaw inertia
+  and drag, flat 650 Nm; Huracán: more front aero and a looser diff than the R8 it shares an engine
+  with; 296 and 720S: boost-limited torque plateau, low CG, low drag). All five share the class envelope
+  the Arrow GT3-R already had; `npm run validate` passes for all 14 cars.
+- **Balance**: with identical AI settings (`LINE_TUNE` 0.97 / 0.6) the six GT3 cars cover 1.0 % at Ravenscar
+  (64.17–64.82 s) and 0.9 % at Spa (153.33–154.69 s). The first draft had the turbo cars 1.2 % ahead at Spa
+  and inside 2.9 s to 100 km/h (outside the envelope): their torque was cut by 2 % and first gear lengthened.
+  Every car laps all circuits cleanly (`tools/ai-laps.js`), and the new cars lap Ravenscar and Spa cleanly
+  in rain and storm (`tools/wet-laps.js`; new test in `tests/wet.test.js`). No shared
+  physics code was touched for this: specs and driver tables only.
+- **Models**: road-car models by jasonjliang (Audi R8), jkazulyblanco (Huracán) and Yan Carvalho (AMG GT),
+  all CC BY 4.0, with a code-generated GT3 race kit (splitter, skirts, diffuser strakes, swan-neck wing)
+  bolted on (`kit` in `GLB_MODELS`). The 296 and 720S have procedural mid-engined bodies (`gtmid`); a
+  front-engined loft (`gtfront`) is the AMG's stand-in while its model loads. 1.75 MB of new `.glb`.
+  `tools/models-build.mjs` gained `yaw` (car parked at an angle in its file) and `tyre.cyl` (tyres that
+  share a material with the trim). See ASSETS.md for what was rejected and why.
+- **Engine sound**: four new recorded-cycle banks (1.90 MB) from Wikimedia Commons recordings — the R8 LMS
+  race car and a road R8 V10, a Huracán Performante, a McLaren 720S (real cycles from 1,800 to 8,000 rpm),
+  and for the AMG one Mercedes SLS band inside a Mustang V8 bank; the 296 GT3 plays the existing Ferrari 296
+  bank. The V10 banks have real cycles only up to 3,600 rpm. Sources, authors, licences and the weak
+  spots are in AUDIO.md. Not listened to (no audio output here); all 16 audio tests pass for every car.
+- **Menu**: cars are grouped by class in a scrolling panel. Keys: **1–9, 0** select the first ten cars,
+  **[** and **]** step through all fourteen (the hint in the menu said 1–6).
+
 ## 0.8.0 — weather, time of day, engine audio round 2
 - **Six conditions**, in the menu, on **V** and as `?wx=`: clear, golden hour,
   overcast (damp), rain, storm at low sun, dusk. Generated cloud skies with

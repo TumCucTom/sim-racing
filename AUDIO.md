@@ -138,8 +138,8 @@ adaptations (excerpts cut into single engine cycles, resampled, level
 normalised). Banks derived from a CC BY-SA source are themselves CC BY-SA 3.0;
 the others are CC BY 3.0. Anyone redistributing the game redistributes these
 files: keep this table (attribution) with them, and keep the CC BY-SA banks
-(`f458`, `hypercar`, `formula`) under CC BY-SA 3.0. Total size of
-`public/audio/`: 3.56 MB (the noise layer added about 60 kB of JSON; its
+(`f458`, `hypercar`, `formula`, `r8lms`, `amggt3`) under CC BY-SA 3.0. Total size of
+`public/audio/`: 5.46 MB (the four GT3 banks added in 0.9.0 are 1.90 MB) (the noise layer added about 60 kB of JSON; its
 textures are generated at load time).
 
 | Bank (car) | Source recording on Wikimedia Commons | Author | Licence |
@@ -157,6 +157,13 @@ textures are generated at load time).
 | `formula.wav` (FX-10, 3.0 V10) | [Red Bull-Cosworth RB1 (2005).ogg](https://commons.wikimedia.org/wiki/File:Red_Bull-Cosworth_RB1_(2005).ogg) | Edvvc | CC BY-SA 3.0 |
 | | [Red-Bull-Cosworth-STR1-2006-David-Coulthard.ogg](https://commons.wikimedia.org/wiki/File:Red-Bull-Cosworth-STR1-2006-David-Coulthard.ogg) | Edvvc | CC BY-SA 3.0 |
 | | [Porsche Carrera GT - engine and exhaust sound (YouTube ti9wpsDF4MI).opus](https://commons.wikimedia.org/wiki/File:Porsche_Carrera_GT_-_engine_and_exhaust_sound_(YouTube_ti9wpsDF4MI).opus) (below about 5,400 rpm) | MDS Sportcar (YouTube) | CC BY 3.0 |
+| `r8lms.wav` (Audi R8 LMS GT3, 5.2 V10) | [Audi R8 LMS (2010).ogg](https://commons.wikimedia.org/wiki/File:Audi_R8_LMS_(2010).ogg) (the GT3 race car pulling away, Goodwood 2010) | Edvvc | CC BY-SA 3.0 |
+| | [Audi R8 42 with Ragazzon exhaust - engine and exhaust sound (YouTube W8Ii1a8dSNw).opus](https://commons.wikimedia.org/wiki/File:Audi_R8_42_with_Ragazzon_exhaust_-_engine_and_exhaust_sound_(YouTube_W8Ii1a8dSNw).opus) (road R8 5.2 FSI V10, rev blips) | Ragazzon Official (YouTube) | CC BY 3.0 |
+| `huracan.wav` (Lamborghini Huracán GT3, 5.2 V10) | [Lamborghini Huracan Performante with modified exhaust - engine and exhaust sound (YouTube 2kZ3XTsrgbA).opus](https://commons.wikimedia.org/wiki/File:Lamborghini_Huracan_Performante_with_modified_exhaust_-_engine_and_exhaust_sound_(YouTube_2kZ3XTsrgbA).opus) (first 40 s) | Auto-chippen.nl (chiptuning) (YouTube) | CC BY 3.0 |
+| `amggt3.wav` (Mercedes-AMG GT3, 6.2 V8) | [Mercedes-Benz SLS AMG.ogg](https://commons.wikimedia.org/wiki/File:Mercedes-Benz_SLS_AMG.ogg) (same M159 6.2 V8; one band, 4,400–5,400 rpm) | Edvvc | CC BY-SA 3.0 |
+| | the two Ford Mustang recordings of `coupe.wav` above (every other band) | Cestni dirkač; LSX632 Performance (YouTube) | CC BY 3.0 |
+| `mc720s.wav` (McLaren 720S GT3, 4.0 twin-turbo V8) | [McLaren 720S with Novitec exhaust - engine and exhaust sound (YouTube XfgP-gX7KNg).opus](https://commons.wikimedia.org/wiki/File:McLaren_720S_with_Novitec_exhaust_-_engine_and_exhaust_sound_(YouTube_XfgP-gX7KNg).opus) | Supercars67 (YouTube) | CC BY 3.0 |
+| Ferrari 296 GT3 | no file of its own: plays `hypercar.wav` (the Ferrari 296 recording is this car's own 3.0 120° twin-turbo V6) | see `hypercar.wav` | CC BY-SA 3.0 (bank) |
 | Volt-R Quad (electric) | none: synthesis only | | |
 | Audi R18 (`lmp1`, 3.7 V6 TDI) | none: synthesis only, balanced against the two R15 TDI recordings listed below | | |
 
@@ -203,6 +210,11 @@ crossfaded / pitch-shifted from the nearest real band.
 | mini | Mini Countryman / Clubman (BMW turbo four; trim not stated in the source) | 800-6600, all 10 | all 10 |
 | hypercar | Ferrari 296 (3.0 twin-turbo 120-degree V6, the 499P's road relative), low revs only; Nissan GT-R at 6000 | 3030-4290, 6075 | 3030-4290 |
 | formula | Real 3.0 F1 V10s (RB1, STR1) trackside at about 14,300 and 16,500 rpm; Carrera GT V10 at 4000-4600 | 4000, 4610, 14300, 16500 | 4610 |
+| r8lms | Audi R8 LMS (GT3 race car, 2010) pulling away, 2300-3700 rpm; road R8 5.2 FSI V10 rev blips for the overrun | 2130-3600 | 1790-2540 |
+| huracan | Huracán Performante 5.2 V10 (same engine as the GT3), straight-piped, street drive: idle, short-shifted pulls, overrun | 1500-3600 | 1500-3020 |
+| amggt3 | SLS AMG (M159 6.2 V8, the GT3's engine) launching, at 4870 only; all other bands Mustang GT 5.0 (another naturally aspirated DOHC cross-plane V8) | 1100-7450, all 10 (one of them Mercedes) | 1100-3180, 6020, 7450 |
+| mc720s | McLaren 720S road car (M840T, the GT3's engine), Novitec exhaust, road drive with full-throttle pulls | 1810-8100 (9 of 10) | 1810-8100 |
+| f296gt3 | plays the `hypercar` bank: Ferrari 296 road car, the same engine | as hypercar | as hypercar |
 
 ## Measurements
 
@@ -348,6 +360,18 @@ stretches, the bank's the cleanest cycles; the truth is in between.
   range is pitch-shifted; the Formula car has real F1 V10 cycles only around
   14-16.5k rpm (pitched over 9-19k) and switches to a Carrera GT road V10
   below about 9000 rpm, a change of character somewhere around 8-9.5k.
+* **GT3 banks (0.9.0), not auditioned and not yet scored with `audio-compare`.** The two V10 banks have
+  real cycles only up to 3,600 rpm; the 5.2 V10's whole racing range (5,000-8,500 rpm) is pitch-shifted
+  from the 3,600 band, so the howl these engines are known for is an extrapolation. Two higher-rev
+  V10 sources were rejected: a Huracán Performante clip that turned out to be music and speech, and the
+  Gallardo LP570-4 pull-away, whose octave (2,550 or 5,100 rpm) could not be settled from its spectrum.
+  The AMG bank is a Mustang with a single Mercedes band in the middle (the only open M159 recording is
+  nine seconds long): expect a change of voice and microphone around 4,400 and 5,400 rpm, and the rpm of
+  that SLS band rests on the assumption that the launch was held near 5,000 rpm. The McLaren bank is
+  one continuous road recording with wind and tyre noise under the engine; it is the only GT3 bank
+  with real full-throttle cycles to the redline. The Ferrari 296 GT3 shares the hypercar's thin 296
+  bank (3,000-4,300 rpm real). All sources are road cars except the R8 LMS pull-away; none is a GT3
+  car at racing speed, and none has the straight-cut gear whine, which stays synthesised.
 * Pitch-shifting a cycle far from its recorded rpm moves its formants with it
   (dull when shifted down, thin when shifted up). Worst cases: hypercar idle
   and top end, formula mid range, coupe 4000-6000.
@@ -404,7 +428,8 @@ the synth outputs it, before the page's reverb and compressor),
    (`limHz`.)
 6. Sweeping slowly through the rev range: any place where the character
    changes abruptly (Formula 8-9.5k, hypercar around 5k and above 6k, coupe
-   4-6k)? Those are band borders between different source cars.
+   4-6k, AMG GT3 at 4.4k and 5.4k where the Mercedes band starts and ends,
+   both V10 GT3 cars above 4k where pitch-shifting takes over)? Those are band borders between different source cars.
 7. Does each car sound like *its* engine type from the outside, and is the
    cockpit view just "the same, duller"?
 
@@ -425,7 +450,10 @@ node tools/audio-page-check.mjs --url http://127.0.0.1:4173/ [--wav <dir>] [car 
 `tools/audio-recipes.json` lists, per bank, the source files, time ranges and
 tracking limits. The recordings themselves are not in the repository.
 
-Hosted single-file build: publish `public/audio/*.wav` next to the page as
+Hosted single-file build: the files to publish as of 0.9.0 are `coupe.wav`, `f458.wav`, `formula.wav`,
+`gt3.wav`, `hatch.wav`, `hypercar.wav`, `mini.wav` and the four new ones, `amggt3.wav`, `huracan.wav`,
+`mc720s.wav`, `r8lms.wav` (11 files, 5.46 MB; the Ferrari 296 GT3 uses `hypercar.wav`).
+Publish `public/audio/*.wav` next to the page as
 `audio/<car>.wav`, or embed them as base64 under `window.__INLINE_ASSETS['audio/<car>.wav']`
 (same convention as `src/game/assets.js`). If neither is there the game
 plays the synthesis fallback.

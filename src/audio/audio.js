@@ -148,7 +148,7 @@ export class AudioEngine {
         squeal = Math.max(squeal, Math.min(1, Math.max(0, car.slipV[i] - 1.8) / 7) * loadF);
         scrub += Math.min(1, car.slipV[i] / 4) * 0.25 * loadF;
       } else if (sf === SURF.GRAVEL) gravel += 0.25; else grass += 0.25;
-      if (sf === SURF.KERB) kerb += 0.5;
+      if (sf === SURF.KERB) kerb += car.surfX && car.surfX[i] > 6 ? 0.85 : 0.5;   // serrated rumble kerbs and sausages hit harder than flat paint
     }
     const v = car.speed, vf = Math.min(1, v / 18);
     const tq = (car.engineTorque || 0) / this.peakTorque;      // engineTorque is undefined before the first sim step
