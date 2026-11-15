@@ -14,6 +14,7 @@ import silverstone from './tracks/silverstone.json' with { type: 'json' };
 import spa from './tracks/spa.json' with { type: 'json' };
 import monza from './tracks/monza.json' with { type: 'json' };
 import nordschleife from './tracks/nordschleife.json' with { type: 'json' };
+import monaco from './tracks/monaco.json' with { type: 'json' };
 
 export const SURF = { ASPHALT: 0, KERB: 1, GRASS: 2, GRAVEL: 3 };
 
@@ -42,8 +43,9 @@ export const TRACKS = {
   spa: { ...spa, real: true },
   monza: { ...monza, real: true },
   nordschleife: { ...nordschleife, real: true },
+  monaco: { ...monaco, real: true },
 };
-export const TRACK_ORDER = ['ravenscar', 'silverstone', 'spa', 'monza', 'nordschleife'];
+export const TRACK_ORDER = ['ravenscar', 'silverstone', 'spa', 'monza', 'nordschleife', 'monaco'];
 
 function catmullRomClosed(pts, perSeg = 40) {
   const n = pts.length;
@@ -175,8 +177,16 @@ export function buildTrack(id = 'ravenscar') {
     // terrain model's noise (trees, buildings) is larger than the real gradients
     z = def.elevation.length > 100 && hi - lo > 40 ? smoothClosed(z, 3, 22) : smoothClosed(z, 3, 45);
   }
-  for (let i = 0; i < n; i++) {
-    grade[i] = (z[(i + 1) % n] - z[(i - 1 + n) % n]) / (segLen[i] + segLen[(i - 1 + n) % n]);
+  // terrain models pick up buildings and cuttings: keep smoothing until no
+  // gradient exceeds what a circuit road can have (~20 %)
+  for (let pass = 0; pass < 16; pass++) {
+    let gmax = 0;
+    for (let i = 0; i < n; i++) {
+      grade[i] = (z[(i + 1) % n] - z[(i - 1 + n) % n]) / (segLen[i] + segLen[(i - 1 + n) % n]);
+      if (Math.abs(grade[i]) > gmax) gmax = Math.abs(grade[i]);
+    }
+    if (!real || gmax <= (def.maxGrade ?? 0.2)) break;
+    z = smoothClosed(z, 1, 30);
   }
 
   // Kerbs wherever the track is turning noticeably (plus lead in/out).
@@ -233,7 +243,7 @@ export function buildTrack(id = 'ravenscar') {
   for (let i = 0; i < n; i++) { wallL[i] = Math.max(wallL[i], hw[i] + 1.5); wallR[i] = Math.max(wallR[i], hw[i] + 1.5); }
 
   const t = {
-    id, name: def.name, country: def.country, real, source: def.source || null,
+    id, name: def.name, country: def.country, real, narrow: !!def.runoff, source: def.source || null,
     n, ds, length, halfWidth: HALF_WIDTH, hw, kerbWidth: KERB_WIDTH,
     x, y, z, grade, heading, curv: curvS, s: sArr, kerb, gravelL, gravelR, wallL, wallR,
     sectors: [0, Math.round(n * 0.33), Math.round(n * 0.67)],

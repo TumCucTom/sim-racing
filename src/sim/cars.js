@@ -135,4 +135,49 @@ CARS.f458 = {
   reference: { zeroTo100: [3.2, 3.7], brake100: [30, 35], latG: [1.0, 1.15], topKmh: [315, 335] },
 };
 
-export const CAR_ORDER = ['gt3', 'f458', 'hatch', 'coupe', 'formula', 'ev'];
+// Le Mans Hypercar in the mould of the Ferrari 499P: 3.0 twin-turbo V6, power
+// capped at 500 kW by the regulations, ~1,030 kg dry, big efficient downforce.
+// (The real car adds a front-axle hybrid motor above 190 km/h inside the same
+// power cap; here all 500 kW go to the rear wheels.)
+CARS.hypercar = {
+  id: 'hypercar', name: 'Aurelia LMH', klass: 'Le Mans Hypercar (499P class) · RWD · 3.0 twin-turbo V6',
+  blurb: '500 kW regulation cap, 1,110 kg with driver, prototype downforce, no ABS.',
+  mass: 1110, wheelbase: 3.15, frontWeight: 0.48, cgHeight: 0.30, trackF: 1.68, trackR: 1.66,
+  yawK: 0.9, wheelRadius: 0.355, wheelInertia: 1.5,
+  drive: 'RWD', diff: { lock: 140, preload: 110, ramp: 0.5 },
+  tireStagger: 1.0, tire: { muX: 1.95, muY: 1.82, loadSens: 0.11, peakAlpha: 0.105, peakKappa: 0.085, C: 1.58, tOpt: 95, tWin: 40, squeal: 0.4 }, rollStiffFront: 0.52,
+  CdA: 0.90, ClA: 4.0, aeroBalance: 0.46,
+  brakeTorque: 15000, brakeBias: 0.60, abs: false, tc: true,
+  engine: {
+    layout: 'V6T', cylinders: 6, turbo: true, inertia: 0.09,
+    idle: 1800, redline: 8500, limiter: 8600,
+    torque: [[2000, 380], [3000, 520], [4500, 680], [5500, 720], [6500, 715], [7000, 682], [7500, 636], [8000, 590], [8500, 530], [8800, 420]],
+    friction: [20, 0.011],
+  },
+  gears: [3.08, 2.36, 1.88, 1.55, 1.30, 1.12, 1.0], finalDrive: 3.35, shiftTime: 0.035, efficiency: 0.94,
+  steerLock: 0.38, body: { style: 'gt', length: 5.05, width: 2.0, height: 1.08, color: 0xc4161c },
+  reference: { zeroTo100: [2.4, 3.1], brake100: [17, 23], latG: [1.9, 2.8], topKmh: [325, 350] },
+};
+
+// Stock Mini Cooper S (F56, 2.0 turbo, 6-speed manual) from published figures.
+CARS.mini = {
+  id: 'mini', name: 'Mini Cooper S', klass: 'Stock road car · FWD · 2.0 turbo I4',
+  blurb: 'Showroom standard: 192 hp, open diff, road tyres. Light, eager, runs out of grip early.',
+  mass: 1310, wheelbase: 2.495, frontWeight: 0.62, cgHeight: 0.55, trackF: 1.485, trackR: 1.485,
+  yawK: 1.0, wheelRadius: 0.308, wheelInertia: 1.2,
+  drive: 'FWD', diff: { lock: 15, preload: 20, ramp: 0.05 },
+  tireStagger: 0.2, tire: { muX: 1.15, muY: 1.06, loadSens: 0.10, peakAlpha: 0.155, peakKappa: 0.12, C: 1.40, tOpt: 75, tWin: 50, squeal: 1.15 }, rollStiffFront: 0.60,
+  CdA: 0.68, ClA: 0.02, aeroBalance: 0.4,
+  brakeTorque: 6200, brakeBias: 0.74, abs: true, tc: true,
+  engine: {
+    layout: 'I4', cylinders: 4, turbo: true, inertia: 0.17,
+    idle: 800, redline: 6500, limiter: 6600,
+    torque: [[1000, 200], [1350, 280], [4600, 280], [5000, 269], [5500, 245], [6000, 224], [6500, 195], [6800, 150]],
+    friction: [16, 0.011],
+  },
+  gears: [3.92, 2.14, 1.39, 1.09, 0.89, 0.76], finalDrive: 3.59, shiftTime: 0.28, efficiency: 0.91,
+  steerLock: 0.58, body: { style: 'hatch', length: 3.85, width: 1.73, height: 1.41, color: 0x1e4d2b },
+  reference: { zeroTo100: [6.4, 7.3], brake100: [33, 38], latG: [0.88, 1.02], topKmh: [225, 240] },
+};
+
+export const CAR_ORDER = ['gt3', 'f458', 'hypercar', 'mini', 'hatch', 'coupe', 'formula', 'ev'];

@@ -14,7 +14,7 @@ for (const id of (process.argv[2] ? process.argv[2].split(',') : CAR_ORDER)) {
   const spec = CARS[id]; let best = null;
   for (const trail of [0, 0.3, 0.6, 0.9]) for (const grip of [0.8, 0.86, 0.92, 0.97, 1.02]) {
     let tot = 0, ok = true;
-    for (const tid of TRACK_ORDER.filter(x => x !== 'nordschleife')) { const t = buildTrack(tid); const r = run(t, spec, { grip, trail, line: t.line, brake: spec.abs ? 0.85 : 0.65 }); if (r === null) { ok = false; break; } tot += r; }
+    for (const tid of TRACK_ORDER.filter(x => x !== 'nordschleife' && x !== 'monaco')) { const t = buildTrack(tid); const r = run(t, spec, { grip, trail, line: t.line, brake: spec.abs ? 0.85 : 0.65 }); if (r === null) { ok = false; break; } tot += r; }
     if (ok && (!best || tot < best.tot)) best = { trail, grip, tot };
   }
   console.log(id.padEnd(8), JSON.stringify(best));
