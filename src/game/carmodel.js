@@ -12,7 +12,13 @@ const glbCache = new Map();
 function loadGLB(url) {
   if (!glbCache.has(url)) {
     if (!gltfLoader) { const d = new DRACOLoader(); d.setDecoderPath('draco/'); gltfLoader = new GLTFLoader(); gltfLoader.setDRACOLoader(d); }
-    glbCache.set(url, gltfLoader.loadAsync(url));
+    // hosted single-file builds embed binary assets as base64 (see tools/make-artifact.js)
+    const inline = globalThis.__INLINE_ASSETS?.[url];
+    if (inline) {
+      const bin = atob(inline), buf = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+      glbCache.set(url, gltfLoader.parseAsync(buf.buffer, ''));
+    } else glbCache.set(url, gltfLoader.loadAsync(url));
   }
   return glbCache.get(url);
 }
@@ -269,7 +275,7 @@ function attachGLB(model, spec, body, { a, bb }) {
     const spin = [0, 0, 0, 0];
     model.setWheel = (i, steer, dSpin) => { const w = gw[i]; spin[i] -= dSpin; if (i < 2) w.rotation.y = steer; w.rotation.x = spin[i]; };
     // baked contact shadow under the car
-    new THREE.TextureLoader().load('models/ferrari_ao.png', (tex) => {
+    new THREE.TextureLoader().load(globalThis.__INLINE_ASSETS?.['models/ferrari_ao.png'] || 'models/ferrari_ao.png', (tex) => {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(0.655 * 4 * k, 1.3 * 4 * k), new THREE.MeshBasicMaterial({ map: tex, blending: THREE.MultiplyBlending, toneMapped: false, transparent: true, premultipliedAlpha: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }));
       m.rotation.x = -Math.PI / 2; m.position.y = 0.012; m.renderOrder = 2; m.userData.shared = false; car.add(m);
     });
