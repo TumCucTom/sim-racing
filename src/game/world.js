@@ -31,6 +31,9 @@ export function makeTerrainFn(track) {
   let cx = 0, cy = 0;
   for (let i = 0; i < track.n; i++) { cx += track.x[i]; cy += track.y[i]; }
   cx /= track.n; cy /= track.n;
+  let zMin = Infinity, zMax = -Infinity, zMean = 0;
+  for (let i = 0; i < track.n; i++) { zMin = Math.min(zMin, track.z[i]); zMax = Math.max(zMax, track.z[i]); zMean += track.z[i] / track.n; }
+  const amp = Math.max(0.12, Math.min(1.6, (zMax - zMin) / 23));
   let ext = 0; for (let i = 0; i < track.n; i += 10) ext = Math.max(ext, Math.hypot(track.x[i] - cx, (track.y[i] - cy) * 1.4));
   return (x, y) => {
     const i = nearestIndexGlobal(track, x, y);
@@ -39,8 +42,9 @@ export function makeTerrainFn(track) {
     const corr = (d > 0 ? track.wallL[i] : track.wallR[i]) + 1.5;
     const near = track.z[i] - 0.25;
     const rc = Math.hypot(x - cx, (y - cy) * 1.4);
-    const far = 10 + 22 * vnoise(x / 420 + 3.1, y / 420 + 7.7) + 8 * vnoise(x / 130, y / 130) + 1.2 * vnoise(x / 28, y / 28)
-      + 150 * smooth(ext + 300, ext + 1200, rc) * (0.45 + 0.9 * vnoise(x / 300 + 11, y / 300 + 5));
+    // surrounding land follows the circuit's own relief: flat circuits sit on flat land
+    const far = zMean + amp * (22 * (vnoise(x / 420 + 3.1, y / 420 + 7.7) - 0.4) + 8 * (vnoise(x / 130, y / 130) - 0.4)) + 1.2 * vnoise(x / 28, y / 28)
+      + (60 + 90 * amp) * smooth(ext + 300, ext + 1200, rc) * (0.45 + 0.9 * vnoise(x / 300 + 11, y / 300 + 5));
     const t = smooth(corr, corr + 80, dist);
     return { h: near + (far - near) * t, idx: i, dist, corr, t };
   };

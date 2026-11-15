@@ -24,6 +24,11 @@ const policyModules = import.meta.glob('../policies/*.json', { eager: true });
 const POLICIES = {};
 for (const [path, mod] of Object.entries(policyModules)) POLICIES[path.match(/([^/]+)\.json$/)[1]] = mod.default ?? mod;
 
+// storage can be unavailable (private windows, sandboxed embeds): never let it break the game
+const store = {
+  get(k) { try { return window.localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { window.localStorage.setItem(k, v); } catch { /* ignore */ } },
+};
 const QUALITY = {
   low: { shadows: false, shadowMap: 1024, trees: 350, maxDpr: 1, bloom: false },
   medium: { shadows: true, shadowMap: 2048, trees: 800, maxDpr: 1.5, bloom: false },
@@ -34,9 +39,9 @@ const CAMS = ['chase', 'far', 'bonnet', 'tv'];
 
 class Game {
   constructor() {
-    this.trackId = TRACKS[params.get('track')] ? params.get('track') : (TRACKS[localStorage.getItem('rr-track')] ? localStorage.getItem('rr-track') : 'ravenscar');
+    this.trackId = TRACKS[params.get('track')] ? params.get('track') : (TRACKS[store.get('rr-track')] ? store.get('rr-track') : 'ravenscar');
     this.track = buildTrack(this.trackId);
-    this.qualityName = params.get('q') || localStorage.getItem('rr-quality') || 'high';
+    this.qualityName = params.get('q') || store.get('rr-quality') || 'high';
     this.quality = QUALITY[this.qualityName] || QUALITY.high;
     const canvas = document.getElementById('gl');
     const r = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -54,12 +59,7 @@ class Game {
     const skyClone = this.world.sky.clone(); envScene.add(skyClone);
     this.scene.environment = pm.fromScene(envScene, 0, 1, 10000).texture; this.scene.environmentIntensity = 0.55;
     pm.dispose();
-    if (this.quality.bloom) {
-      this.composer = new EffectComposer(r);
-      this.composer.addPass(new RenderPass(this.scene, this.camera));
-      this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.22, 0.6, 0.92));
-      this.composer.addPass(new OutputPass());
-    }
+    this.setupComposer();
     this.effects = new Effects(this.scene);
     this.props = new Props(this.scene, this.track, this.world);
     this.ui = document.getElementById('ui');
@@ -76,7 +76,7 @@ class Game {
     this.tvPosts = this.buildTvPosts();
     this.bindKeys();
     this.buildMenu();
-    this.setCar(params.get('car') || localStorage.getItem('rr-car') || 'gt3');
+    this.setCar(params.get('car') || store.get('rr-car') || 'gt3');
     window.addEventListener('resize', () => this.resize()); this.resize();
     document.getElementById('loading').remove();
     if (params.has('autostart')) this.start(params.has('ai')); else this.showMenu(true);
@@ -129,15 +129,58 @@ class Game {
     const ts = document.getElementById('track');
     for (const id of TRACK_ORDER) { const o = document.createElement('option'); o.value = id; o.textContent = `${TRACKS[id].name}${TRACKS[id].real ? ' — ' + TRACKS[id].country : ' (original)'}`; ts.appendChild(o); }
     ts.value = this.trackId;
-    ts.onchange = () => { localStorage.setItem('rr-track', ts.value); const u = new URL(location.href); u.searchParams.set('track', ts.value); u.searchParams.delete('autostart'); location.href = u.toString(); };
+    ts.onchange = () => this.setTrack(ts.value);
+    this.updateTrackInfo();
+    const q = document.getElementById('quality'); q.value = this.qualityName;
+    q.onchange = () => this.applyQuality(q.value);
+    document.getElementById('go').onclick = () => this.start(false);
+    document.getElementById('watch').onclick = () => this.start(true);
+  }
+
+  // Change graphics quality live. Tree density is fixed at world-build time, so
+  // it follows the new setting the next time a circuit is loaded.
+  applyQuality(name) {
+    if (!QUALITY[name]) return;
+    store.set('rr-quality', name);
+    this.qualityName = name; const ql = this.quality = QUALITY[name], r = this.renderer;
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, ql.maxDpr));
+    r.shadowMap.enabled = ql.shadows; this.world.sunLight.castShadow = ql.shadows;
+    this.world.sunLight.shadow.mapSize.set(ql.shadowMap, ql.shadowMap);
+    if (this.world.sunLight.shadow.map) { this.world.sunLight.shadow.map.dispose(); this.world.sunLight.shadow.map = null; }
+    this.scene.traverse(o => { if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true; });
+    this.setupComposer();
+    this.resize();
+  }
+
+  setupComposer() {
+    this.composer = null;
+    if (!this.quality.bloom) return;
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.22, 0.6, 0.92));
+    this.composer.addPass(new OutputPass());
+  }
+
+  // Swap circuits in place (no page reload).
+  setTrack(id) {
+    if (!TRACKS[id] || id === this.trackId) return;
+    store.set('rr-track', id);
+    this.scene.remove(this.world.group);
+    this.world.group.traverse(o => { if (o.isMesh) { o.geometry.dispose(); for (const m of [].concat(o.material)) { m.map?.dispose(); m.dispose(); } } });
+    this.props.dispose(this.scene); this.effects.clear();
+    this.trackId = id; this.track = buildTrack(id);
+    this.world = buildWorld(this.track, this.renderer, this.quality); this.scene.add(this.world.group);
+    this.props = new Props(this.scene, this.track, this.world);
+    this.rec = new Recorder(this.track); this.tel.setTrack(this.rec, this.track); this.hud.setTrack(this.track);
+    this.tvPosts = this.buildTvPosts(); this.aiLap = null;
+    this.updateTrackInfo();
+    this.setCar(this.spec.id);
+  }
+
+  updateTrackInfo() {
     const t = this.track; let zmin = Infinity, zmax = -Infinity; for (let i = 0; i < t.n; i++) { zmin = Math.min(zmin, t.z[i]); zmax = Math.max(zmax, t.z[i]); }
     document.getElementById('trackname').innerHTML = `${t.name} <small>${(t.length / 1000).toFixed(2)} km · ${(2 * t.halfWidth).toFixed(0)} m wide · ${(zmax - zmin).toFixed(0)} m elevation change</small>`;
     document.getElementById('tracknote').textContent = t.real ? 'Real circuit: centreline and track width from open survey data (TUMFTM racetrack-database). Elevation is approximated; scenery is procedural.' : 'Original circuit designed for this simulator; the RL driver was trained here.';
-    document.title = `${t.name} — Racing Simulator`;
-    const q = document.getElementById('quality'); q.value = this.qualityName;
-    q.onchange = () => { localStorage.setItem('rr-quality', q.value); const u = new URL(location.href); u.searchParams.set('q', q.value); location.href = u.toString(); };
-    document.getElementById('go').onclick = () => this.start(false);
-    document.getElementById('watch').onclick = () => this.start(true);
   }
 
   showMenu(show) {
@@ -164,7 +207,7 @@ class Game {
   setCar(id) {
     if (!CARS[id]) id = 'gt3';
     const spec = this.spec = CARS[id];
-    localStorage.setItem('rr-car', id);
+    store.set('rr-car', id);
     document.querySelectorAll('.card').forEach(c => c.classList.toggle('sel', c.dataset.id === id));
     this.sim = new Sim(this.track, spec);
     this.sim.onLap = (t, valid) => this.onLap(t, valid);

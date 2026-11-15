@@ -116,15 +116,15 @@ export class TelemetryPanel {
     this.chips = chips;
     el.querySelectorAll('[data-view]').forEach(b => b.onclick = () => { this.view = b.dataset.view; el.querySelectorAll('[data-view]').forEach(o => o.classList.toggle('on', o === b)); chips.style.display = this.view === 'traces' ? '' : 'none'; });
     el.querySelectorAll('[data-ref]').forEach(b => b.onclick = () => { this.refMode = b.dataset.ref; el.querySelectorAll('[data-ref]').forEach(o => o.classList.toggle('on', o === b)); });
-    el.querySelector('[data-act=fit]').onclick = () => { this.x0 = 0; this.x1 = track.length; this.follow = false; el.querySelector('[data-act=follow]').classList.remove('on'); };
+    el.querySelector('[data-act=fit]').onclick = () => { this.x0 = 0; this.x1 = this.track.length; this.follow = false; el.querySelector('[data-act=follow]').classList.remove('on'); };
     el.querySelector('[data-act=follow]').onclick = (e) => { this.follow = !this.follow; e.target.classList.toggle('on', this.follow); if (this.follow) { this.x0 = 0; this.x1 = 600; } };
     const cv = this.cv;
     cv.addEventListener('wheel', (e) => {
       if (this.view !== 'traces') return; e.preventDefault();
       const r = cv.getBoundingClientRect(), f = (e.clientX - r.left - 44) / (r.width - 52);
       const xc = this.x0 + (this.x1 - this.x0) * Math.max(0, Math.min(1, f)), k = e.deltaY > 0 ? 1.25 : 0.8;
-      let w = Math.max(120, Math.min(track.length, (this.x1 - this.x0) * k));
-      this.x0 = Math.max(0, xc - w * f); this.x1 = Math.min(track.length, this.x0 + w); this.x0 = Math.max(0, this.x1 - w);
+      let w = Math.max(120, Math.min(this.track.length, (this.x1 - this.x0) * k));
+      this.x0 = Math.max(0, xc - w * f); this.x1 = Math.min(this.track.length, this.x0 + w); this.x0 = Math.max(0, this.x1 - w);
     }, { passive: false });
     let drag = null;
     cv.addEventListener('mousedown', (e) => { drag = { x: e.clientX, x0: this.x0, x1: this.x1 }; });
@@ -133,7 +133,7 @@ export class TelemetryPanel {
       const r = cv.getBoundingClientRect();
       if (drag && this.view === 'traces') {
         const dx = -(e.clientX - drag.x) / (r.width - 52) * (drag.x1 - drag.x0), w = drag.x1 - drag.x0;
-        this.x0 = Math.max(0, Math.min(track.length - w, drag.x0 + dx)); this.x1 = this.x0 + w;
+        this.x0 = Math.max(0, Math.min(this.track.length - w, drag.x0 + dx)); this.x1 = this.x0 + w;
       }
       const f = (e.clientX - r.left - 44) / (r.width - 52);
       this.cursor = f >= 0 && f <= 1 ? this.x0 + (this.x1 - this.x0) * f : null;
@@ -141,6 +141,7 @@ export class TelemetryPanel {
     });
     cv.addEventListener('mouseleave', () => { this.cursor = null; this.onCursor?.(null); });
   }
+  setTrack(recorder, track) { this.rec = recorder; this.track = track; this.x0 = 0; this.x1 = track.length; this.cursor = null; }
   get visible() { return !this.el.classList.contains('hidden'); }
   toggle() { this.el.classList.toggle('hidden'); if (!this.visible) this.onCursor?.(null); }
   ref() { return this.refMode === 'ai' ? (this.rec.hasAI ? this.rec.ai : null) : (this.rec.hasBest ? this.rec.best : null); }

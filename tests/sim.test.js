@@ -113,3 +113,30 @@ test('walls contain the car', () => {
     assert.ok(Math.abs(sim.car.d) <= lim + 0.5);
   }
 });
+
+test('real circuits: lengths match official figures and geometry is sane', async () => {
+  const { TRACK_ORDER } = await import('../src/sim/track.js');
+  const official = { silverstone: 5891, spa: 7004, monza: 5793 };
+  for (const id of TRACK_ORDER) {
+    const t = buildTrack(id);
+    if (official[id]) assert.ok(Math.abs(t.length - official[id]) / official[id] < 0.005, `${id} length ${t.length}`);
+    for (let i = 0; i < t.n; i++) {
+      assert.ok(t.hw[i] > 3.5 && t.hw[i] < 10, `${id} half-width ${t.hw[i]}`);
+      assert.ok(t.wallL[i] >= t.hw[i] + 1.4 && t.wallR[i] >= t.hw[i] + 1.4, `${id} wall inside track at ${i}`);
+      assert.ok(Math.abs(t.grade[i]) < 0.2);
+    }
+  }
+});
+
+test('the in-game AI completes a clean lap in every car on every circuit', async () => {
+  const { TRACK_ORDER } = await import('../src/sim/track.js');
+  for (const tid of TRACK_ORDER) {
+    const t = buildTrack(tid);
+    for (const id of CAR_ORDER) {
+      const spec = CARS[id], sim = new Sim(t, spec);
+      const drv = new BaselineDriver(t, spec, t.real ? { grip: 0.84, brake: spec.abs ? 0.8 : 0.62 } : { grip: 0.88 });
+      while (sim.lap < 1 && sim.time < 400) { sim.step(drv.control(sim.car)); assert.ok(sim.car.wallContact <= 0, `${id} hit a wall at ${tid} s=${sim.car.s.toFixed(0)}`); }
+      assert.ok(sim.lap === 1 && sim.lastLapValid, `${id} at ${tid}`);
+    }
+  }
+});

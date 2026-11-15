@@ -55,6 +55,7 @@ export class Props {
     for (const it of this.items) { it.home = it.body.position.clone(); it.homeQ = it.body.quaternion.clone(); }
     this.sync();
   }
+  dispose(scene) { for (const it of this.items) scene.remove(it.mesh); this.items = []; }
   reset() { for (const it of this.items) { it.body.position.copy(it.home); it.body.quaternion.copy(it.homeQ); it.body.velocity.setZero(); it.body.angularVelocity.setZero(); it.body.sleep(); } this.sync(); }
   update(dt, car, spec) {
     const b = this.carBody, cy = Math.cos(car.yaw), sy = Math.sin(car.yaw);

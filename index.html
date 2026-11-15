@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Racing Simulator</title>
+<title>Ravenscar Racing Simulator</title>
 <style>
-  html, body { margin:0; height:100%; background:#0b0e13; overflow:hidden; font-family:system-ui, -apple-system, 'Segoe UI', sans-serif; color:#e8ecf1; }
+  html, body { margin:0; height:100%; background:#0b0e13; color-scheme:dark; overflow:hidden; font-family:system-ui, -apple-system, 'Segoe UI', sans-serif; color:#e8ecf1; }
   #gl { position:fixed; inset:0; width:100%; height:100%; display:block; }
   #ui { position:fixed; inset:0; pointer-events:none; }
   #timing { position:absolute; left:12px; top:12px; min-width:238px; background:rgba(10,13,18,.74); border:1px solid rgba(255,255,255,.12); border-radius:8px; padding:9px 12px; font-variant-numeric:tabular-nums; backdrop-filter:blur(6px); }
@@ -26,7 +26,7 @@
   #perf { position:absolute; right:12px; top:170px; font:11px/1.4 ui-monospace, monospace; background:rgba(10,13,18,.7); padding:6px 8px; border-radius:6px; white-space:pre; display:none; }
   #menu { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:linear-gradient(180deg, rgba(8,10,14,.55), rgba(8,10,14,.86)); pointer-events:auto; overflow:auto; }
   #menu.hidden { display:none; }
-  #menu .inner { width:min(1080px, 94vw); padding:18px 0; }
+  #menu .inner { width:min(1080px, 100%); box-sizing:border-box; padding-block:18px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); margin:auto; }
   #menu h1 { margin:0; font-size:34px; letter-spacing:.02em; } #menu h1 small { font-size:14px; font-weight:400; opacity:.7; margin-left:10px; }
   #menu p.sub { margin:6px 0 14px; opacity:.78; font-size:14px; }
   #cars { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:10px; }

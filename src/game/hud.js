@@ -29,7 +29,12 @@ export class HUD {
     this.map = this.$('map'); this.mctx = this.map.getContext('2d');
     this.cl = this.$('cluster'); this.cctx = this.cl.getContext('2d');
     this.toastT = 0;
-    // precompute map transform + path
+    this.setTrack(track);
+    this.sectorBest = [null, null, null];
+  }
+
+  setTrack(track) {
+    this.track = track;
     const t = track; let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (let i = 0; i < t.n; i++) { minX = Math.min(minX, t.x[i]); maxX = Math.max(maxX, t.x[i]); minY = Math.min(minY, t.y[i]); maxY = Math.max(maxY, t.y[i]); }
     const W = 460, H = 300, pad = 22, sc = Math.min((W - 2 * pad) / (maxX - minX), (H - 2 * pad) / (maxY - minY));
@@ -37,7 +42,6 @@ export class HUD {
     this.my = (y) => H - pad - (y - minY) * sc - ((H - 2 * pad) - (maxY - minY) * sc) / 2;
     this.path = new Path2D();
     for (let i = 0; i <= t.n; i += 3) { const k = i % t.n; if (i === 0) this.path.moveTo(this.mx(t.x[k]), this.my(t.y[k])); else this.path.lineTo(this.mx(t.x[k]), this.my(t.y[k])); }
-    this.sectorBest = [null, null, null];
   }
 
   toast(msg, secs = 2.5) { const el = this.$('toast'); el.textContent = msg; el.style.opacity = 1; this.toastT = secs; }
