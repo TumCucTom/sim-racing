@@ -5,3 +5,4 @@ dist-single
 rl/runs/test_*
 rl/runs/*/latest.json
 rl/runs/*/final.json
+artifact
