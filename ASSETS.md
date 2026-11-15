@@ -105,5 +105,6 @@ on top of the existing CC0 textures above.
 | `trackside.osm` in `src/sim/tracks/{silverstone,spa,monza,nordschleife,laguna}.json` (gravel beds, barrier lines) | OpenStreetMap contributors, extracted with `api/0.6/map` in November 2026 and processed by `tools/trackside-osm.mjs` | ODbL 1.0 | Derived database: ray-cast offsets from the centreline, not the original geometry. |
 | `src/sim/tracks/laguna.json` centreline | OpenStreetMap contributors: `highway=raceway` ways 10464852 and 1315957502–1315957508 | ODbL 1.0 | Resampled every 5 m. |
 | `src/sim/tracks/laguna.json` elevation | USGS 3D Elevation Program 1/3 arc-second DEM (`ned10m`) via opentopodata.org | US public domain | Sampled every 10 m along the lap. |
+| `src/sim/tracks/monaco.scene.json` (building footprints and heights, coastline, tunnel range) | OpenStreetMap contributors, processed by `tools/monaco-scene.mjs` | ODbL 1.0 | 71 kB; façades, roofs, yachts are procedural. |
 | `src/sim/tracks/*.trackside.json` | Written by hand from memory of the venues | project licence | Not surveyed; see README "Trackside". |
 

@@ -121,22 +121,22 @@ tuning, all laps inside track limits; `node tools/ai-laps.js`):
 
 | car | Ravenscar | Silverstone | Spa | Monza | Nordschleife | Monaco | Laguna Seca |
 |---|---|---|---|---|---|---|---|
-| FX-10 | 0:53.54 | 1:58.43 | 2:08.80 | 1:37.48 | 5:48.97 | 1:34.20 | 1:19.12 |
-| Aurelia LMH | 0:56.23 | 2:02.39 | 2:15.02 | 1:43.96 | 6:31.97 | 1:40.48 | 1:22.23 |
-| Audi R18 | 0:57.86 | 2:06.56 | 2:19.69 | 1:48.11 | 6:45.41 | 1:42.65 | 1:24.75 |
-| Arrow GT3-R | 1:04.49 | 2:19.78 | 2:34.69 | 1:57.29 | 7:27.72 | 1:47.06 | 1:32.31 |
-| Audi R8 LMS GT3 | 1:04.17 | 2:19.13 | 2:33.82 | 1:56.62 | 7:25.35 | 1:46.66 | 1:31.87 |
-| Lamborghini Huracán GT3 | 1:04.39 | 2:19.07 | 2:33.47 | 1:56.33 | 7:25.09 | 1:46.55 | 1:31.78 |
-| Mercedes-AMG GT3 | 1:04.82 | 2:19.21 | 2:34.02 | 1:57.12 | 7:26.17 | 1:46.92 | 1:32.17 |
-| Ferrari 296 GT3 | 1:04.22 | 2:18.97 | 2:33.33 | 1:56.29 | 7:24.95 | 1:46.56 | 1:31.70 |
-| McLaren 720S GT3 | 1:04.20 | 2:19.05 | 2:33.47 | 1:56.29 | 7:25.27 | 1:46.57 | 1:31.74 |
-| Ferrari 458 | 1:15.95 | 2:43.17 | 2:59.10 | 2:11.57 | 8:47.63 | 2:03.63 | 1:47.17 |
-| Huracán LP 610-4 | 1:16.77 | 2:45.89 | 3:01.52 | 2:12.82 | 8:48.83 | 2:02.43 |
-| Aventador SVJ | 1:17.14 | 2:45.75 | 3:01.00 | 2:11.09 | 8:27.01 | 1:58.10 |
-| Volt-R | 1:19.09 | 2:49.31 | 3:05.36 | 2:14.34 | 8:44.77 | 2:01.51 | 1:51.02 |
-| Vanta RS | 1:20.83 | 2:52.81 | 3:11.85 | 2:23.73 | 9:30.78 | 2:11.42 | 1:53.98 |
-| Brawler GT | 1:21.50 | 2:54.68 | 3:12.67 | 2:22.71 | 9:34.15 | 2:11.90 | 1:55.00 |
-| Mini Cooper S | 1:28.97 | 3:07.43 | 3:29.63 | 2:38.57 | 10:28.72 | 2:23.46 | 2:04.50 |
+| FX-10 | 0:53.54 | 1:58.43 | 2:08.89 | 1:37.50 | 5:48.99 | 1:34.06 | 1:19.12 |
+| Aurelia LMH | 0:56.23 | 2:02.39 | 2:15.12 | 1:44.00 | 6:31.81 | 1:40.28 | 1:22.23 |
+| Audi R18 | 0:57.86 | 2:06.56 | 2:19.81 | 1:48.16 | 6:45.21 | 1:42.43 | 1:24.74 |
+| Arrow GT3-R | 1:04.49 | 2:19.78 | 2:34.72 | 1:57.35 | 7:27.40 | 1:46.86 | 1:32.31 |
+| Audi R8 LMS GT3 | 1:04.17 | 2:19.13 | 2:33.90 | 1:56.68 | 7:25.08 | 1:46.46 | 1:31.86 |
+| Lamborghini Huracán GT3 | 1:04.39 | 2:19.07 | 2:33.60 | 1:56.39 | 7:24.81 | 1:46.34 | 1:31.78 |
+| Mercedes-AMG GT3 | 1:04.82 | 2:19.21 | 2:34.20 | 1:57.19 | 7:25.88 | 1:46.74 | 1:32.16 |
+| Ferrari 296 GT3 | 1:04.22 | 2:18.97 | 2:33.45 | 1:56.34 | 7:24.67 | 1:46.35 | 1:31.70 |
+| McLaren 720S GT3 | 1:04.20 | 2:19.05 | 2:33.62 | 1:56.34 | 7:24.95 | 1:46.36 | 1:31.74 |
+| Ferrari 458 | 1:15.95 | 2:43.17 | 2:59.25 | 2:11.66 | 8:47.33 | 2:03.33 | 1:47.16 |
+| Huracán LP 610-4 | 1:16.77 | 2:45.89 | 3:01.66 | 2:12.87 | 8:48.53 | 2:02.08 | 1:48.51 |
+| Aventador SVJ | 1:17.14 | 2:45.75 | 3:01.16 | 2:11.15 | 8:26.76 | 1:57.80 | 1:48.73 |
+| Volt-R | 1:19.09 | 2:49.31 | 3:05.56 | 2:14.40 | 8:44.47 | 2:01.23 | 1:51.02 |
+| Vanta RS | 1:20.83 | 2:52.81 | 3:12.05 | 2:23.80 | 9:30.21 | 2:11.05 | 1:53.98 |
+| Brawler GT | 1:21.50 | 2:54.68 | 3:12.89 | 2:22.82 | 9:33.68 | 2:11.58 | 1:54.99 |
+| Mini Cooper S | 1:28.97 | 3:07.43 | 3:30.05 | 2:38.72 | 10:28.12 | 2:22.95 | 2:04.50 |
 
 **GT3 class.** The five real GT3 cars added in 0.9.0 are specified from published homologation
 figures (wheelbase, dimensions, engine type and rev range, homologated weight) at typical
@@ -167,11 +167,11 @@ model has no suspension, so kerb-riding and crest behaviour are missing.
 |---|---|---|---|
 | Ravenscar Ridge | 2.91 km | Original design: 10 turns, hairpin, esses, flat-out kink | designed, 23 m relief |
 | Silverstone GP | 5.89 km | Surveyed centreline + widths (TUMFTM racetrack-database, LGPL-3.0) | hand-approximated (nearly flat) |
-| Spa-Francorchamps | 7.00 km | same | EU-DEM 25 m terrain model, 106 m relief |
-| Monza | 5.79 km | same | EU-DEM 25 m |
-| Nürburgring Nordschleife | 20.75 km | OpenStreetMap centreline (ODbL) | EU-DEM 25 m, 288 m relief |
-| Monaco | 3.31 km | OpenStreetMap street centrelines (ODbL), official 3.337 km | SRTM 30 m, ~53 m relief, noisy between buildings so gradient is capped at 11 % |
-| Laguna Seca | 3.60 km | OpenStreetMap raceway centreline (ODbL), official 3.602 km, anticlockwise | USGS 3DEP 10 m (`ned10m`), 57 m relief; the Corkscrew drops 17.3 m in 140 m (peak gradient 16 %) |
+| Spa-Francorchamps | 7.00 km | same | EU-DEM 25 m terrain model: 105 m relief, max 13 % (Raidillon), under 10 % elsewhere |
+| Monza | 5.79 km | same | EU-DEM 25 m: 13 m relief, max 1.8 % |
+| Nürburgring Nordschleife | 20.75 km | OpenStreetMap centreline (ODbL) | EU-DEM 25 m: 288 m relief, max 15.6 % up, 11 % down |
+| Monaco | 3.31 km | OpenStreetMap street centrelines (ODbL), official 3.337 km | SRTM 30 m, scaled to the real 42 m relief (rooftops inflate it), max 7.3 %; the tunnel stretch is bridged |
+| Laguna Seca | 3.60 km | OpenStreetMap raceway centreline (ODbL), official 3.602 km, anticlockwise | USGS 3DEP 10 m (`ned10m`), 57 m relief; the Corkscrew drops 17.5 m in 140 m (peak gradient 16 %), under 14 % elsewhere |
 
 What "real" means here, precisely: the **plan-view layout is real survey or
 map data** (lap lengths within 1 % of official figures — tested), and elevation
@@ -180,7 +180,33 @@ smoothed. Track width is surveyed for the TUMFTM circuits and estimated for
 the Nordschleife, Monaco and Laguna Seca. Buildings and scenery are generated,
 themed per circuit (forest at the Nordschleife, apartment blocks at Monaco, dry
 golden hills with scattered oaks at Laguna Seca) but not replicas: no Monaco
-tunnel or harbour, no Eau Rouge grandstands.
+landmarks, no Eau Rouge grandstands. Monaco's surroundings are OpenStreetMap building
+footprints extruded to their tagged heights, the real harbour outline with moored yachts and an
+enclosed tunnel (`tools/monaco-scene.mjs` → `monaco.scene.json`).
+
+#### Elevation: a fitted profile, not a clipped one
+A 10–30 m terrain model sampled along a road is the road plus noise: grid steps, the hillside the
+road is cut into, tree canopy, rooftops, bridges. `fitElevation` in `src/sim/track.js` therefore fits a
+**periodic smoothing spline** to the samples (exactly a 4th-order low-pass on a closed lap; cutoff
+wavelength per circuit: 110 m for the 10 m model at Laguna Seca, 200 m for EU-DEM at Spa and the
+Nordschleife, 350 m for SRTM in Monaco, 600 m at Monza), made robust by pulling samples more than 2.5 m
+off the fit back to it, with tunnel stretches bridged. Where the fit still exceeds the circuit's
+realistic gradient (or a vertical curvature no racing surface has) only that stretch is refitted with
+a longer cutoff — nothing is clipped — and Monaco and Monza are scaled to their published relief.
+
+| Circuit | Relief before → after | Max gradient | RMS gradient | Crests + dips per km |
+|---|---|---|---|---|
+| Spa | 106.0 → 105.4 m | 19.8 → 13.1 % (was a false −19.8 % after Bruxelles) | 6.21 → 5.64 % | 3.1 → 2.6 |
+| Monza | 17.4 → 13.0 m | 5.0 → 1.8 % | 1.64 → 0.76 % | 4.1 → 1.7 |
+| Nordschleife | 288.2 → 287.5 m | 19.9 → 15.6 % up, 11.0 % down | 6.54 → 6.10 % | 3.1 → 2.5 |
+| Monaco | 49.3 → 42.0 m | 11.4 → 7.3 % | 4.33 → 3.45 % | 3.6 → 2.4 |
+| Laguna Seca | 57.2 → 57.4 m | 16.3 → 16.1 % (Corkscrew only; 13.3 % elsewhere) | 6.05 → 6.18 % | 4.4 → 5.0 |
+
+Ravenscar (analytic) and Silverstone (hand profile, 11 m) are unchanged. Still wrong: Raidillon peaks at
+13 % against a real 17–18 % (the 25 m model cannot resolve it and the fit will not invent it), Beau
+Rivage at 6 % against about 10 %, and nothing here is a survey. The landscape around flat circuits is
+now flat too (it used to get 60–130 m hills regardless); there is no vertical exaggeration, camber or
+banking in the renderer.
 
 #### Trackside: kerbs, run-off, gravel, barriers
 What lies beside the road is data per circuit, per corner and per side
@@ -206,7 +232,7 @@ from two sources that the data keeps apart:
 | Spa | 13 gravel beds (the 2022 layout with gravel back at Les Combes, Bruxelles, Pouhon, Fagnes, Stavelot, Blanchimont), barriers over 98 % (fit 1.6 m) | paved run-off at La Source, Eau Rouge / Raidillon, Les Combes, Bus Stop; red/yellow kerbs; yellow sausage kerbs and serrated kerbs at the Bus Stop; TecPro at the escape areas | endurance pit lane, Raidillon's exact new run-off shape |
 | Monza | 11 gravel beds (Curva Grande, Roggia exit, both Lesmos, Ascari, behind the Parabolica asphalt), barriers on 44 % of the lap (fit 1.4 m) | paved escape areas at the Rettifilo and Roggia with TecPro, sausage and serrated kerbs at both chicanes, paved strip in front of the Parabolica gravel, pit wall | polystyrene boards / escape-road slalom, the old banking |
 | Nordschleife | barrier lines for 97 % of the lap (clamped to 3.2–30 m from the road edge), 7 gravel beds (Hatzenbach entry, Aremberg, Brünnchen, Pflanzgarten, GP link), section names | small gravel beds at Adenauer Forst and Bergwerk | the Karussell's concrete banking; kerbs still stand on both sides of every corner (the AI tuning depends on that layout) |
-| Monaco | centreline only | barriers at the kerb everywhere; three escape roads as short paved spurs (Sainte Dévote, Mirabeau, Nouvelle Chicane) closed by TecPro; sausage kerbs at the chicane and the swimming pool | real street widths (uniform 9.4 m), tunnel, the Rascasse and Noghès escape pockets |
+| Monaco | centreline; 686 building footprints (357 with tagged height, the rest guessed from area), the coastline / quays of Port Hercule, the tunnel's station range (1,542–1,904 m) | barriers at the kerb everywhere; three escape roads as short paved spurs (Sainte Dévote, Mirabeau, Nouvelle Chicane) closed by TecPro; sausage kerbs at the chicane and the swimming pool | real street widths (uniform 9.4 m), the Rascasse and Noghès escape pockets; façades, yachts and the tunnel interior are generic (procedural windows, box hulls, a plain box section); no palm trees, grandstands, pit building or Casino / Piscine landmarks |
 | Laguna Seca | centreline, barrier lines for 97 % of the lap, the Corkscrew gravel | gravel at Turns 2, 3, 4, 5, 6, 9, 10 and 11 (which corners have it; depth follows the surveyed barrier), serrated Corkscrew kerbs, two footbridges (positions approximate) | widths per section are estimates |
 | Ravenscar (fictional) | — | designed: paved run-off with a gravel band at Anvil, Crow's Nest and Home, gravel wedges elsewhere, pit wall. Kerbs and the first 2 m of verge are untouched so the RL benchmark is bit-identical | — |
 
@@ -424,7 +450,7 @@ GPU has not been measured.
   above 3,600 rpm), the AMG GT3 is mostly a Mustang recording, and the recordings are
   road cars free-revving, not race cars on load.
 - **Circuits**: real layouts and (mostly) real elevation, generated
-  scenery. Monaco has no tunnel or harbour; Silverstone's elevation is
+  scenery. Monaco's buildings are OSM footprints with generic façades, not models of the real ones; Silverstone's elevation is
   approximated; width at the Nordschleife, Monaco and Laguna Seca is estimated.
 - **Trackside**: gravel beds and barrier lines are OpenStreetMap geometry of unknown date;
   paved run-off, kerb types and colours are from memory and kerb positions are rule-made, so

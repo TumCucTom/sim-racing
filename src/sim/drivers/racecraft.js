@@ -34,11 +34,12 @@ export function classOf(id) { for (const k in CLASSES) if (CLASSES[k].includes(i
 
 // A seeded personality. `difficulty` scales everybody (1 = the tuned racing-line driver).
 export function makePersonality(rng, difficulty = 0.96) {
+  const skill = Math.min(1, difficulty * (1 - 0.06 * rng.next())), slip = Math.max(0.1, Math.min(1.5, (1.02 - skill) / 0.1));
   return {
-    skill: difficulty * (1 - 0.06 * rng.next()),   // share of the tuned grip and braking the driver uses
+    skill,   // share of the tuned grip and braking the driver uses
     aggression: rng.uniform(0.2, 0.95),            // how small a gap / pace advantage they will go for
     consistency: rng.uniform(0.6, 1.0),            // 1 = every lap the same
-    mistake: rng.uniform(0.002, 0.015),             // chance of a lock-up / wide exit per braking zone (x2.5 under pressure)
+    mistake: rng.uniform(0.002, 0.015) * slip,             // chance of a lock-up / wide exit per braking zone (x2.5 under pressure)
     reaction: rng.uniform(0.16, 0.42),             // seconds from lights-out to throttle
   };
 }
@@ -72,13 +73,18 @@ export class RaceDriver {
     const p = this.p = personality || { skill: 0.96, aggression: 0.5, consistency: 1, mistake: 0, reaction: 0.25 };
     this.rng = new RNG(seed);
     const tune = lineDriverOptions(track, spec);
-    const opts = this.opts = { ...tune, grip: tune.grip * p.skill, brake: tune.brake * (0.4 + 0.6 * p.skill), wet };
+    // skill is a share of the validated tune, never more: the best drivers are fast because they are
+    // precise and consistent, not because they ask more of the car than it has
+    const sk = Math.min(1, p.skill);
+    const opts = this.opts = { ...tune, grip: tune.grip * sk, brake: tune.brake * (0.4 + 0.6 * sk), wet };
+    this.aeroC = 0.5 * 1.2 * spec.ClA / spec.mass;      // downforce acceleration per v^2
     this.base = new BaselineDriver(track, spec, opts);
     const n = track.n, w = spec.body.width;
     this.vLine = this.base.vT;
     // usable lateral range for the car centre (never narrower than the racing line itself)
     const lim = this.lim = new Float32Array(n);
-    for (let i = 0; i < n; i++) lim[i] = Math.max(track.hw[i] - w / 2 - 0.25, Math.abs(track.lineD[i]));
+    // (off the line a car keeps 0.7 m between its wheels and the grass: at speed the tracking error is real)
+    for (let i = 0; i < n; i++) lim[i] = Math.max(track.hw[i] - w / 2 - 0.7, Math.abs(track.lineD[i]));
     // speed profiles of the racing line shifted sideways (and clamped to the road): what the
     // car can carry when it is off line. Off the line there is less rubber (and, in the wet, the
     // line may be the only dry part), so a little grip is taken off as well.
@@ -91,6 +97,9 @@ export class RaceDriver {
     this.px = new Float64Array(n); this.py = new Float64Array(n); this.vCmd = new Float64Array(n);
     this.base.opts = { ...this.base.opts, line: { x: this.px, y: this.py } };
     this.base.vT = this.vCmd;
+    // a car without ABS or with a lot of downforce punishes over-driving harder: smaller liberties
+    const tame = (spec.abs ? 1 : 0.5) * (spec.ClA > 2.5 ? 0.6 : 1);
+    this.slipK = 1 + 0.045 * tame; this.atkK = tame;
     this.reset();
   }
 
@@ -101,7 +110,7 @@ export class RaceDriver {
     this.nL = false; this.nR = false; this.lOff = 0; this.lSep = 0; this.rOff = 0; this.rSep = 0;   // cars alongside, left and right
     this.vF = Infinity; this.speedK = 1; this.paceK = 1; this.extra = 0;
     this.held = 0; this.defApex = -1; this.defD = 0; this.mistakeT = 0; this.braking = false; this.lastLap = -1;
-    this.yieldTo = null; this.keepT = 0; this.started = false; this.spun = false; this.slowPass = false; this.atk = 1; this.panic = false; this.lastBrakeT = -1e9;
+    this.yieldTo = null; this.keepT = 0; this.started = false; this.spun = false; this.slowPass = false; this.atk = 1; this.panic = false; this.wakeF = 0; this.lastBrakeT = -1e9;
     this.passes = 0; this.aborts = 0; this.defends = 0; this.mistakes = 0; this.why = {};
     this.info = { ahead: null, gapA: 0, behind: null, gapB: 0, left: false, right: false };
   }
@@ -158,7 +167,7 @@ export class RaceDriver {
     if (this.extra > 0) {   // brake earlier (dirty air, first-corner caution)
       const k2 = (car.idx + Math.round(v * (0.12 + this.extra) / t.ds)) % n, v2 = this.vAt(k2, this.o); if (v2 < vt) vt = v2;
     }
-    const kk = this.speedK * this.paceK * (this.mistakeT > 0 ? 1.045 : this.atk);
+    const kk = this.speedK * this.paceK * (this.mistakeT > 0 ? this.slipK : this.atk);
     if (kk !== 1) vt *= kk;
     if (this.vF < vt) vt = this.vF;
     // two or more wheels on the grass: ease off and come back gently
@@ -171,8 +180,31 @@ export class RaceDriver {
     const u = b.control(car);
     // Braking for traffic harder than the profile ever does leaves the front tyres nothing to steer
     // with: unless it is an emergency keep a little in hand (and be gentle on the grass).
-    const cap = onGrass >= 2 ? 0.5 : this.panic ? 1 : 0.82;
-    if (u.brake > cap && this.vF < 1e9) u.brake = cap; else if (onGrass >= 2 && u.brake > 0.5) u.brake = 0.5;
+    let cap = onGrass >= 2 ? 0.5 : this.panic ? 1 : 0.82;
+    if (!this.spec.abs && traffic) {
+      // no ABS: threshold braking. Never ask for more than the tyres can take at the present load
+      // (which, on a downforce car, falls away as the speed comes down), on either axle.
+      const sp = this.spec, mu = 0.9 * sp.tire.muX * sp.wheelRadius / sp.brakeTorque;
+      const lock = Math.min((car.fz[0] + car.fz[1]) * mu / sp.brakeBias, (car.fz[2] + car.fz[3]) * mu / (1 - sp.brakeBias));
+      if (lock < cap) cap = Math.max(0.15, lock);
+    }
+    if (traffic && cap < 1) {
+      // braking for traffic while cornering: only what the cornering leaves of the friction circle
+      const sp = this.spec, use = Math.abs(car.ayF) / (0.9 * sp.tire.muY * (9.81 + this.aeroC * v * v));
+      if (use > 0.3) cap *= Math.sqrt(Math.max(0.06, 1 - Math.min(1, use) * Math.min(1, use)));
+    }
+    if (traffic) {
+      // Keep it on the road: in traffic the car is not on the path the line follower was tuned on, and
+      // pure pursuit is slow to notice a drift toward the edge. If the car is about to run out of
+      // road, steer back and free the front tyres to do it.
+      const dP = car.d + 0.4 * (car.vx * Math.sin(car.headErr) + car.vy * Math.cos(car.headErr));
+      const edge = Math.max(t.hw[car.idx] - this.spec.body.width / 2 - 0.15, Math.abs(t.lineD[car.idx]) + 0.35), over = Math.abs(dP) - edge;
+      if (over > 0 && onGrass < 3) {
+        const fix = Math.min(0.4, 0.14 * over) * (dP > 0 ? -1 : 1);
+        u.steer = Math.max(-1, Math.min(1, u.steer + fix)); cap = Math.min(cap, 0.45); if (u.throttle > 0.5) u.throttle = 0.5;
+      }
+    }
+    if (u.brake > cap && (this.vF < 1e9 || !this.spec.abs && traffic)) u.brake = cap; else if (onGrass >= 2 && u.brake > 0.5) u.brake = 0.5;
     return u;
   }
 
@@ -291,8 +323,12 @@ export class RaceDriver {
     if (hazIn < 1e9) { const stop = Math.sqrt(hazV * hazV + 2 * 8 * Math.max(0, hazIn - 7)); if (stop < vF) { vF = stop; if (hazIn < 30) panic = true; } }
     else if (hazGap < 120) vF = Math.min(vF, Math.max(22, 0.75 * v));
     // dirty air: less downforce and less drag when close behind, so brake a little earlier
-    this.extra = (A && gapA < 25 && this.mode !== 'pass' ? 0.07 * (1 - gapA / 25) : 0) + (caution ? 0.12 : 0);
+    this.extra = (A && gapA < 25 && this.mode !== 'pass' ? 0.07 * (1 - gapA / 25) : 0) + (caution ? 0.12 : 0) + (this.wakeF > 0.02 ? 0.3 * this.wakeF * this.aeroC * v * v / (9.81 + this.aeroC * v * v) : 0);
     let speedK = caution ? 0.97 : rc.finished ? 0.75 : 1, atk = 1;
+    // in a wake the car has less downforce (race.js): take off what that costs at this speed. Nothing for
+    // a road car, several per cent for a single-seater in a fast corner.
+    this.wakeF += (rc.wake - this.wakeF) * (rc.wake > this.wakeF ? 0.2 : 0.03);     // quick to see a wake, slow to forget it
+    if (this.wakeF > 0.02) { const dl = this.aeroC * v * v, loss = 0.12 * this.wakeF * dl / (9.81 + dl); speedK *= 1 - 2 * loss; }      // (twice the first-order cost: the tune leaves no margin, a wake is gusty)
 
     // --- state machine ---
     const lapper = rc.blue, fasterBehind = !!B && B.driver && B.driver.lapEst < this.lapEst * 0.97;
@@ -322,7 +358,7 @@ export class RaceDriver {
       if (this.mode === 'pass') this.oT = oStar;
       // out-braking: on the inside for the corner and not yet clear, use the braking the tuned profile
       // keeps in reserve (brake later, arrive hotter); given up at the apex
-      atk = this.mode === 'pass' && !this.slowPass && this.side === inside && dBrake < 200 && dApex > 15 ? 1.02 + 0.025 * p.aggression : 1;
+      atk = this.mode === 'pass' && !this.slowPass && this.side === inside && dBrake < 200 && dApex > 15 ? 1 + (0.02 + 0.025 * p.aggression) * this.atkK : 1;
     } else if (this.mode === 'defend') {
       // one move, then hold it until the corner; release at the apex
       const passed = ((idx - this.defApex + n) % n) < n / 2;

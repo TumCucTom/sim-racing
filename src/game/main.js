@@ -42,6 +42,7 @@ import { Props } from './props.js';
 import { buildLineGuide } from './lineviz.js';
 import { AudioEngine } from '../audio/audio.js';
 import { RaceMode } from './racemode.js';
+import { TvCam } from './tvcam.js';
 import { CONDITIONS, CONDITION_ORDER, patchFog } from './wx.js';
 import { Weather, LensShader } from './weather.js';
 import { wetFor } from '../sim/wet.js';
@@ -509,7 +510,7 @@ class Game {
     const fx = Math.cos(yaw), fz = -Math.sin(yaw);
     // in-car cameras (src/game/cockpit.js): sets the pose for 'cockpit' / 'bonnet', shows or hides the cockpit kit
     const inFov = inCar.update({ renderer: this.renderer, scene: this.scene, composer: this.composer, camera: cam, model: this.model, spec: this.spec, car, mode: this.paused ? 'menu' : mode, dt,
-      info: { lapTime: this.sim.lapStart === null ? null : this.sim.lapTime, lastLap: this.sim.lastLap } });
+      info: { lapTime: this.sim.lapStart === null ? null : this.sim.lapTime, lastLap: this.sim.lastLap, delta: this.rec.delta(this.sim, this.tel.ref()) } });
     if (this.hudCockpit !== (inFov !== null && mode === 'cockpit')) { this.hudCockpit = !this.hudCockpit; const cl = this.hud.cl.style; cl.transformOrigin = '100% 100%'; cl.transform = this.hudCockpit ? 'scale(0.62)' : ''; cl.opacity = this.hudCockpit ? 0.85 : 1; }
     if (this.paused) {
       // showroom orbit behind the menu
@@ -532,16 +533,15 @@ class Game {
     } else if (mode === 'bonnet' || mode === 'cockpit') {
       fov = inFov;
     } else {
-      let best = this.tvPosts[0], bd = Infinity;
-      for (const p of this.tvPosts) { const d = p.distanceToSquared(pos); if (d < bd) { bd = d; best = p; } }
-      cam.position.copy(best); cam.lookAt(pos.x, pos.y + 0.6, pos.z);
-      fov = THREE.MathUtils.clamp(2 * Math.atan(9 / Math.sqrt(bd)) * 57.3, 7, 50);
+      // trackside camera with a checked line of sight to the car (tvcam.js)
+      if (!this.tv || this.tv.world !== this.world) this.tv = new TvCam(this.track, this.world);
+      fov = this.tv.update(dt, pos, car, cam);
     }
     if (mode !== 'tv') {
       // engine / road vibration grows with speed; kerbs and grass rattle the camera
       const t = performance.now() * 0.001, k = Math.min(1, spd / 75), off = car.surf && (car.surf[0] || car.surf[1] || car.surf[2] || car.surf[3]) ? Math.min(1, spd / 25) : 0;
-      const inCar = mode === 'bonnet' || mode === 'cockpit';
-      const amp = (mode === 'cockpit' ? 0.0025 : inCar ? 0.007 : 0.0035) * k * k + off * (mode === 'cockpit' ? 0.008 : inCar ? 0.016 : 0.008);
+      const onBoard = mode === 'bonnet' || mode === 'cockpit';
+      const amp = (mode === 'cockpit' ? 0.0025 : onBoard ? 0.007 : 0.0035) * k * k + off * (mode === 'cockpit' ? 0.008 : onBoard ? 0.016 : 0.008);
       cam.position.y += amp * (Math.sin(t * 61) + 0.6 * Math.sin(t * 37.3));
       cam.rotation.z += amp * 0.35 * Math.sin(t * 29.1); cam.rotation.x += amp * 0.25 * Math.sin(t * 43.7);
     }

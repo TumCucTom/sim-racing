@@ -36,7 +36,8 @@ export function makeTerrainFn(track, { sea = false } = {}) {
   cx /= track.n; cy /= track.n;
   let zMin = Infinity, zMax = -Infinity, zMean = 0;
   for (let i = 0; i < track.n; i++) { zMin = Math.min(zMin, track.z[i]); zMax = Math.max(zMax, track.z[i]); zMean += track.z[i] / track.n; }
-  const amp = Math.max(0.12, Math.min(1.6, (zMax - zMin) / 23));
+  // surrounding relief follows the circuit's own: flat circuits (Monza, Silverstone) sit in flat country
+  const amp0 = Math.max(0.12, Math.min(1.6, (zMax - zMin) / 23)), amp = amp0 < 1 ? amp0 * amp0 : amp0;
   let ext = 0; for (let i = 0; i < track.n; i += 10) ext = Math.max(ext, Math.hypot(track.x[i] - cx, (track.y[i] - cy) * 1.4));
   // coastal circuits: the land falls away into the sea beyond the lowest part of the lap
   let sx = 0, sy = 0, lx0 = 0, ly0 = 0, ln = 0;
@@ -44,6 +45,17 @@ export function makeTerrainFn(track, { sea = false } = {}) {
     for (let i = 0; i < track.n; i++) if (track.z[i] < zMin + 0.12 * (zMax - zMin)) { lx0 += track.x[i]; ly0 += track.y[i]; ln++; }
     lx0 /= ln; ly0 /= ln; const d = Math.hypot(lx0 - cx, ly0 - cy) || 1; sx = (lx0 - cx) / d; sy = (ly0 - cy) / d;
   }
+  // real coastline (OSM, water on the right of each chain): signed distance, + = in the sea
+  const coast = sea && track.scene?.coast ? track.scene.coast.map(c => Float64Array.from(c, v => v / 10)) : null;
+  const seaDist = coast ? (x, y) => {
+    let bd = Infinity, sg = -1;
+    for (const c of coast) for (let k = 0; k + 3 < c.length; k += 2) {
+      const ax = c[k], ay = c[k + 1], ex = c[k + 2] - ax, ey = c[k + 3] - ay, px = x - ax, py = y - ay;
+      const u = Math.max(0, Math.min(1, (px * ex + py * ey) / (ex * ex + ey * ey))), dx = px - ex * u, dy = py - ey * u, d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; sg = ex * py - ey * px < 0 ? 1 : -1; }
+    }
+    return sg * Math.sqrt(bd);
+  } : null;
   return (x, y) => {
     const i = nearestIndexGlobal(track, x, y);
     const d = latOffset(track, i, x, y);
@@ -53,15 +65,19 @@ export function makeTerrainFn(track, { sea = false } = {}) {
     const rc = Math.hypot(x - cx, (y - cy) * 1.4);
     // surrounding land follows the circuit's own relief: flat circuits sit on flat land
     const far = zMean + amp * (22 * (vnoise(x / 420 + 3.1, y / 420 + 7.7) - 0.4) + 8 * (vnoise(x / 130, y / 130) - 0.4)) + 1.2 * vnoise(x / 28, y / 28)
-      + (60 + 90 * amp) * smooth(ext + 300, ext + 1200, rc) * (0.45 + 0.9 * vnoise(x / 300 + 11, y / 300 + 5));
+      + (25 + 110 * amp) * smooth(ext + 300, ext + 1200, rc) * (0.45 + 0.9 * vnoise(x / 300 + 11, y / 300 + 5));
     const t = smooth(corr, corr + 80, dist);
     let h = near + (far - near) * t;
+    let sd = -1;
     if (sea) {
-      const p = (x - lx0) * sx + (y - ly0) * sy, w = smooth(20, 260, p) * smooth(corr + 4, corr + 60, dist);
+      const p = (x - lx0) * sx + (y - ly0) * sy;
+      let w = smooth(20, 260, p) * smooth(corr + 4, corr + 60, dist);
+      // with a real coastline the quay drops straight into the harbour
+      if (seaDist) { sd = seaDist(x, y); w = smooth(0, 3, sd) * smooth(corr + 0.5, corr + 3, dist); }
       h += (zMin - 14 - h) * w;                       // sea bed
       h += (1 - smooth(-200, 500, p)) * smooth(corr + 30, corr + 400, dist) * 60;   // the town climbs the hill behind
     }
-    return { h, idx: i, dist, corr, t, zMin };
+    return { h, idx: i, dist, corr, t, zMin, sea: sd };
   };
 }
 
@@ -267,8 +283,8 @@ export function buildWorld(track, renderer, qualityIn) {
   const aspFallback = TX.asphaltTile(aniso);
   const oldU = { value: aspFallback.map }, avgU = { value: 0.068 };
   const asphaltMat = patch(new THREE.MeshStandardMaterial({ map: aspFallback.map, normalMap: aspFallback.normalMap, normalScale: new THREE.Vector2(0.5, 0.5), roughness: 0.86, metalness: 0 }), 'road', {
-    ...ROAD_V, uniforms: { uOld: oldU, uAvg: avgU },
-    fpars: 'uniform sampler2D uOld; uniform float uAvg; varying vec4 vRoad; varying float vRub; varying vec3 vWPos; float gRub; float gPaint;',
+    ...ROAD_V, uniforms: { uOld: oldU, uAvg: avgU, uUrban: { value: urban ? 1 : 0 } },
+    fpars: 'uniform sampler2D uOld; uniform float uAvg; uniform float uUrban; varying vec4 vRoad; varying float vRub; varying vec3 vWPos; float gRub; float gPaint;',
     color: `{
       vec2 m = vRoad.xy;                                   // metres across (+left) / along
       vec3 a1 = diffuseColor.rgb;
@@ -306,6 +322,16 @@ export function buildWorld(track, renderer, qualityIn) {
       float wear = smoothstep(1.2, 1.8, lum(a1) / uAvg + 0.8 * vnoise(m * vec2(7.0, 1.2)));
       gPaint = ln * (1.0 - 0.6 * wear);
       alb = mix(alb, vec3(0.7, 0.7, 0.68) * (0.8 + 0.2 * lum(a1) / uAvg), gPaint);
+      if (uUrban > 0.5) {
+        // street circuit: zebra crossings, a worn centre line and manhole covers
+        float zs = mod(m.y + 40.0, 211.0);
+        float zb = step(zs, 3.6) * step(0.5, fract(m.x / 1.0 + 0.25)) * step(abs(m.x), vRoad.w - 0.5);
+        float cl = step(abs(m.x), 0.07) * step(0.4, fract(m.y / 9.0)) * step(20.0, zs);
+        alb = mix(alb, vec3(0.6, 0.6, 0.57) * (0.7 + 0.3 * lum(a1) / uAvg), max(zb, cl * 0.5) * (0.75 - 0.5 * wear) * (1.0 - 0.6 * gRub));
+        vec2 mc = vec2(m.x - 2.6 * (hash12(vec2(floor(m.y / 47.0), 3.0)) - 0.5) * 2.0, mod(m.y, 47.0) - 23.5);
+        float mh = smoothstep(0.36, 0.33, length(mc));
+        alb = mix(alb, vec3(0.045, 0.04, 0.036) * (0.7 + 0.6 * step(0.5, fract(mc.x * 9.0)) * step(0.5, fract(mc.y * 9.0))), mh * 0.85);
+      }
       // rain: a water film darkens the surface (the rubbered line dries first on a damp
       // track), water stands along the edges (same function as the sim) and in low spots
       if (uWet > 0.001) {
@@ -663,7 +689,8 @@ export function buildWorld(track, renderer, qualityIn) {
     const fd = 1 - 0.62 * f; r *= fd * (1 - 0.1 * f); g *= fd; b *= fd * (1 - 0.15 * f);     // forest floor / canopy tone
     out.push(r * (1 - rock) + 1.9 * rock, g * (1 - rock) + 1.5 * rock, b * (1 - rock) + 2.2 * rock);
   };
-  const tintUrban = (X, Y, h, out) => { const v = 0.5 + 0.25 * vnoise(X / 23, Y / 23) + 0.12 * vnoise(X / 4, Y / 4); out.push(v, v, v * 0.98); };
+  // streets and squares between the buildings: warm paving, darker tarmac patches, the odd garden
+  const tintUrban = (X, Y, h, out) => { const v = 0.34 + 0.2 * vnoise(X / 23, Y / 23) + 0.1 * vnoise(X / 4, Y / 4), gdn = smooth(0.66, 0.72, vnoise(X / 55 + 9, Y / 55 + 2)); out.push(v * (1 - 0.55 * gdn), v * (0.96 - 0.2 * gdn), v * (0.88 - 0.6 * gdn)); };
   let zMean = 0; for (let i = 0; i < n; i++) zMean += track.z[i] / n;
   const terrainMat = patch(new THREE.MeshStandardMaterial({ map: grassFallback, vertexColors: true, roughness: 0.96 }), 'terrain' + (track.theme || ''), {
     vpars: 'varying vec2 vWxz;', vmain: 'vWxz = (modelMatrix * vec4(position, 1.0)).xz;',
@@ -765,6 +792,7 @@ export function buildWorld(track, renderer, qualityIn) {
       const h = track.heading[i], X = track.x[i] - Math.sin(h) * off * side, Y = track.y[i] + Math.cos(h) * off * side;
       const t = terrain(X, Y);
       if (t.dist < t.corr + 3.5) continue;                       // inside some other part of the circuit
+      if (t.sea > 0) continue;                                    // in the harbour
       const f = forestAt(X, Y);
       if (rng.next() > (urban ? 0.5 : 0.07 + 0.93 * f)) continue;
       if (urban && off < wallAt(side, i) + 60) continue;
@@ -796,8 +824,102 @@ export function buildWorld(track, renderer, qualityIn) {
     }
   }
 
-  // ---- street circuit: city blocks behind the fences and the sea beyond the harbour ----
-  if (urban) {
+  // ---- Monaco from OpenStreetMap: real building footprints extruded, harbour, yachts, tunnel ----
+  const scene = urban ? track.scene : null;
+  if (scene) {
+    // linear-space tints: ochre, salmon, cream, terracotta pink, pale yellow, off-white, peach, stone
+    const PAL = [[0.82, 0.58, 0.28], [0.8, 0.42, 0.28], [0.88, 0.78, 0.55], [0.78, 0.45, 0.38], [0.9, 0.72, 0.32], [0.84, 0.8, 0.72], [0.86, 0.56, 0.36], [0.7, 0.68, 0.62]];
+    const wp = [], wn = [], wu = [], wc = [], rp = [], rc = [], ri = [];
+    let nb = 0;
+    for (const b of scene.buildings) {
+      const hgt = b[0] / 10, P = []; for (let k = 2; k < b.length; k += 2) P.push([b[k] / 10, b[k + 1] / 10]);
+      // keep the circuit corridor clear (and nothing is built over the tunnel: it has its own structure)
+      let ok = true, lo = Infinity, hi = -Infinity;
+      for (let k = 0; k < P.length && ok; k++) { const a = P[k], c = P[(k + 1) % P.length], L = Math.hypot(c[0] - a[0], c[1] - a[1]), st = Math.max(1, Math.ceil(L / 4)); for (let q = 0; q < st; q++) { const x = a[0] + (c[0] - a[0]) * q / st, y = a[1] + (c[1] - a[1]) * q / st, t = terrain(x, y); if (t.dist < t.corr + 0.8) { ok = false; break; } if (q === 0) { const g = t.sea > 0 ? t.zMin - 2 : groundH(x, y, t); lo = Math.min(lo, g); hi = Math.max(hi, g); } } }
+      if (!ok) continue;
+      const base = lo - 1.5, top = (lo + hi) / 2 + hgt, hsh = hash2(b[2], b[3]), tint = PAL[Math.floor(hsh * PAL.length)], sh = 0.86 + 0.2 * hash2(b[3], b[2]);
+      let per = hash2(b[2] + 5, b[3]) * 3;
+      for (let k = 0; k < P.length; k++) {
+        const a = P[k], c = P[(k + 1) % P.length], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 0.05) continue;
+        const nx = (c[1] - a[1]) / L, ny = -(c[0] - a[0]) / L;
+        for (const [px, py, pz, u, v] of [[a[0], a[1], base, per, 0], [c[0], c[1], base, per + L, 0], [c[0], c[1], top, per + L, top - base], [a[0], a[1], base, per, 0], [c[0], c[1], top, per + L, top - base], [a[0], a[1], top, per, top - base]]) {
+          wp.push(px, pz, -py); wn.push(nx, 0, -ny); wu.push(u, v - (hi - base)); wc.push(tint[0] * sh, tint[1] * sh, tint[2] * sh);
+        }
+        per += L;
+      }
+      const tri = THREE.ShapeUtils.triangulateShape(P.map(p => new THREE.Vector2(p[0], p[1])), []), o = rp.length / 3, rt = hsh > 0.45 ? [0.62, 0.36, 0.26] : [0.62, 0.6, 0.57], rs = 0.8 + 0.3 * hash2(b[2], 9);
+      for (const p of P) { rp.push(p[0], top, -p[1]); rc.push(rt[0] * rs, rt[1] * rs, rt[2] * rs); }
+      for (const f of tri) ri.push(o + f[0], o + f[1], o + f[2]);
+      nb++;
+    }
+    const wg = new THREE.BufferGeometry();
+    wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); wg.setAttribute('normal', new THREE.Float32BufferAttribute(wn, 3));
+    wg.setAttribute('uv', new THREE.Float32BufferAttribute(wu, 2)); wg.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3));
+    // façade: window bays 3.2 m wide and 3.1 m floors, shutters, balconies, shop fronts at street level
+    const facMat = wettable(patch(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }), 'facade', {
+      vpars: 'varying vec2 vFac;', vmain: 'vFac = uv;', fpars: 'varying vec2 vFac; float gGlass;',
+      color: `{
+        vec2 q = vec2(vFac.x / 3.2, vFac.y / 3.1), f = fract(q), c = floor(q);
+        float street = step(vFac.y, 0.0) * step(-4.2, vFac.y);
+        float win = step(0.2, f.x) * step(f.x, 0.8) * step(0.3, f.y) * step(f.y, 0.86) * step(0.0, vFac.y);
+        float shop = street * step(0.08, f.x) * step(f.x, 0.92) * step(-3.4, vFac.y) * step(vFac.y, -0.5);
+        float h = hash12(c + 17.0), shut = step(0.62, h);
+        vec3 wall = diffuseColor.rgb * (0.92 + 0.12 * vnoise(vFac * vec2(0.3, 0.8))) * (1.0 - 0.1 * step(f.y, 0.06));
+        vec3 glass = mix(vec3(0.07, 0.1, 0.14), vec3(0.3, 0.42, 0.52), smoothstep(0.3, 0.86, f.y) * 0.7 + 0.3 * h);
+        vec3 shutter = mix(vec3(0.16, 0.3, 0.24), vec3(0.3, 0.36, 0.42), step(0.5, hash12(vec2(c.x * 0.0, floor(vFac.x / 40.0))))) * (0.8 + 0.2 * step(0.5, fract(f.y * 14.0)));
+        vec3 alb = mix(wall, mix(glass, shutter, shut), win);
+        // balcony: slab shadow and railing in front of the lower part of each window bay
+        float bal = step(0.12, f.x) * step(f.x, 0.88) * step(0.0, vFac.y) * step(0.5, hash12(vec2(c.x, 5.0)));
+        alb = mix(alb, wall * 0.55, bal * step(0.22, f.y) * step(f.y, 0.3));
+        alb = mix(alb, vec3(0.12), bal * step(0.3, f.y) * step(f.y, 0.52) * step(0.6, fract(f.x * 16.0)) * 0.8);
+        alb = mix(alb, vec3(0.05, 0.06, 0.08) + 0.25 * vec3(hash12(c), hash12(c + 3.0), hash12(c + 7.0)) * step(f.y, 0.9), shop);
+        alb = mix(alb, wall * 0.6, street * (1.0 - shop) * 0.5);
+        gGlass = max(win * (1.0 - shut), shop);
+        diffuseColor.rgb = alb;
+      }`,
+      rough: 'roughnessFactor = mix(roughnessFactor, 0.12, gGlass);' }), 0.25);
+    const walls = new THREE.Mesh(wg, facMat); walls.castShadow = quality.shadows; walls.receiveShadow = true; group.add(walls);
+    const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(rp, 3)); rg.setAttribute('color', new THREE.Float32BufferAttribute(rc, 3)); rg.setIndex(ri); rg.computeVertexNormals();
+    const roofs = new THREE.Mesh(rg, wettable(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }), 0.5)); roofs.castShadow = quality.shadows; roofs.receiveShadow = true; group.add(roofs);
+
+    // the harbour: sea level 3 m below the quay, yachts moored stern-to along the quays
+    const zs = terrain(track.x[0], track.y[0]).zMin - 3;
+    const seaN = TX.asphaltTile(aniso).normalMap.clone(); seaN.repeat.set(700, 700); seaN.needsUpdate = true;
+    const sea = new THREE.Mesh(new THREE.PlaneGeometry(16000, 16000).rotateX(-Math.PI / 2), new THREE.MeshPhysicalMaterial({ color: 0x0b3a5c, roughness: 0.08, metalness: 0, normalMap: seaN, normalScale: new THREE.Vector2(0.5, 0.5), envMapIntensity: 1.4 }));
+    sea.position.set(track.x[0], zs, -track.y[0]); sea.receiveShadow = true; group.add(sea);
+    {
+      const hull = new THREE.BoxGeometry(1, 0.5, 1).translate(0, 0.25, 0), deck = new THREE.BoxGeometry(0.62, 0.32, 0.8).translate(-0.08, 0.66, 0), brg = new THREE.BoxGeometry(0.34, 0.26, 0.62).translate(-0.12, 0.95, 0);
+      const paint = (g, r, gr, bl) => { const c = new Float32Array(g.attributes.position.count * 3); for (let k = 0; k < c.length; k += 3) { c[k] = r; c[k + 1] = gr; c[k + 2] = bl; } g.setAttribute('color', new THREE.BufferAttribute(c, 3)); return g; };
+      // pointed bow: pull the front vertices in
+      { const p = hull.attributes.position; for (let k = 0; k < p.count; k++) if (p.getX(k) > 0.4) p.setZ(k, p.getZ(k) * 0.15); }
+      const yg = mergeGeometries([paint(hull, 0.95, 0.95, 0.96), paint(deck, 0.9, 0.9, 0.92), paint(brg, 0.2, 0.26, 0.32)]);
+      const rng = new RNG(606), list = [], n0 = quality.detail > 0 ? 170 : 70;
+      let guard = 0;
+      while (list.length < n0 && guard++ < 6000) {
+        const c = scene.coast[rng.int(scene.coast.length)], k = 2 * rng.int(c.length / 2 - 1), ax = c[k] / 10, ay = c[k + 1] / 10, ex = c[k + 2] / 10 - ax, ey = c[k + 3] / 10 - ay, L = Math.hypot(ex, ey); if (L < 1) continue;
+        const u = rng.next(), len = rng.uniform(12, 42) * (rng.next() < 0.12 ? 1.8 : 1), off = len / 2 + 2.5, nx = ey / L, ny = -ex / L;     // water is to the right
+        const X = ax + ex * u + nx * off, Y = ay + ey * u + ny * off, t = terrain(X, Y);
+        if (!(t.sea > len * 0.45) || t.dist > 520 || terrain(X + nx * len * 0.5, Y + ny * len * 0.5).sea < 3) continue;
+        if (list.some(o => Math.hypot(o.X - X, o.Y - Y) < (o.len + len) * 0.3 + 2)) continue;
+        list.push({ X, Y, len, rot: Math.atan2(ny, nx) });
+      }
+      const im = new THREE.InstancedMesh(yg, wettable(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35 }), 0.2), list.length), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pv = new THREE.Vector3(), sv = new THREE.Vector3();
+      list.forEach((o, j) => { q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, o.rot); im.setMatrixAt(j, m4.compose(pv.set(o.X, zs - 0.3, -o.Y), q, sv.set(o.len, o.len * 0.2, o.len * 0.24))); });
+      im.castShadow = quality.shadows; im.receiveShadow = true; im.computeBoundingSphere(); group.add(im);
+    }
+    // the tunnel: an enclosed box section over the road with two rows of lamps
+    for (const [a, b] of scene.tunnel) {
+      if (b - a < 60) continue;
+      const inT = (i) => i >= a && i <= b, H = 5.4;
+      const shell = strip(track, ksEdge, (i, o) => { const z = track.z[i], l = track.wallL[i] + 0.25, r = track.wallR[i] + 0.25; o.push(l, z - 0.3, 0, l, z + H, 0.3, -r, z + H, 0.7, -r, z - 0.3, 1, -(r + 1.2), z - 0.3, 1, -(r + 1.2), z + H + 1.2, 0.7, l + 1.2, z + H + 1.2, 0.3, l + 1.2, z - 0.3, 0); }, { mask: inT, vScale: 3 });
+      const tm = new THREE.MeshStandardMaterial({ map: concreteFallback, color: 0x8d8a84, roughness: 0.9, side: THREE.DoubleSide }); photo(tm, { map: [ASSETS.concrete, { aniso }] });
+      add(shell, tm, { cast: true });
+      const lamps = [];
+      for (const off of [2.3, -2.3]) lamps.push(strip(track, ksEdge, (i, o) => { const z = track.z[i] + H - 0.06; o.push(off - 0.22, z, 0, off + 0.22, z, 1); }, { mask: inT, vScale: 1, flip: true }));
+      const lm = patch(new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 2.7, 1.9), fog: false, side: THREE.DoubleSide }), 'tunlamp', { ...ROAD_V, fpars: 'varying vec4 vRoad; varying float vRub;', color: 'if (fract(vRoad.y / 7.0) > 0.45) discard;' });
+      add(mergeGeometries(lamps.filter(Boolean)), lm, { receive: false });
+    }
+  } else if (urban) {
     const rng = new RNG(1929);
     // one bay x one floor of facade; tinted per building
     const mkFacade = (seed, balcony) => {

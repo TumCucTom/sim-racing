@@ -44,8 +44,23 @@ tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
   relief, the Corkscrew drops 17.3 m in 140 m with a peak gradient of 16.3 %. Widths are estimates.
   Every car laps it cleanly (GT3 1:32.3 dry, 1:49.2 in rain).
 - Tools: `tools/trackside-map.mjs` (top-down PNG of the trackside as the physics sees it),
-  `tools/trackside-shot.mjs` (screenshots with a free camera). 5 new tests (`tests/trackside.test.js`),
-  49 in all.
+  `tools/trackside-shot.mjs` (screenshots with a free camera). 5 new tests (`tests/trackside.test.js`);
+  `npm test` passes (53 tests with the other work in flight).
+- **Elevation is fitted, not clipped** (owner feedback: "elevation looks exaggerated"). Three circuits sat
+  on the old gradient cap, i.e. terrain-model noise was being clipped rather than removed. `fitElevation`
+  fits a periodic smoothing spline (cutoff 110–600 m by terrain-model resolution), robust to rooftops and
+  bridges, bridges tunnels, and lengthens the cutoff locally where a circuit's realistic gradient or
+  vertical-curvature limit is exceeded. Spa 19.8 → 13.1 % max (the −19.8 % was a false drop after
+  Bruxelles), Monza 17.4 → 13.0 m relief and 5.0 → 1.8 %, Nordschleife 19.9 → 15.6 % up / 11.0 % down,
+  Monaco 49.3 → 42.0 m and 11.4 → 7.3 %, Laguna unchanged in substance (Corkscrew 17.5 m in 140 m).
+  Before / after table in the README. The landscape around flat circuits no longer grows hills. AI lap
+  times moved by under 0.2 %; all 16 cars remain clean on all 7 circuits; no driver table changed.
+- **Monaco rebuilt from OpenStreetMap** (owner feedback: "Monaco looks pretty dire"): 686 real building
+  footprints extruded (tagged heights where present) with procedural Mediterranean façades and tiled
+  roofs, the real coastline of Port Hercule with quay walls, water and moored yachts, an enclosed tunnel
+  over stations 1,542–1,904 m with lamp rows, zebra crossings, a centre line and manhole covers on the
+  road. Physics walls are unchanged. Not done: palm trees, grandstands, pit building, recognisable
+  landmarks (Casino, Piscine), hillside backdrop beyond 330 m.
 - Not done: real kerb positions, vertical kerb dynamics, the Karussell banking, barrier types that differ
   in a crash, Monaco's real widths. Version number not bumped (other work is in flight).
 

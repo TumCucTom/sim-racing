@@ -26,6 +26,7 @@ import monzaSide from './tracks/monza.trackside.json' with { type: 'json' };
 import nordschleifeSide from './tracks/nordschleife.trackside.json' with { type: 'json' };
 import monacoSide from './tracks/monaco.trackside.json' with { type: 'json' };
 import lagunaSide from './tracks/laguna.trackside.json' with { type: 'json' };
+import monacoScene from './tracks/monaco.scene.json' with { type: 'json' };
 import { buildTrackside, finishTrackside, SX, SX_CLASS } from './trackside.js';
 export { SX, SX_CLASS, SX_NAME, SX_MU, SX_ROLL, SX_WET, SX_RUMBLE, GRAVEL, BAR, KERB_COLOURS } from './trackside.js';
 
@@ -56,7 +57,7 @@ export const TRACKS = {
   spa: { ...spa, real: true, trackside: { ...spa.trackside, ...spaSide } },
   monza: { ...monza, real: true, trackside: { ...monza.trackside, ...monzaSide } },
   nordschleife: { ...nordschleife, real: true, trackside: { ...nordschleife.trackside, ...nordschleifeSide } },
-  monaco: { ...monaco, real: true, trackside: { ...monaco.trackside, ...monacoSide } },
+  monaco: { ...monaco, real: true, scene: monacoScene, trackside: { ...monaco.trackside, ...monacoSide } },
   laguna: { ...laguna, real: true, trackside: { ...laguna.trackside, ...lagunaSide } },
 };
 export const TRACK_ORDER = ['ravenscar', 'silverstone', 'spa', 'monza', 'nordschleife', 'monaco', 'laguna'];
@@ -110,6 +111,91 @@ function periodicProfile(keys, u) {
   const span = (k === m - 1 ? 1 + b[0] : b[0]) - a[0];
   const t = (u - a[0]) / span, f = t * t * (3 - 2 * t);
   return a[1] + (b[1] - a[1]) * f;
+}
+
+// Elevation profile from terrain-model samples along the lap (def.elevation: [fraction, metres]).
+//
+// A 10-30 m terrain model sampled along a road is the road plus noise: grid steps, the hillside
+// the road is cut into (a few metres of plan error on a slope reads as metres of height), trees,
+// buildings, bridges and embankments. Clipping the gradient of that leaves the false crests in.
+// Instead the profile is the periodic smoothing-spline fit to the samples: minimise
+//   sum (z - d)^2  +  (cutoff / 2 pi)^4  integral (z'')^2
+// which on a closed lap is exactly a low-pass in the Fourier domain with gain
+// 1 / (1 + (cutoff / wavelength)^4). Samples far from the fit (structures) are pulled back to it
+// and the fit repeated (a Huber-style robust fit); stretches listed in `ignore` (tunnels: the model
+// sees the ground above) are bridged before fitting. If the result still exceeds the circuit's
+// realistic maximum gradient or vertical curvature, the cutoff wavelength is lengthened there until
+// it does not: the limits shape the fit, nothing is clipped. `relief` (the circuit's published total
+// relief) scales the result down when surface models have inflated it (rooftops, tree canopy).
+//   opt: { cutoff (m), maxGrade | maxUp, maxDown, limits, maxVCurv (1/m), ignore: [[s0, s1] m], huber (m), relief (m) }
+export function fitElevation(keys, length, n, opt) {
+  const m = Math.max(64, Math.round(length / 4)), d = new Float64Array(m), w = new Uint8Array(m).fill(1);
+  const K = keys.length;
+  let k = 0;
+  for (let j = 0; j < m; j++) {
+    const u = j / m; while (k < K - 1 && keys[k + 1][0] <= u) k++;
+    const a = keys[k], b = keys[(k + 1) % K], span = (k === K - 1 ? 1 + b[0] : b[0]) - a[0];
+    d[j] = a[1] + (b[1] - a[1]) * Math.min(1, Math.max(0, (u - a[0]) / span));
+  }
+  for (const [s0, s1] of opt.ignore || []) {
+    const a = Math.round(s0 / length * m), b = Math.round(s1 / length * m);
+    for (let j = a + 1; j < b; j++) { d[j % m] = d[a % m] + (d[b % m] - d[a % m]) * (j - a) / (b - a); w[j % m] = 0; }
+  }
+  const fit = (src, cutoff) => {
+    const H = Math.min(m >> 1, Math.ceil(4 * length / cutoff)), out = new Float64Array(m);
+    let mean = 0; for (let j = 0; j < m; j++) mean += src[j]; mean /= m; out.fill(mean);
+    for (let h = 1; h <= H; h++) {
+      let re = 0, im = 0; const wv = 2 * Math.PI * h / m;
+      for (let j = 0; j < m; j++) { re += src[j] * Math.cos(wv * j); im -= src[j] * Math.sin(wv * j); }
+      const g = 2 / m / (1 + Math.pow(cutoff * h / length, 4));
+      re *= g; im *= g;
+      for (let j = 0; j < m; j++) out[j] += re * Math.cos(wv * j) - im * Math.sin(wv * j);
+    }
+    return out;
+  };
+  const robust = (cutoff) => {
+    let z = fit(d, cutoff); const c = opt.huber ?? 2.5, t = new Float64Array(m);
+    for (let it = 0; it < 4; it++) { for (let j = 0; j < m; j++) { const r = d[j] - z[j]; t[j] = w[j] ? z[j] + (r > c ? c : r < -c ? -c : r) : z[j]; } z = fit(t, cutoff); }
+    return z;
+  };
+  // Limits: maxUp / maxDown (or maxGrade for both) over the lap, `limits: [[s0, s1, up, down]]` for
+  // stretches known to be steeper or gentler (Raidillon, the Corkscrew), maxVCurv everywhere.
+  // Where the fit breaks a limit, only that stretch is refitted with a longer cutoff (level by level,
+  // x1.2 each), and the whole lap is then smoothed once more at the base cutoff so the joins are clean.
+  const step = length / m, cMax = opt.maxVCurv ?? 0.006, base = opt.cutoff ?? 250;
+  const up = new Float64Array(m).fill(opt.maxUp ?? opt.maxGrade ?? 0.2), dn = new Float64Array(m).fill(opt.maxDown ?? opt.maxGrade ?? 0.2);
+  for (const [s0, s1, u, dwn = u] of opt.limits || []) for (let j = Math.round(s0 / step); j <= Math.round(s1 / step); j++) { up[j % m] = u; dn[j % m] = dwn; }
+  const level = new Uint8Array(m), fits = [robust(base)], src = new Float64Array(m), reach = Math.max(2, Math.round(base / 2 / step));
+  let z = fits[0], maxLevel = 0;
+  for (let pass = 0; pass < 40; pass++) {
+    const bad = new Uint8Array(m); let any = false;
+    for (let j = 0; j < m; j++) {
+      const a = z[(j + m - 1) % m], b2 = z[(j + 1) % m], g = (b2 - a) / (2 * step), c = Math.abs(a - 2 * z[j] + b2) / (step * step);
+      if (g > up[j] || -g > dn[j] || c > cMax) { any = true; for (let q = -reach; q <= reach; q++) bad[(j + q + m) % m] = 1; }
+    }
+    if (!any) break;
+    for (let j = 0; j < m; j++) if (bad[j] && level[j] < 9) { level[j]++; if (level[j] > maxLevel) maxLevel = level[j]; }
+    while (fits.length <= maxLevel) fits.push(robust(base * Math.pow(1.2, fits.length)));
+    // blend between the fits with a smoothed (fractional) level so no step appears where the level changes
+    let acc = 0; for (let q = -reach; q <= reach; q++) acc += level[(q + m) % m];
+    for (let j = 0; j < m; j++) {
+      const lv = acc / (2 * reach + 1), l0 = Math.min(maxLevel, Math.floor(lv)), l1 = Math.min(maxLevel, l0 + 1), f = lv - l0;
+      src[j] = fits[l0][j] * (1 - f) + fits[l1][j] * f;
+      acc += level[(j + reach + 1) % m] - level[(j - reach + m) % m];
+    }
+    z = fit(src, base);
+  }
+  if (opt.relief) { let lo = Infinity, hi = -Infinity; for (let j = 0; j < m; j++) { lo = Math.min(lo, z[j]); hi = Math.max(hi, z[j]); } const k = opt.relief / (hi - lo); if (k < 1) for (let j = 0; j < m; j++) z[j] = lo + (z[j] - lo) * k; }
+  // back to the track samples: periodic Catmull-Rom through the 4 m grid
+  const out = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const f = i / n * m, j = Math.floor(f), u = f - j, p0 = z[(j + m - 1) % m], p1 = z[j % m], p2 = z[(j + 1) % m], p3 = z[(j + 2) % m];
+    out[i] = 0.5 * (2 * p1 + (p2 - p0) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u * u + (3 * p1 - p0 - 3 * p2 + p3) * u * u * u);
+  }
+  let lo = Infinity; for (let i = 0; i < n; i++) lo = Math.min(lo, out[i]);
+  for (let i = 0; i < n; i++) out[i] -= lo;
+  out.levels = maxLevel;
+  return out;
 }
 
 const cache = new Map();
@@ -185,7 +271,9 @@ export function buildTrack(id = 'ravenscar') {
       : 14 + 9.0 * Math.sin(u - 1.9) + 4.0 * Math.sin(2 * u + 0.6) + 1.5 * Math.sin(5 * u + 2.0);
   }
   // hand-approximated profiles need heavy smoothing; surveyed ones only a little
-  if (real) {
+  const fitted = real && !!def.elev;
+  if (fitted) z = fitElevation(def.elevation, length, n, def.elev);
+  else if (real) {
     let lo = Infinity, hi = -Infinity; for (let i = 0; i < n; i++) { lo = Math.min(lo, z[i]); hi = Math.max(hi, z[i]); }
     // surveyed profiles on hilly circuits keep their detail; on near-flat ones the
     // terrain model's noise (trees, buildings) is larger than the real gradients
@@ -199,7 +287,7 @@ export function buildTrack(id = 'ravenscar') {
       grade[i] = (z[(i + 1) % n] - z[(i - 1 + n) % n]) / (segLen[i] + segLen[(i - 1 + n) % n]);
       if (Math.abs(grade[i]) > gmax) gmax = Math.abs(grade[i]);
     }
-    if (!real || gmax <= (def.maxGrade ?? 0.2)) break;
+    if (!real || fitted || gmax <= (def.maxGrade ?? 0.2)) break;
     z = smoothClosed(z, 1, 30);
   }
 
@@ -283,7 +371,7 @@ export function buildTrack(id = 'ravenscar') {
   for (let i = 0; i < n; i++) { gravelL[i] = side.gBL[i] > 0 ? 1 : 0; gravelR[i] = side.gBR[i] > 0 ? 1 : 0; }
 
   const t = {
-    id, name: def.name, country: def.country, real, narrow: !!def.runoff, urban, source: def.source || null, theme: tsDef?.theme || null, sections: tsDef?.sections || null,
+    id, name: def.name, country: def.country, real, narrow: !!def.runoff, urban, source: def.source || null, theme: tsDef?.theme || null, scene: def.scene || null, sections: tsDef?.sections || null,
     n, ds, length, halfWidth: HALF_WIDTH, hw, kerbWidth: KERB_WIDTH,
     x, y, z, grade, heading, curv: curvS, s: sArr, gravelL, gravelR, wallL, wallR,
     ...side, verge: urban ? SX.PAVE : SX.GRASS,

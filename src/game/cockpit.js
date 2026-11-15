@@ -218,7 +218,7 @@ function buildArms(kit, fit, spec) {
   return [-1, 1].map((s) => ({
     s, shoulder: V(e.x - (narrow ? 0.05 : 0.1), e.y - (narrow ? 0.2 : 0.215), e.z + s * (narrow ? 0.17 : 0.2)),
     upper: kit.mesh(new THREE.CylinderGeometry(0.052, 0.043, 1, 10), sleeve), fore: kit.mesh(new THREE.CylinderGeometry(0.043, 0.034, 1, 10), sleeve),
-    elbow: kit.mesh(new THREE.SphereGeometry(0.044, 10, 8), sleeve), cuff: kit.mesh(new THREE.SphereGeometry(0.036, 10, 8), cuffM), ball: kit.mesh(new THREE.SphereGeometry(0.056, 10, 8), sleeve),
+    elbow: kit.mesh(new THREE.SphereGeometry(0.044, 10, 8), sleeve), cuff: kit.mesh(new THREE.CylinderGeometry(0.036, 0.038, 1, 12), cuffM), ball: kit.mesh(new THREE.SphereGeometry(0.056, 10, 8), sleeve),
   }));
 }
 
@@ -304,7 +304,7 @@ function buildCockpit(model, spec, fit) {
     }
     // instruments
     if (k === 'road') {
-      const cw = 0.29, ch = cw * 192 / 512, pc = V(xD1 - 0.012, C.y + 0.105, e.z), sc = screen(kit.group, cw, ch); facing(sc, pc, V(e.x, e.y - 0.03, e.z));
+      const cw = 0.29, ch = cw * 192 / 512, pc = V(xD1 - 0.012, C.y + 0.092, e.z), sc = screen(kit.group, cw, ch); facing(sc, pc, V(e.x, e.y - 0.03, e.z));
       const top = pc.y + ch / 2 + 0.022, bot = Math.min(yDr, pc.y - ch / 2) - 0.01, hw = cw / 2 + 0.03, sh = new THREE.Shape();
       sh.moveTo(-hw, bot); sh.lineTo(-hw, top - 0.04); sh.quadraticCurveTo(-hw, top, -hw + 0.05, top); sh.lineTo(hw - 0.05, top); sh.quadraticCurveTo(hw, top, hw, top - 0.04); sh.lineTo(hw, bot); sh.lineTo(-hw, bot);
       const hood = kit.mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.2, bevelEnabled: false, curveSegments: 6 }).rotateY(Math.PI / 2), dash); hood.position.set(pc.x + 0.004, 0, e.z);
@@ -382,7 +382,8 @@ function updateRig(rig, dt, car, spec, info) {
     d.divideScalar(dist);
     const h = Math.sqrt(Math.max(0, L * L - dist * dist / 4)), pole = _p.set(-0.1, -1, arm.s * 0.5); pole.addScaledVector(d, -pole.dot(d)).normalize();
     const El = _e.copy(S).addScaledVector(d, dist / 2).addScaledVector(pole, h);
-    place(arm.upper, El, S); place(arm.fore, W, El); arm.elbow.position.copy(El); arm.cuff.position.copy(W); arm.ball.position.copy(S);
+    place(arm.upper, El, S); place(arm.fore, W, El); arm.elbow.position.copy(El); arm.ball.position.copy(S);
+    d.subVectors(W, El).normalize(); place(arm.cuff, _p.copy(W).addScaledVector(d, -0.05), S.copy(W).addScaledVector(d, 0.025));
   }
   // instruments and shift lights, at most 20 times a second
   rig.t -= dt;
@@ -413,7 +414,7 @@ class InCar {
     if (this.rig && (model !== this.model || key !== this.rigKey || model.disposed)) { this.unclip(); this.rig.kit.dispose(); this.rig = null; }
     this.model = model;
     const ao = o.composer?.passes.find(p => p.gtaoMaterial); if (ao) ao.enabled = !inside;     // the AO pass cannot see the clipping
-    const near = inside ? 0.07 : ours ? 0.15 : 0.3; if (camera.near !== near) { camera.near = near; camera.updateProjectionMatrix(); }
+    const near = inside ? 0.07 : ours ? 0.1 : 0.3; if (camera.near !== near) { camera.near = near; camera.updateProjectionMatrix(); }
     if (!ours || !model) { if (this.rig) this.rig.kit.group.visible = false; this.unclip(); return null; }
     const fit = cabinFit(model, spec), ch = model.chassis;
     model.root.updateMatrixWorld(true);

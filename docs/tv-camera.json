@@ -1,0 +1,28 @@
+{
+ "monaco": {
+  "samples": 854,
+  "beforePct": 73.8,
+  "afterPct": 91.8,
+  "heliPct": 7.7,
+  "cuts": 30,
+  "minDistance": 9.4,
+  "stations": 30,
+  "validPosts": 26,
+  "rejected": 4,
+  "occluders": 105,
+  "blockedAt": [
+   278,
+   933,
+   1160,
+   1318,
+   1341,
+   1351,
+   1359,
+   1364,
+   1491,
+   1546,
+   1555,
+   1565
+  ]
+ }
+}
