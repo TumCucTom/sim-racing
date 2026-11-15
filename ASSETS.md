@@ -49,6 +49,9 @@ glass and tyre materials on the 911 (white), Civic (blue), Mustang (red) and ele
 the simulated wheelbase and adds brake lamps. The RC-09 and R18 keep the liveries their authors painted (including the sponsor
 names on them). Brand names and badges on these models belong to their owners; the cars keep fictional names in the game.
 
-The Mini Cooper S is still procedural: no openly licensed F56 model with a credible origin was found.
+The Mini Cooper S is still procedural, with its own body builder (`src/game/minibody.js`, original code, no third-party
+asset). No openly licensed F56 model with a credible origin was found: the candidates on Sketchfab are game rips or
+NonCommercial, the Mini files indexed by Objaverse-XL sit in GitHub repositories with no licence or are a CGTrader purchase,
+and BlenderKit has none.
 
 Car models add about 3.9 MB (`public/models/*.glb` is 5.6 MB including the existing Ferrari).

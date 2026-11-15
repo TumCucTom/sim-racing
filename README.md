@@ -212,15 +212,18 @@ Measured in this repository's CI-like container (4 vCPU, **no GPU**: Chromium re
 
 | Metric | Value |
 |---|---|
-| Physics throughput (headless Node, 1 core) | 1,083,425 steps/s = 3611× real time |
-| Physics cost per 60 Hz frame (5 steps) | 0.005 ms |
+| Physics throughput (headless Node, 1 core) | 1,225,743 steps/s = 4086× real time |
+| Physics cost per 60 Hz frame (5 steps) | 0.004 ms |
 | RL training throughput | 1930 env steps/s per process (4 in parallel) |
 | Training time | 23.8 min per 3M-step seed |
-| Build size | 1903 kB JS (502 kB gzip) + 1.7 MB car model and Draco decoder |
-| Render, low @ ravenscar (software GL, 1280×720) | 55.6 fps, 178 draw calls, 112896 triangles, CPU 24.37 ms/frame |
-| Render, medium @ ravenscar (software GL, 1280×720) | 24.7 fps, 290 draw calls, 231488 triangles, CPU 2.87 ms/frame |
-| Render, medium @ spa (software GL, 1280×720) | 23.6 fps, 248 draw calls, 503522 triangles, CPU 2.74 ms/frame |
-| Test suite | pass 16 fail 0  |
+| Build size | 2043 kB JS (552 kB gzip) + 5.6 MB car models, 3.5 MB engine recordings, sky and textures |
+| Render, software GL, 1280×720 | 11–39 fps across low/medium at Ravenscar and Spa (215–321 draw calls, 110k–563k triangles) |
+| Test suite | pass 24 fail 0 |
+
+The software-rendered frame rates are noisy (the same scene measured between 11
+and 39 fps in consecutive runs) and say little beyond "it runs"; texture-heavy
+PBR shading is exactly what a CPU rasteriser is worst at. Performance on a real
+GPU has not been measured.
 
 ## Known limitations
 - **Visuals** are roughly a decade behind a current commercial sim, not at

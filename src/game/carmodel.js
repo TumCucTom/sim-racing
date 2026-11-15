@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { labelTexture } from './textures.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { buildMiniBody } from './minibody.js';
 
 let gltfLoader = null;
 const glbCache = new Map();
@@ -40,15 +41,11 @@ const STYLES = {
     [0.35, 0.99, 0.16, 0.86, 0.88, 0.62], [0.46, 0.95, 0.20, 0.76, 0.78, 0.58], [0.495, 0.85, 0.30, 0.62, 0.64, 0.52], [0.50, 0.78, 0.36, 0.54, 0.56, 0.48]],
 };
 
-// Mini: upright, short overhangs, almost vertical tail and screen.
-STYLES.mini = [[-0.50, 0.86, 0.36, 0.82, 0.84, 0.72], [-0.488, 0.95, 0.26, 0.97, 1.22, 0.78], [-0.462, 0.99, 0.21, 1.00, 1.37, 0.82], [-0.38, 1.00, 0.19, 1.00, 1.41, 0.84],
-  [-0.02, 1.00, 0.18, 0.99, 1.41, 0.84], [0.13, 1.00, 0.18, 0.98, 1.38, 0.82], [0.225, 1.00, 0.18, 0.97, 1.01, 0.78], [0.36, 0.99, 0.19, 0.93, 0.95, 0.72],
-  [0.455, 0.96, 0.22, 0.87, 0.89, 0.68], [0.492, 0.88, 0.30, 0.74, 0.76, 0.62], [0.50, 0.80, 0.38, 0.62, 0.64, 0.56]];
 // Le Mans prototype: [xFrac, halfWidthFrac, floorY, fenderY, deckY, roofY, canopyWidthFrac]
 STYLES.proto = [[-0.50, 0.95, 0.22, 0.60, 0.50, 0.50, 0.30], [-0.465, 1.00, 0.11, 0.80, 0.56, 0.56, 0.30], [-0.34, 1.00, 0.07, 0.86, 0.62, 0.64, 0.30], [-0.21, 1.00, 0.06, 0.70, 0.64, 0.88, 0.31],
   [-0.08, 0.98, 0.06, 0.58, 0.60, 1.06, 0.35], [0.02, 0.97, 0.06, 0.56, 0.57, 1.08, 0.36], [0.11, 0.97, 0.06, 0.60, 0.53, 0.98, 0.35], [0.21, 0.98, 0.06, 0.74, 0.47, 0.50, 0.33],
   [0.31, 1.00, 0.06, 0.84, 0.40, 0.41, 0.30], [0.42, 0.99, 0.07, 0.70, 0.31, 0.32, 0.30], [0.485, 0.94, 0.09, 0.40, 0.24, 0.25, 0.30], [0.50, 0.88, 0.11, 0.30, 0.22, 0.23, 0.30]];
-const REF_H = { gt: 1.25, hatch: 1.41, mini: 1.41, proto: 1.08 };
+const REF_H = { gt: 1.25, hatch: 1.41, proto: 1.08 };
 
 function sampleStations(keys, n) {
   const out = [], C = keys[0].length;
@@ -258,9 +255,16 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
   let shadow = null;
 
   const kind = spec.id === 'hypercar' ? 'proto' : spec.id === 'mini' ? 'mini' : b.style;
-  if (b.style !== 'formula') {
-    const proto = kind === 'proto', mini = kind === 'mini';
-    const shift = mid + (proto ? 0 : b.style === 'gt' ? -0.05 : mini ? 0.02 : 0.06);
+  if (kind === 'mini') {
+    // the Mini has its own body builder (minibody.js): British racing green, white roof and mirror caps
+    const hw = b.width / 2;
+    const roofMat = new THREE.MeshPhysicalMaterial({ color: 0xf2f2ee, roughness: 0.35, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.06 });
+    chassis.add(buildMiniBody({ a, bb, wheelR: R, archR: R * 1.16 + 0.012, zInner: hw - Math.max(tyreW[0], tyreW[1]) - 0.1, ghost, mats: { paintMat, roofMat, glassMat, black, tailMat } }));
+    if (!ghost) root.add(shadow = contactShadow(b.length, b.width));
+    wheelZ.push(hw - tyreW[0] / 2 - 0.005, hw - tyreW[1] / 2 - 0.005);
+  } else if (b.style !== 'formula') {
+    const proto = kind === 'proto';
+    const shift = mid + (proto ? 0 : b.style === 'gt' ? -0.05 : 0.06);
     const hw = b.width / 2;
     const archR = (R) => R * (race ? 1.1 : 1.16) + 0.012;
     const loft = loftBody(kind, b.length, b.width, b.height, {
@@ -268,8 +272,7 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
       zInner: hw - Math.max(tyreW[0], tyreW[1]) - 0.1, glassFront: proto ? -0.1 : -1,
     });
     const linerMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.95 });
-    const roofMat = mini ? new THREE.MeshPhysicalMaterial({ color: 0xf2f2ee, roughness: 0.35, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.06 }) : paintMat;
-    const body = new THREE.Mesh(loft.paint, [paintMat, roofMat, linerMat]), glass = new THREE.Mesh(loft.glass, glassMat);
+    const body = new THREE.Mesh(loft.paint, [paintMat, paintMat, linerMat]), glass = new THREE.Mesh(loft.glass, glassMat);
     for (const m of [body, glass]) { m.position.x = shift; m.castShadow = true; m.receiveShadow = true; chassis.add(m); }
     const front = shift + b.length / 2, rear = shift - b.length / 2;
     const sectAt = (x) => loft.sect.reduce((best, s) => (Math.abs(s.x + shift - x) < Math.abs(best.x + shift - x) ? s : best));
@@ -283,19 +286,6 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
       const yel = new THREE.MeshStandardMaterial({ color: 0xffd400, roughness: 0.4 });
       addPatch(loft.patchGeo(-0.02, 0.10, 8, 8, 0.003), yel);                          // yellow roof flash
       addPatch(loft.patchGeo(0.36, 0.5, 8, 8, 0.003), yel);                            // yellow nose stripe
-    } else if (mini) {
-      for (const sgn of [1, -1]) {
-        // round headlamps with chrome bezels, upright tail lamps
-        const s = sectAt(front - 0.13), lamp = new THREE.Group();
-        const lens = new THREE.Mesh(new THREE.SphereGeometry(0.105, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2.4).rotateZ(-Math.PI / 2), lensMat);
-        const bezel = new THREE.Mesh(new THREE.TorusGeometry(0.105, 0.014, 8, 24).rotateY(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xe8e8e8, metalness: 1, roughness: 0.15 }));
-        lamp.add(lens, bezel); lamp.position.set(front - 0.14, s.pts[5][1] - 0.05, sgn * (s.pts[5][0] * 0.74)); lamp.rotation.set(0, -sgn * 0.25, 0.55); chassis.add(lamp);
-      }
-      addPatch(loft.patchGeo(-0.5, -0.468, 4, 4), tailMat);
-      addPatch(loft.patchGeo(0.487, 0.5, 2, 3, 0.006), black);                           // grille mouth
-      // bonnet stripes
-      const stripe = new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.4 });
-      void stripe;
     } else {
       addPatch(loft.patchGeo(0.405, 0.482, 4, 5), lensMat);
       addPatch(loft.patchGeo(-0.5, -0.468, b.style === 'gt' ? 4 : 3, 4), tailMat);
@@ -304,7 +294,7 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
     // door and bonnet shut lines
     if (!ghost) {
       const lineMat = new THREE.LineBasicMaterial({ color: 0x030303 });
-      const doors = proto ? [[0.17, 2, 6], [-0.07, 2, 6]] : b.style === 'sedan' || b.style === 'hatch' && !mini ? [[0.185, 1, 4], [-0.03, 1, 4], [-0.2, 1, 4]] : [[0.17, 1, 4], [-0.08, 1, 4]];
+      const doors = proto ? [[0.17, 2, 6], [-0.07, 2, 6]] : b.style === 'sedan' || b.style === 'hatch' ? [[0.185, 1, 4], [-0.03, 1, 4], [-0.2, 1, 4]] : [[0.17, 1, 4], [-0.08, 1, 4]];
       for (const [xf, k0, k1] of [...doors, ...(proto ? [] : [[0.2, 5, 8]])]) for (const pos of loft.shutLine(xf, k0, k1)) {
         const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
         const l = new THREE.Line(g, lineMat); l.position.x = shift; chassis.add(l);
@@ -313,15 +303,15 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
     for (const sgn of [1, -1]) {
       // mirrors
       const mx = shift + b.length * (proto ? 0.2 : 0.14), ms = sectAt(mx);
-      const mm = box(0.12, 0.09, 0.18, mini ? roofMat : proto ? new THREE.MeshStandardMaterial({ color: 0xffd400, roughness: 0.4 }) : paintMat, mx, ms.pts[proto ? 6 : 5][1] + (proto ? 0.16 : 0.05), sgn * (ms.pts[proto ? 6 : 5][0] + 0.08)); chassis.add(mm);
+      const mm = box(0.12, 0.09, 0.18, proto ? new THREE.MeshStandardMaterial({ color: 0xffd400, roughness: 0.4 }) : paintMat, mx, ms.pts[proto ? 6 : 5][1] + (proto ? 0.16 : 0.05), sgn * (ms.pts[proto ? 6 : 5][0] + 0.08)); chassis.add(mm);
     }
     // grille / intakes
-    if (!mini) chassis.add(box(0.06, proto ? 0.08 : 0.2, b.width * 0.5, black, front - 0.03, fs.pts[0][1] + (proto ? 0.07 : 0.16), 0));
+    chassis.add(box(0.06, proto ? 0.08 : 0.2, b.width * 0.5, black, front - 0.03, fs.pts[0][1] + (proto ? 0.07 : 0.16), 0));
     chassis.add(box(0.06, 0.12, b.width * 0.7, black, rear + 0.02, rs.pts[0][1] + 0.08, 0));
     // exhausts
-    if (!spec.engine.electric) for (const sgn of b.style === 'hatch' ? (mini ? [0.08, -0.08] : [0.25, 0, -0.25]) : [1, -1]) {
+    if (!spec.engine.electric) for (const sgn of b.style === 'hatch' ? [0.25, 0, -0.25] : [1, -1]) {
       const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.14, 10).rotateZ(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x999999, metalness: 1, roughness: 0.25 }));
-      tip.position.set(rear + 0.02, rs.pts[0][1] + 0.06, b.style === 'hatch' ? sgn * (mini ? 1 : 0.5) : sgn * b.width * 0.28); chassis.add(tip);
+      tip.position.set(rear + 0.02, rs.pts[0][1] + 0.06, b.style === 'hatch' ? sgn * 0.5 : sgn * b.width * 0.28); chassis.add(tip);
     }
     if (proto) {
       // splitter, diffuser, shark fin, full-width wing on swan-neck pylons and tall end plates
@@ -360,7 +350,7 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
       const stripeM = new THREE.MeshStandardMaterial({ color: 0xd4002a, roughness: 0.4 });
       addPatch(loft.patchGeo(-0.5, 0.5, 8, 8, 0.003), stripeM);                          // centre stripe over the whole car
     }
-    if (b.style === 'hatch') chassis.add(box(mini ? 0.2 : 0.28, 0.03, b.width * 0.72, mini ? roofMat : paintMat, rear + (mini ? 0.12 : 0.36), b.height * 0.985, 0));
+    if (b.style === 'hatch') chassis.add(box(0.28, 0.03, b.width * 0.72, paintMat, rear + 0.36, b.height * 0.985, 0));
     if (b.style === 'coupe') chassis.add(box(0.12, 0.04, b.width * 0.7, paintMat, rear + 0.12, rs.pts[5][1] + 0.04, 0));
     if (!ghost) root.add(shadow = contactShadow(b.length, b.width));
     wheelZ.push(hw - tyreW[0] / 2 - 0.005, hw - tyreW[1] / 2 - 0.005);

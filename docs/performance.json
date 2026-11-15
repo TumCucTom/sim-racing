@@ -1,40 +1,40 @@
 {
-  "simStepsPerSec": 1083425,
-  "realtimeFactor": 3611,
-  "simMsPerFrame": 0.005,
+  "simStepsPerSec": 1225743,
+  "realtimeFactor": 4086,
+  "simMsPerFrame": 0.004,
   "trainSps": 1930,
   "trainMinutes": 23.8,
-  "bundleKb": 1903,
-  "gzipKb": 502,
+  "bundleKb": 2043,
+  "gzipKb": 552,
   "render": [
     {
       "quality": "low",
       "track": "ravenscar",
-      "fps": 55.6,
-      "calls": 178,
-      "tris": 112896,
-      "frameMs": 24.37,
-      "simMs": 0.037
+      "fps": 11.3,
+      "calls": 235,
+      "tris": 109762,
+      "frameMs": 415.32,
+      "simMs": 3.317
     },
     {
       "quality": "medium",
       "track": "ravenscar",
-      "fps": 24.7,
-      "calls": 290,
-      "tris": 231488,
-      "frameMs": 2.87,
-      "simMs": 0.057
+      "fps": 38.7,
+      "calls": 215,
+      "tris": 562952,
+      "frameMs": 65.37,
+      "simMs": 0.195
     },
     {
       "quality": "medium",
       "track": "spa",
-      "fps": 23.6,
-      "calls": 248,
-      "tris": 503522,
-      "frameMs": 2.74,
-      "simMs": 0.046
+      "fps": 11.9,
+      "calls": 321,
+      "tris": 332038,
+      "frameMs": 337.3,
+      "simMs": 0.8
     }
   ],
-  "tests": "pass 16 fail 0 ",
+  "tests": "",
   "browserErrors": []
 }
