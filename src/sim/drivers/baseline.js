@@ -76,8 +76,8 @@ export class BaselineDriver {
 // Per-car settings for the racing-line driver, found by tools/tune-line.js:
 // the fastest (grip, trail-braking) pair that laps every circuit cleanly.
 const LINE_TUNE = {
-  gt3: { grip: 1.02, trail: 0.6 }, f458: { grip: 0.92, trail: 0.6 }, hatch: { grip: 0.97, trail: 0.6 },
-  coupe: { grip: 1.02, trail: 0 }, formula: { grip: 0.8, trail: 0.9 }, ev: { grip: 0.8, trail: 0.3 },
+  gt3: { grip: 0.97, trail: 0.6 }, f458: { grip: 0.92, trail: 0.6 }, hatch: { grip: 0.97, trail: 0.6 },
+  coupe: { grip: 0.97, trail: 0.3 }, formula: { grip: 0.8, trail: 0.9 }, ev: { grip: 0.8, trail: 0.3 },
 };
 // The Nordschleife is narrow, bumpy in gradient and unforgiving: separate, more
 // conservative settings (also from a sweep; every car laps it cleanly).
