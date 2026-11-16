@@ -33,21 +33,26 @@ for (const s of shots) {
     if (s.follow !== undefined && g.followCar) g.followCar(s.follow);
     if (s.cam) (g.setCamera ? g.setCamera(s.cam) : null);
     if (s.pre) (0, eval)(s.pre);
-    // log what the audio worklet is told, per frame
-    window.__alog = []; const a = g.audio, n = a && (a.node || a.worklet);
-    if (n && n.port) { const post = n.port.postMessage.bind(n.port); n.port.postMessage = (m, tr) => { if (m && !m.pcm && !m.bank) window.__alog.push([window.__frame | 0, m]); return post(m, tr); }; }
+    // log what the audio engine tells the synth, per frame (replayed offline by tools/film-audio.mjs)
+    window.__alog = []; const a = g.audio;
+    if (a && a._send) { if (a.cfg) window.__alog.push([-1, { cfg: a.cfg }]); const send = a._send.bind(a); a._send = (m, tr) => { if (m && !m.pcm && !m.bank) window.__alog.push([window.__frame | 0, m]); return send(m, tr); }; }
   }, { s });
   await p.clock.pauseAt(await p.evaluate(() => Date.now() + 8000));   // the page is slow: leave a wide margin (game is paused meanwhile)
   await p.evaluate(() => { const g = window.__game; g.paused = false; g.last = performance.now(); });
   for (let i = 0; i < 12; i++) await p.clock.runFor(1000 / FPS);   // settle camera, LOD, exposure
-  const N = Math.round(s.secs * FPS), t0 = Date.now();
+  const grab = async (file) => { const url = await p.evaluate(() => { const g = window.__game; if (g.composer) g.composer.render(); else g.renderer.render(g.scene, g.camera); return g.renderer.domElement.toDataURL('image/jpeg', 0.94); }); fs.writeFileSync(file, Buffer.from(url.slice(url.indexOf(',') + 1), 'base64')); };
+  // scouting: single frames at several times / cameras from one page load (times must increase)
+  for (const [k, st] of (s.stills || []).entries()) {
+    await p.evaluate((st) => { const g = window.__game; g.paused = true; const t = g.race ? g.race.time : g.sim.time; if (st.ff > t) g.fastForward(st.ff - t); if (st.follow !== undefined && g.followCar) g.followCar(st.follow); if (st.cam) g.setCamera(st.cam); if (st.js) (0, eval)(st.js); g.paused = false; g.last = performance.now(); }, st);
+    for (let i = 0; i < 8; i++) await p.clock.runFor(1000 / FPS);
+    await grab(`${dir}/s${String(k).padStart(2, '0')}_${st.ff}_${st.cam || ''}_${st.follow ?? ''}.jpg`); console.log(s.name, 'still', k, new Date().toISOString().slice(11, 19));
+  }
+  const N = Math.round((s.secs || 0) * FPS), t0 = Date.now();
   for (let f = 0; f < N; f++) {
     for (const c of s.cuts || []) if (Math.round(c.at * FPS) === f) await p.evaluate((c) => { const g = window.__game; if (c.follow !== undefined) g.followCar(c.follow); if (c.cam) g.setCamera(c.cam); if (c.js) (0, eval)(c.js); }, c);
     await p.evaluate((f) => { window.__frame = f; }, f);
     await p.clock.runFor(1000 / FPS);
-    // read the frame straight from the WebGL canvas (a page screenshot waits for a real animation frame, which never comes with the clock paused)
-    const url = await p.evaluate(() => { const g = window.__game; if (g.composer) g.composer.render(); else g.renderer.render(g.scene, g.camera); return g.renderer.domElement.toDataURL('image/jpeg', 0.94); });
-    fs.writeFileSync(`${dir}/f${String(f + 1).padStart(5, '0')}.jpg`, Buffer.from(url.slice(url.indexOf(',') + 1), 'base64'));
+    await grab(`${dir}/f${String(f + 1).padStart(5, '0')}.jpg`);
     if (f % 30 === 0) console.log(s.name, f, '/', N, ((Date.now() - t0) / 1000).toFixed(0) + 's');
   }
   fs.writeFileSync(`${dir}/audio.json`, JSON.stringify(await p.evaluate(() => window.__alog)));
