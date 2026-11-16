@@ -196,6 +196,17 @@ Stored compactly (`src/sim/tracks/gp/`, 131 kB for nine). **Not added:** Jeddah,
 Barcelona, Zandvoort, Baku, Singapore, Las Vegas, Lusail, Yas Marina — they need OpenStreetMap loop-building
 per venue (TUMFTM has none or an outdated layout) and that work was not reached.
 
+#### Circuits built from OpenStreetMap circuit relations (`tools/osm-circuit.mjs`)
+| Circuit (`?track=`) | Built / official length | Notes |
+|---|---|---|
+| Marina Bay, Singapore (`singapore`) | 4,948 / 4,940 m, anticlockwise | current layout (long straight after T14); uniform 11 m width (estimate); modelled flat; barriers at the kerb, three escape roads from memory (T1, T7, T14); opens at dusk with floodlight poles round the whole lap and an even fill light; generic city blocks, no Marina Bay landmarks, no water |
+| Imola (`imola`) | 4,901 / 4,909 m, anticlockwise | uniform 11 m width; EU-DEM scaled to 30 m relief, max 6.8 %; OSM gravel beds and barriers |
+| Albert Park (`melbourne`) | 5,301 / 5,278 m | post-2021 layout as mapped in OSM; uniform 13 m; SRTM scaled to 5 m; almost no OSM barrier data, so default 9 m run-off instead of the real close walls; no lake |
+
+OSM polylines turn at their nodes, so corner radii on these three are cruder than on the surveyed circuits, and
+start-line positions are my estimates. Barcelona and Zandvoort are built (`src/sim/tracks/gp/`) but **not offered**:
+several cars cannot yet lap them cleanly. Yas Marina, Baku, Jeddah, Miami, Lusail and Las Vegas are not built.
+
 What "real" means here, precisely: the **plan-view layout is real survey or
 map data** (lap lengths within 1 % of official figures — tested), and elevation
 on five of the six real circuits is sampled from public terrain models and

@@ -93,6 +93,17 @@ tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
 - The HUD's dial shrinks in the cockpit view, where the dash shows the same numbers.
 - Tests: `tests/cockpit.test.js` (seating on a synthetic saloon and roadster, overrides, class of every car).
 
+## Unreleased — Singapore, Imola, Albert Park
+- **Marina Bay** (`singapore`), **Imola** (`imola`) and **Albert Park** (`melbourne`) built from OpenStreetMap
+  `type=circuit` relations by the new `tools/osm-circuit.mjs` (lengths +0.2 %, −0.2 %, +0.4 % of official;
+  Singapore and Imola anticlockwise). All 16 cars lap each cleanly, the GT3 in rain too, and a 12-car GT3 race
+  finishes on each without wall contact. Singapore is a walled street circuit (Monaco treatment) that opens
+  at dusk: night-race circuits (`night` in the trackside file) get floodlight poles round the whole lap and a
+  fill light. Flat street circuits no longer get the "falls into the sea" landscape (it produced NaN terrain).
+- Barcelona and Zandvoort are built and surveyed but not registered: with OSM's coarse corner geometry several
+  cars leave the road (Zandvoort around 2.26 km, Barcelona around 2.44 km). Rounding the kinks made it worse
+  and was reverted. Six circuits remain unbuilt (Yas Marina, Baku, Jeddah, Miami, Lusail, Las Vegas).
+
 ## Unreleased — nine Grand Prix circuits (of twenty requested)
 - **Added**: Circuit of the Americas, Hungaroring, Mexico City, Montreal, Bahrain, Interlagos, Shanghai,
   Red Bull Ring, Suzuka (`cota`, `hungaroring`, `mexico`, `montreal`, `bahrain`, `interlagos`, `shanghai`,

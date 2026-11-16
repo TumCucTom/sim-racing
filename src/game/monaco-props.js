@@ -369,6 +369,15 @@ export function dressMonaco(K) {
     const im = instance(geo, tm, cards, { colour: true }); if (im) { im.customDepthMaterial = dm; im.receiveShadow = false; ctx.skipOverride?.(im); }
   }
 
+  // solid stand-ins for the crowns, drawn to no buffer: the trackside camera (tvcam.js) finds its posts and checks its
+  // line of sight by ray-casting the world, and thin alpha-cut fronds let it park inside a palm
+  {
+    const oct = new THREE.OctahedronGeometry(1, 0), gs = [];
+    for (const o of palms) gs.push(oct.clone().scale(3.4 * o.sx, 2.4, 3.4 * o.sz).translate(o.x + 0.5 * o.sx, o.z + 7.0 * o.sy, -o.y), new THREE.BoxGeometry(0.6, 7 * o.sy, 0.6).toNonIndexed().translate(o.x, o.z + 3.5 * o.sy, -o.y));
+    for (const o of cards) gs.push(oct.clone().scale(o.sx * 0.85, o.sy * 0.42, o.sx * 0.85).translate(o.x, o.z + o.sy * 0.58, -o.y));
+    if (gs.length) { const m = new THREE.Mesh(mergeGeometries(gs), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false })); m.castShadow = m.receiveShadow = false; m.renderOrder = -1; group.add(ctx.skipOverride ? ctx.skipOverride(m) : m); }
+  }
+
   // ---- harbour: pontoons, yachts moored stern-to, the swimming pools ----
   {
     const deck = mkAcc(), wood = srgb('#b9a58a'), pcol = srgb('#d9d6cf');
