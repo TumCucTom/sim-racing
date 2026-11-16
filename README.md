@@ -423,8 +423,8 @@ fixed order, plus three stages the solo car never sees:
   contact point, so an off-centre hit yaws both cars, then a positional push-out split by inverse mass.
   Tests: linear and angular momentum conserved to 1e-9, kinetic energy never rises in the impulse stage, no
   tunnelling at 300 km/h closing speed, bodies never stay overlapped for more than 10 steps.
-- *Slipstream.* `Vehicle.dragK` / `downK` (exactly 1 in free air): up to −40 % drag and −12 % downforce
-  directly behind another car, falling with distance (90 m) and sideways offset.
+- *Slipstream.* `Vehicle.dragK` / `downK` (exactly 1 in free air): up to −50 % drag directly behind another car, falling with
+  distance (120 m) and sideways offset, and up to −12 % downforce at close range (90 m).
 - *Race logic.* Staggered two-wide grid behind the line, five red lights then a seeded random hold, per-driver
   reaction times, positions by race distance, gaps and intervals from 25 m time stamps, sector / lap / best
   lap per car (the solo lap timer), blue flags, finish when the leader completes the distance (everyone else
@@ -449,15 +449,14 @@ speed to feed it:
 - *Overtaking.* Close up in the tow, pull out late (the tow is behind the car, not beside it), take the inside
   for the next braking zone when within range, use the braking the tune keeps in reserve, and back out if not
   alongside by turn-in; two abreast into a corner the car behind concedes unless it is on the inside with its
-  nose well alongside; hairpins and chicanes are single file. Held up into a corner that leads onto a
-  straight, a driver drops back before the apex to get a run on the exit.
+  nose well alongside; hairpins and chicanes are single file.
 - *Defending.* One move to the inside on the approach to a braking zone when a car is close behind, held to
   the apex; never against a lapping car or a faster class; room is always left to a car alongside.
 - *Start.* Lanes are kept off the grid; the field funnels onto the line only near the first corner, with
   bigger gaps and earlier braking until it is through.
 - *Personality* (seeded): skill (share of the validated tune, never more than 100 %), aggression,
-  consistency (lap-to-lap pace noise), mistakes (a late-braking error per braking zone, likelier under
-  pressure, rarer with skill, smaller in cars without ABS or with a lot of downforce), reaction time.
+  consistency (lap-to-lap pace noise), mistakes (a poor corner that costs time, likelier under pressure,
+  rarer with skill), reaction time.
   The grid is qualifying order with noise. Nobody is given grip or power they would not have alone.
 
 **Game** (`src/game/racemode.js`, `racehud.js`, `tvcam.js`, `src/audio/opponents.js`). Every car has its own
@@ -483,22 +482,46 @@ Scripting, for filming: `__game.startRace({ n, laps, grid, klass, skill, seed, o
 between the two within 4 s and the passed car at racing speed); contacts by closing speed at the contact
 point: light < 2 m/s, medium 2–6, heavy > 6. Means per race.
 
-| race | seeds | finished | overtakes (clean) | contacts L / M / H | heavy per car-lap | off-tracks | spins | respawns | DNF |
-|---|---|---|---|---|---|---|---|---|---|
-| Ravenscar, 12 cars, 5 laps | 5 | 5/5 | 4.2 (3.0) | 0.8 / 1.8 / 0.0 | 0.000 | 0.6 | 0.6 | 0.2 | 0 |
-| Spa, 12 cars, 5 laps | 5 | 5/5 | 0.6 (0.4) | 0.8 / 1.8 / 0.4 | 0.007 | 0.4 | 1.0 | 1.0 | 0 |
-| Monza, 12 cars, 5 laps | 5 | 5/5 | 2.0 (1.0) | 2.0 / 0.4 / 0.2 | 0.003 | 0.6 | 0.4 | 0.2 | 0 |
-| Monza, reverse grid | 3 | 3/3 | 3.7 (1.3) | 3.3 / 0.3 / 0.0 | 0.000 | 0.7 | 0.0 | 0.0 | 0 |
-| Laguna Seca, 12 cars, 5 laps | 3 | 3/3 | 0.0 (0.0) | 0.0 / 0.7 / 0.0 | 0.000 | 0.0 | 0.0 | 0.0 | 0 |
-| Silverstone, 20 cars, 5 laps | 3 | 3/3 | 9.7 (9.3) | 0.0 / 0.3 / 0.0 | 0.000 | 0.0 | 0.0 | 0.0 | 0 |
-| Spa, mixed classes (prototypes, GT3, road cars), 5 laps | 3 | 3/3 | 1.7 (1.0) | 0.7 / 0.7 / 2.0 | 0.033 | 1.3 | 0.7 | 0.3 | 0 |
-| Monaco, 12 cars, 5 laps | 3 | 3/3 | 0.0 (0.0) | 0.7 / 0.7 / 0.0 | 0.000 | 0.0 | 0.0 | 0.0 | 0 |
-| Nordschleife, 8 cars, 1 lap | 3 | 3/3 | 0.0 (0.0) | 0.7 / 2.0 / 2.0 | 0.250 | 4.7 | 5.0 | 3.7 | 0 |
-| Ravenscar in rain, 12 cars, 5 laps | 3 | 3/3 | 0.7 (0.7) | 0.0 / 0.3 / 0.0 | 0.000 | 0.0 | 0.7 | 0.7 | 0 |
-| Spa in a storm, 12 cars, 3 laps | 2 | 2/2 | 0.0 (0.0) | 0.5 / 0.0 / 0.0 | 0.000 | 0.0 | 0.0 | 0.0 | 0 |
+| race | seeds | finished | clean passes, before → after | all passes | contacts per race | heavy per car-lap | spins | DNF |
+|---|---|---|---|---|---|---|---|---|
+| Ravenscar, 12 cars, 5 laps | 5 | 5/5 | 3.0 → 3.6 | 4.0 | 5.2 | 0.017 | 0.8 | 0 |
+| Spa, 12 cars, 5 laps | 5 | 5/5 | 0.4 → 3.4 | 3.8 | 4.4 | 0.007 | 0.6 | 0 |
+| Monza, 12 cars, 5 laps | 5 | 5/5 | 1.0 → 8.2 | 9.0 | 3.6 | 0.007 | 0 | 0 |
+| Monza, reverse grid | 3 | 3/3 | 1.3 → 10.3 | 13.0 | 6.4 | 0.006 | 0 | 0 |
+| Laguna Seca, 12 cars, 5 laps | 3 | 3/3 | 0 → 0 | 0 | 0 | 0.000 | 0 | 0 |
+| Silverstone, 20 cars, 5 laps | 3 | 3/3 | 9.3 → 7.0 | 7.0 | 5.3 | 0.010 | 0 | 0 |
+| Spa, mixed classes, 5 laps | 3 | 3/3 | 1.0 → 2.3 | 3.3 | 6.3 | 0.018 | 1.3 | 0 |
+| Monaco, 12 cars, 5 laps | 3 | 3/3 | 0 → 0 | 0 | 0.4 | 0.006 | 0 | 0 |
+| Nordschleife, 8 cars, 1 lap | 3 | 3/3 | 0 → 0 | 0 | 1.7 | 0.000 (was 0.250) | 0 (was 5.0) | 0 |
+| Ravenscar in rain, 12 cars, 5 laps | 3 | 3/3 | 0.7 → 0.7 | 0.7 | 0 | 0.000 | 0 | 0 |
+| Spa in a storm, 12 cars, 3 laps | 2 | 2/2 | 0 → 0 | 0 | 0 | 0.000 | 0 | 0 |
 
-All 38 races finished with every car classified; no deadlocks. In the mixed-class races two or three cars
-are lapped by the prototypes.
+"Before" is the first version of the racecraft (clean but processional); "after" has the second round described
+below. The pass counter was corrected in between: it used to ignore a pass if the car being passed was below
+8 m/s at that instant, which is most passes at the Monza chicane (apex 45 km/h); the tool prints the old
+"strict" count too (Monza 5.4 clean, Spa 3.2, Ravenscar 3.6 by the old rule). Every race finished with every
+car classified. These numbers move by a pass or two from seed to seed and from one small change to the next
+(the races are chaotic); the Nordschleife row in particular is three clean races here and was one messy and
+two clean ones a change earlier.
+
+*What changed in round two.* The first version kept followers 0.6-1.0 s apart: protections meant for close
+traffic were on for any car within 500 m, a "hang back for the exit" rule and a generous accordion gap opened
+more room, and nobody ever got near enough to try. Now: those protections apply only to a car that is close,
+alongside or off line; the follower sits as close as the corner allows; the tow reaches further (-50 % drag at
+the bumper, about +3 km/h at one second on the Kemmel straight) while the loss of downforce stays short-range;
+a lunge is decided in time, not metres (t seconds behind at the braking point is t x apex speed behind at
+the apex, i.e. alongside into a slow corner), the attacker brakes up to 0.3 s later using the braking the tune
+keeps in reserve, and is judged at turn-in: nose alongside or back out; the inside car with its nose alongside
+keeps its lane, the outside car gives the corner up once the other is half a car alongside unless it is
+clearly ahead; if the defender shuts the inside the attacker goes for the outside; where the inside has no
+room at all it may try the outside from the start; a driver stuck behind the same car gets steadily bolder;
+form comes and goes (every 15-40 s a driver is on it, a little off it or, rarely, well off it), drivers have
+a weaker corner type, and a mistake costs time (9 % for three seconds) instead of over-driving the car.
+Cars without ABS and with a lot of downforce do not lunge at all.
+
+*For filming:* `node tools/race-moments.mjs "<race url query>"` runs the whole race in the headless browser and
+lists every pass with time, lap, place and car index. Use that list, not `tools/race-sim.js`: Node and
+Chromium differ in the last bit of some Math functions, so the same seed is a different race in each.
 
 *Top AI level in every class* (`--diff 1.0`, 8 identical cars, 3 laps, 1 on the Nordschleife; 7 circuits dry and
 6 in rain; 2 seeds each; totals over the 26 races of a class): Formula spins 14.5 / barrier hits 7.5 (before
@@ -527,14 +550,12 @@ is left for one that will keep it, with a helicopter and then an on-track fallba
 
 ### Where the racing is still weak
 
-- **Processional among equal cars.** With a qualifying-order grid, 12 GT3 cars at Spa change places 0.6 times
-  in five laps and from a reverse grid at Monza the slowest car still wins from pole: a faster car closes up,
-  shows its nose and is usually refused. Passing needs a clear pace or straight-line advantage (20 cars at
-  Silverstone: 9.7 a race). There is no cut-back / switchback planning beyond "drop back before the apex",
-  no late-apex defending, and out-braking is conservative because the inside lane's speed profile is that of
-  a smooth shifted line, not of a real dive.
-- **The Nordschleife in traffic** is the one place where races are scruffy in every class: narrow, fast, and
-  the line follower's tuning there is already marginal; two heavy contacts and five spins per 8-car lap.
+- **Passing is concentrated at big braking zones.** Monza's first chicane and Les Combes at Spa take almost
+  all of it; Laguna Seca (12 cars, 5 laps) still has none, Ravenscar 3.6 a race, and a storm has none. Passes
+  on the straight itself are rare between cars of one class; there is no switchback planning, and a pass round
+  the outside almost never sticks. The form swings that bring cars together are a random process, not tyres.
+- **The Nordschleife in traffic** is much tidier (lunges are damped on barrier-lined circuits) but is still
+  where an incident is most likely, and nobody passes there.
 - **Mixed classes**: lapping works, but a heavy contact every other race, typically a prototype arriving on a
   road car that is 40 % slower in a fast corner.
 - A car that is hit is not damaged; contact is a rigid-body impulse on the chassis (no deformation, no

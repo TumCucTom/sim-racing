@@ -3,6 +3,21 @@
 All notable changes, newest first. Numbers quoted here were measured by the
 tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
 
+## Unreleased — racecraft round two: equal cars fight
+- The first race mode was clean but processional (12 GT3 at Spa: 0.4 clean passes in five laps). Followers now
+  run as close as the corner allows, the tow reaches further, lunges are decided in time and judged at turn-in
+  (nose alongside or back out), the attacker brakes later from the tune's reserve, the inside car alongside keeps
+  its lane and the outside car gives the corner up, a blocked attacker tries the outside, patience runs out
+  behind the same car, and form, corner-type weaknesses and time-costing mistakes bring cars together
+  (`src/sim/drivers/racecraft.js`, `src/sim/race.js`).
+- Clean on-track passes per race, before -> after (`node tools/race-sim.js`, GT3, level 0.96): Spa 0.4 -> 3.4,
+  Monza 1.0 -> 8.2, Monza reverse grid 1.3 -> 10.3, Ravenscar 3.0 -> 3.6, Laguna Seca 0 -> 0, 20 cars at
+  Silverstone 9.3 -> 7.0. Heavy contacts per car-lap 0.007 / 0.007 / 0.006 / 0.017 / 0 / 0.010. Nordschleife
+  (8 cars, 1 lap): spins 5.0 -> 0, heavy contacts 0.25 -> 0 per car-lap in these three seeds. The pass counter no
+  longer drops passes of a car below 8 m/s (the Monza chicane); the old count is still printed as "strict".
+- `tools/race-moments.mjs` lists the passes of a race as the browser runs it (Node and Chromium do not run the
+  same seed identically); `?grid=quali` starts the player's car where its pace puts it, as the headless tool does.
+
 ## Unreleased — race mode: a field of AI cars, contact, slipstream, racecraft
 - **Multi-car racing** (`src/sim/race.js`): N cars at 300 Hz in a fixed order, deterministic and DOM-free.
   Car-to-car contact (oriented rectangles, impulse with restitution and friction at the contact point,
