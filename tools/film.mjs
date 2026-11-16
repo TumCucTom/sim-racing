@@ -37,7 +37,7 @@ for (const s of shots) {
     window.__alog = []; const a = g.audio;
     if (a && a._send) { if (a.cfg) window.__alog.push([-1, { cfg: a.cfg }]); const send = a._send.bind(a); a._send = (m, tr) => { if (m && !m.pcm && !m.bank) window.__alog.push([window.__frame | 0, m]); return send(m, tr); }; }
   }, { s });
-  await p.clock.pauseAt(await p.evaluate(() => Date.now() + 8000));   // the page is slow: leave a wide margin (game is paused meanwhile)
+  await p.clock.pauseAt(await p.evaluate(() => Date.now() + 120000));   // the page is slow: leave a wide margin (game is paused meanwhile)
   await p.evaluate(() => { const g = window.__game; g.paused = false; g.last = performance.now(); });
   for (let i = 0; i < 12; i++) await p.clock.runFor(1000 / FPS);   // settle camera, LOD, exposure
   const grab = async (file) => { const url = await p.evaluate(() => { const g = window.__game; if (g.composer) g.composer.render(); else g.renderer.render(g.scene, g.camera); return g.renderer.domElement.toDataURL('image/jpeg', 0.94); }); fs.writeFileSync(file, Buffer.from(url.slice(url.indexOf(',') + 1), 'base64')); };
