@@ -242,7 +242,7 @@ export class Race {
     const cars = this.cars, n = cars.length;
     for (let i = 0; i < n; i++) {
       const F = cars[i]; if (F.retired) continue;
-      const f = F.car; let k = 0;
+      const f = F.car; let k = 0, kd = 0;
       for (let j = 0; j < n; j++) {
         if (j === i) continue;
         const Ld = cars[j]; if (Ld.retired) continue;
@@ -252,12 +252,14 @@ export class Race {
         const cy = Math.cos(l.yaw), sy = Math.sin(l.yaw);
         const back = -(dx * cy + dy * sy); if (back < 1.5 || back > WAKE_LEN) continue;
         const lat = -dx * sy + dy * cy, sg = 1.2 + 0.045 * back, q = 1 - back / WAKE_LEN;
-        let w = Math.pow(q, 0.8) * Math.exp(-(lat * lat) / (sg * sg)) * Math.min(1, (v - 15) / 25);
-        w *= Math.min(1, Math.sqrt(Ld.spec.CdA / F.spec.CdA));
+        const shape = Math.exp(-(lat * lat) / (sg * sg)) * Math.min(1, (v - 15) / 25) * Math.min(1, Math.sqrt(Ld.spec.CdA / F.spec.CdA));
+        const w = Math.pow(q, 0.8) * shape;
         if (w > k) k = w;
+        // the tow reaches a long way back; the loss of downforce is a close-range effect
+        if (back < 90) { const qd = 1 - back / 90, wd = qd * Math.pow(qd, 0.25) * shape; if (wd > kd) kd = wd; }
       }
       F.wake = k;
-      f.dragK = 1 - WAKE_DRAG * k; f.downK = 1 - WAKE_DOWN * k;
+      f.dragK = 1 - WAKE_DRAG * k; f.downK = 1 - WAKE_DOWN * kd;
     }
   }
 

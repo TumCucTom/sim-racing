@@ -102,7 +102,7 @@ export class RaceDriver {
     this.base.vT = this.vCmd;
     // a car without ABS or with a lot of downforce punishes over-driving harder: smaller liberties
     const tame = (spec.abs ? 1 : 0.5) * (spec.ClA > 2.5 ? 0.6 : 1);
-    this.slipK = 0.91; this.atkK = tame;     // a mistake costs time (a missed apex, late on the power), it does not over-drive the car
+    this.slipK = 0.91; this.atkK = tame < 0.5 ? 0 : tame;     // (no late-braking lunges at all in a car with neither ABS nor margin)     // a mistake costs time (a missed apex, late on the power), it does not over-drive the car
     // margin in a wake: the first-order cost for most cars, twice that for the high-downforce ones whose
     // tune leaves nothing in hand (a wake is gusty)
     this.wakeK = spec.ClA > 2.5 ? 2 : 0.8;
@@ -116,7 +116,7 @@ export class RaceDriver {
     this.nL = false; this.nR = false; this.lOff = 0; this.lSep = 0; this.rOff = 0; this.rSep = 0;   // cars alongside, left and right
     this.vF = Infinity; this.speedK = 1; this.paceK = 1; this.extra = 0;
     this.held = 0; this.defApex = -1; this.defD = 0; this.mistakeT = 0; this.braking = false; this.lastLap = -1;
-    this.yieldTo = null; this.keepT = 0; this.started = false; this.spun = false; this.slowPass = false; this.stuckOn = null; this.stuckT = 0; this.lapK = 1; this.formK = 1; this.phaseT = 20; this.atk = 0; this.lateM = 0; this.vApexAtk = 10; this.panic = false; this.wakeF = 0; this.near = false; this.lastBrakeT = -1e9;
+    this.yieldTo = null; this.keepT = 0; this.started = false; this.spun = false; this.slowPass = false; this.kk = 1; this.stuckOn = null; this.stuckT = 0; this.lapK = 1; this.formK = 1; this.phaseT = 20; this.atk = 0; this.lateM = 0; this.vApexAtk = 10; this.panic = false; this.wakeF = 0; this.near = false; this.lastBrakeT = -1e9;
     this.passes = 0; this.aborts = 0; this.defends = 0; this.mistakes = 0; this.why = {};
     this.info = { ahead: null, gapA: 0, behind: null, gapB: 0, left: false, right: false };
   }
@@ -180,14 +180,14 @@ export class RaceDriver {
       const f = (v - 1.2 * this.vApexAtk) / (0.4 * v + 1), sh = Math.min(this.atk * (f < 0 ? 0 : f > 1 ? 1 : f), 0.3 * v);    // (never more than three tenths of a second late)
       const v2 = this.vAt(((k - Math.round(sh / t.ds)) % n + n) % n, this.o); if (v2 > vt) vt = v2;
     }
-    const kk = this.speedK * this.paceK * (this.mistakeT > 0 ? this.slipK : 1);
+    const kk = this.kk;        // speedK x paceK x mistake, eased in (see think)
     if (kk !== 1) vt *= kk;
     if (this.vF < vt) vt = this.vF;
     // two or more wheels on the grass: ease off and come back gently
     let onGrass = 0; for (let i = 0; i < 4; i++) if (car.surf[i] >= 2) onGrass++;
     // (alone on the line the tuned driver is left exactly as it is, kerb-hopping included)
     // ("traffic" = off my line, a car alongside, or one close ahead; a car 200 m up the road is not traffic)
-    const held = this.vF < vt + 3, traffic = this.o !== 0 || this.nL || this.nR || this.near;
+    const held = this.vF < vt + 3, traffic = this.o !== 0 || this.nL || this.nR || this.near || (this.wakeK > 1 && this.wakeF > 0.05);   // (a downforce car is "in traffic" anywhere in a wake)
     if (onGrass < 3 && !traffic) onGrass = 0;
     if (onGrass >= 2 && vt > v - 1) vt = Math.max(12, v - 1);
     this.vCmd[k] = vt;
@@ -417,7 +417,7 @@ export class RaceDriver {
         // pull out late: the tow is behind the car, not beside it
         const range = 3 + Math.max(0, closing) * 1.1 + (dBrake < 330 ? 0.12 * v : 0);
         const run = closing > 1.3 - 0.9 * p.aggression || (this.held > 1.2 && rc.wake > 0.2 && closing > 0.1) || slow;
-        const lunge = !caution && dBrake > 40 && dBrake < 50 + 1.6 * v && gapA < 0.42 * v && closing > -1.5;
+        const lunge = this.atkK > 0 && !caution && dBrake > 40 && dBrake < 50 + 1.6 * v && gapA < 0.42 * v && closing > -1.5;
         if ((gapA < range && run || lunge) && (!caution || slow)) {
           const tPass = (gapA + 2 * sepL + 2) / Math.max(1.5, closing + 1.2), dNeed = tPass * v;
           let limMin = lim; for (let q = 20; q <= 80; q += 20) limMin = Math.min(limMin, this.lim[(idx + q) % n]);
@@ -441,7 +441,7 @@ export class RaceDriver {
           const late = (v * v - vApex * vApex) / 28 * (0.08 + 0.10 * aggr) * this.atkK * (t.narrow ? 0.5 : 1);
           const tGap = (gapA + sepL) / v - late / v - 0.4 * Math.max(0, closing) * (dBrake / v) / v;
           const overlapAtApex = sepL - tGap * vApex;
-          const setup = twoWide && dBrake > 40 && dBrake < 50 + 1.6 * v && closing > -1.5 && overlapAtApex > 1.3 - 0.9 * aggr;
+          const setup = this.atkK > 0 && twoWide && dBrake > 40 && dBrake < 50 + 1.6 * v && closing > -1.5 && overlapAtApex > 1.3 - 0.9 * aggr;
           const ok = (s) => (s > 0 ? roomL >= 0 && !left : roomR >= 0 && !right);
           I.att = { setup, twoWide, ov: overlapAtApex, okIn: ok(inside), canComplete, dBrake };
           let side = 0, outLunge = false;
@@ -470,6 +470,9 @@ export class RaceDriver {
     // going round an obstacle: keep rolling so the car can steer
     if (this.mode === 'pass' && this.slowPass && vF < 2.5 && gapA > 1.2) vF = 2.5;
     if (dLo > dHi) speedK = Math.min(speedK, 0.93);        // squeezed from both sides
+    // every pace factor is eased in and out: a step in the target speed in the middle of a corner is a
+    // stab at the brakes, which is what spins a car with no ABS and no margin
+    { const kT = speedK * this.paceK * (this.mistakeT > 0 ? this.slipK : 1), stepMax = this.spec.abs ? 0.012 : 0.005, e = kT - this.kk; this.kk += e > stepMax ? stepMax : e < -stepMax ? -stepMax : e; }
     this.speedK = speedK; this.atk = atk; this.vF = vF; this.panic = panic; this.nL = left; this.nR = right;
 
     // Move the offset toward its target at a human rate, and only really on the straights: through a
