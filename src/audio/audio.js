@@ -69,7 +69,16 @@ export class AudioEngine {
       this.dist.connect(this.comp); this.dist.connect(this.send); this.send.connect(this.verb); this.verb.connect(this.comp);
       this.comp.connect(this.out); this.out.connect(c.destination);
       // [weather] ambient weather layer joins the bus after the camera-dependent part
-      try { this.wx = new WeatherAudio(c, this.comp); this.wx.set(this.weather); } catch (e) { this.wx = null; }
+      // thunder goes round the compressor (it must not pump the engine), so the sum gets a soft
+      // ceiling instead: transparent below 0.7, then a smooth knee that never reaches full scale
+      let post = null;
+      try {
+        const lim = c.createWaveShaper(), curve = new Float32Array(4097);
+        for (let i = 0; i <= 4096; i++) { const x = (i - 2048) / 2048 * 2, ax = Math.abs(x); curve[i] = Math.sign(x) * (ax <= 0.7 ? ax : 0.7 + 0.29 * Math.tanh((ax - 0.7) / 0.29)); }
+        lim.curve = curve; const pre = c.createGain(); pre.gain.value = 0.5;   // the curve spans +-2
+        this.out.disconnect(); this.out.connect(pre); pre.connect(lim); lim.connect(c.destination); post = this.out;
+      } catch (e) { post = null; }
+      try { this.wx = new WeatherAudio(c, this.comp, { post, verb: this.verb }); this.wx.set(this.weather); } catch (e) { this.wx = null; }
     } catch (err) {
       this.delay = null; this.out = this.node;
       try { this.node.disconnect(); } catch (e) { /* not connected yet */ }
@@ -181,6 +190,6 @@ export class AudioEngine {
   }
   // [weather] conditions: { rain: 0..1, wet: 0..1 }; thunder arrives `delay` seconds after the flash
   setWeather(w) { this.weather = w; this.wx?.set(w); }
-  thunder(delay, loud) { this.wx?.thunder(delay, loud); }
+  thunder(delay, loud, opts) { this.wx?.thunder(delay, loud, opts); }
   toggleMute() { this.muted = !this.muted; return this.muted; }
 }

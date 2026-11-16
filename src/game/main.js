@@ -266,6 +266,7 @@ class Game {
 
   showMenu(show) {
     document.getElementById('menu').classList.toggle('hidden', !show);
+    document.body.classList.toggle('menu-open', show);   // the HUD is hidden behind the front end
     this.paused = show;
     if (show) { this.camInit = false; this.menu?.sync(); } else this.menu?.help(false);
     this.last = performance.now();

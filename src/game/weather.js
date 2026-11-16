@@ -261,8 +261,9 @@ export class Weather {
     this._v[4].set(Math.cos(a), 0.35 + 0.3 * Math.random(), Math.sin(a)).normalize();
     if (U) U.flashDir.value.copy(this._v[4]);
     this.game.world.flash.position.copy(this._v[4]);
-    const km = 0.5 + Math.random() * 2.5;
-    this.game.audio.thunder?.(km / 0.343, 1 / (0.6 + km));
+    // 0.3-4 km away (sound takes about 3 s per km); now and then a second stroke follows
+    const u = Math.random(), km = 0.3 + 3.7 * u * Math.sqrt(u);
+    this.game.audio.thunder?.(km / 0.343, 1 / (0.6 + km), { km, double: Math.random() < 0.25 });
   }
 
   update(dt, car, camMode, paused) {

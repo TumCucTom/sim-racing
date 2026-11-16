@@ -14,11 +14,13 @@ for (const [name, w, h, touch, mode] of [['1280x720', 1280, 720, false, 'hot'], 
   p.on('pageerror', e => errs.push(`[${name}] pageerror ${e.message}`));
   await p.goto(`http://127.0.0.1:${process.env.PORT || 5173}/?${query}`, { timeout: 180000 });
   await p.waitForFunction(() => window.__game && !document.getElementById('loading'), null, { timeout: 300000 });
+  await p.waitForTimeout(1500); await p.waitForFunction(() => window.__game?.menu, null, { timeout: 300000 });
   await p.evaluate((m) => window.__game.menu.setMode(m), mode);
   await p.waitForTimeout(+process.env.WAIT || 9000);
   await p.screenshot({ path: `${outDir}/menu-${name}.png`, timeout: 300000 });
   if (name === '1280x720') {
     // keyboard: down = next car, right = next class, Controls panel, Enter = drive
+    await p.waitForFunction(() => window.__game?.menu, null, { timeout: 300000 });
     const r = await p.evaluate(async () => {
       const g = window.__game, key = (code) => window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true })), out = { car0: g.spec.id };
       key('ArrowDown'); out.down = g.spec.id; key('ArrowRight'); out.right = g.spec.id;

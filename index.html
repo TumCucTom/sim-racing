@@ -31,6 +31,7 @@
     background:linear-gradient(90deg, rgba(7,9,13,.94) 0, rgba(7,9,13,.8) calc(var(--rail) * .8), rgba(7,9,13,0) calc(var(--rail) + 9vw), rgba(7,9,13,0) calc(100% - var(--side) - 9vw), rgba(7,9,13,.8) calc(100% - var(--side) * .8), rgba(7,9,13,.94) 100%),
       linear-gradient(180deg, rgba(7,9,13,.72) 0, rgba(7,9,13,0) 22%, rgba(7,9,13,0) 62%, rgba(7,9,13,.8) 100%); }
   #menu.hidden { display:none; }
+  body.menu-open #ui { visibility:hidden; }
   #menu * { box-sizing:border-box; }
   #menu button, #menu select { font:inherit; color:inherit; }
   #menu :focus-visible { outline:2px solid var(--acc); outline-offset:2px; }
@@ -44,8 +45,8 @@
   #menu #m-mode button { padding:7px 20px; font-size:13px; letter-spacing:.06em; text-transform:uppercase; }
   #menu .ghost { background:rgba(255,255,255,.07); border:1px solid var(--line); border-radius:8px; padding:7px 13px; font-size:12.5px; cursor:pointer; } #menu .ghost:hover, #menu .ghost.on { background:rgba(255,255,255,.16); }
   #menu .m-left { display:flex; flex-direction:column; min-height:0; padding:4px 0 14px 20px; }
-  #menu .tabs { display:flex; flex-wrap:wrap; gap:4px 14px; padding:4px 0 8px; border-bottom:1px solid var(--line); margin-bottom:8px; }
-  #menu .tabs button { background:none; border:0; padding:4px 0; font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--mut); cursor:pointer; border-bottom:2px solid transparent; }
+  #menu .tabs { display:flex; flex-wrap:wrap; gap:4px 12px; padding:4px 0 8px; border-bottom:1px solid var(--line); margin-bottom:8px; }
+  #menu .tabs button { background:none; border:0; padding:4px 0; font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--mut); cursor:pointer; border-bottom:2px solid transparent; }
   #menu .tabs button:hover { color:var(--ink); } #menu .tabs button.on { color:var(--ink); border-bottom-color:var(--acc); }
   #cars { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:4px; padding:2px 8px 2px 2px; scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.3) transparent; }
   .card { display:grid; grid-template-columns:4px minmax(0, 1fr) auto; gap:0 10px; align-items:center; text-align:left; width:100%; background:rgba(255,255,255,.045); border:1px solid transparent; border-radius:8px; padding:8px 10px 8px 0; cursor:pointer; transition:background .15s, border-color .15s, transform .15s; animation:m-in .28s both; }
