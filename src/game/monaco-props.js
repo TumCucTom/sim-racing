@@ -25,14 +25,14 @@ const ZONES = [
 ];
 // Landmark footprints, found by a point inside them: looks and heights OpenStreetMap does not carry.
 const MARKS = [
-  { at: [590, 300], name: 'casino', h: 21, style: { body: L.PALACE, ground: L.PALACE, top: L.CORNICE, topH: 1.6, roof: 'mansard', roofLayer: L.COPPER, tint: '#f3e6c4' } },
+  { at: [567, 308], name: 'casino', h: 21, style: { body: L.PALACE, ground: L.PALACE, top: L.CORNICE, topH: 1.6, roof: 'mansard', roofLayer: L.COPPER, tint: '#f3e6c4' } },
   { at: [465, 270], name: 'paris', h: 27, style: { body: L.BELLE2, ground: L.ARCADE, top: L.CORNICE, topH: 1.6, roof: 'mansard', tint: '#f6efdc' } },
-  { at: [490, 385], name: 'onemc', h: 27, style: { body: L.GLASS, ground: L.SHOPS, top: L.PARAPET, topH: 1.2, roof: 'flat', tint: '#efe9dc', pent: true } },
-  { at: [480, 455], name: 'metropole', h: 24, style: { body: L.BELLE, ground: L.ARCADE, top: L.CORNICE, topH: 1.6, roof: 'mansard', tint: '#f1dfb8' } },
-  { at: [690, 330], name: 'fairmont', top: 30.5, style: { body: L.HOTEL, ground: L.HOTEL, top: L.PARAPET, topH: 1.2, roof: 'flat', tint: '#f2e7cf' } },
-  { at: [540, 170], name: 'star', top: 31, style: { body: L.BANDS, ground: L.CONCRETE, top: L.PARAPET, topH: 1.2, roof: 'flat', tint: '#f0e6d2' } },
-  { at: [660, 195], name: 'auditorium', top: 27, style: { body: L.GLASS, ground: L.CONCRETE, top: L.PARAPET, topH: 1.2, roof: 'flat', tint: '#e9e4d8' } },
-  { at: [655, 440], name: 'sardanapale', h: 14, style: { body: L.HOTEL, ground: L.SHOPS, top: L.PARAPET, topH: 1.2, roof: 'flat', tint: '#f2e7cf' } },
+  { at: [522, 382], name: 'onemc', h: 27, style: { body: L.GLASS, ground: L.SHOPS, top: L.PARAPET, topH: 1.2, roof: 'flat', tint: '#efe9dc', pent: true } },
+  { at: [520, 468], name: 'metropole', h: 24, style: { body: L.BELLE, ground: L.ARCADE, top: L.CORNICE, topH: 1.6, roof: 'mansard', tint: '#f1dfb8' } },
+  { at: [670, 330], name: 'fairmont', top: 30.5, style: { body: L.HOTEL, ground: L.HOTEL, top: L.PARAPET, topH: 1.2, roof: 'flat', tint: '#f2e7cf' } },
+  { at: [574, 182], name: 'star', top: 31, style: { body: L.BANDS, ground: L.CONCRETE, top: L.PARAPET, topH: 1.2, roof: 'flat', tint: '#f0e6d2' } },
+  { at: [642, 205], name: 'auditorium', top: 27, style: { body: L.GLASS, ground: L.CONCRETE, top: L.PARAPET, topH: 1.2, roof: 'flat', tint: '#e9e4d8' } },
+  { at: [652, 470], name: 'sardanapale', h: 14, style: { body: L.HOTEL, ground: L.SHOPS, top: L.PARAPET, topH: 1.2, roof: 'flat', tint: '#f2e7cf' } },
   { at: [137, -455], name: 'rascasse', h: 7.5, style: { body: L.PLAIN, ground: L.SHOPS, top: L.PARAPET, topH: 0.8, roof: 'flat', tint: '#f3ead6' } },
 ];
 
@@ -40,7 +40,7 @@ export function prepMonaco(K) {
   const { srgb } = K;
   K.marks = {};
   K.landmark = (b) => {
-    for (const m of MARKS) if (Math.abs(b.c[0] - m.at[0]) < 220 && inPoly(b.P, m.at[0], m.at[1])) {
+    for (const m of MARKS) if (!K.marks[m.name] && (Math.hypot(b.c[0] - m.at[0], b.c[1] - m.at[1]) < 14 || (Math.abs(b.c[0] - m.at[0]) < 220 && inPoly(b.P, m.at[0], m.at[1])))) {
       if (m.h) b.h = m.h; if (m.top) b.topAbs = m.top;
       b.style = { ...m.style, tint: srgb(m.style.tint) }; b.mark = m.name; K.marks[m.name] = b;
     }
@@ -174,7 +174,7 @@ export function dressMonaco(K) {
       // the façade towards the square (north-west): twin towers either side of the entrance, copper dome behind
       const tgt = [505, 345]; let best = null;
       for (let k = 0; k < cs.P.length; k++) { const a = cs.P[k], e = cs.P[(k + 1) % cs.P.length], len = Math.hypot(e[0] - a[0], e[1] - a[1]); if (len < 14) continue; const mx = (a[0] + e[0]) / 2, my = (a[1] + e[1]) / 2, d = Math.hypot(mx - tgt[0], my - tgt[1]) - len * 0.3; if (!best || d < best.d) best = { d, a, e, len }; }
-      const fo = K.foot.find(f => f.P && inPoly(f.P, 590, 300));
+      const fo = K.foot.find(f => f.mark === 'casino');
       if (best && fo) {
         const ux = (best.e[0] - best.a[0]) / best.len, uy = (best.e[1] - best.a[1]) / best.len, nx = uy, ny = -ux, rot = Math.atan2(uy, ux), zt = fo.top, mx = (best.a[0] + best.e[0]) / 2, my = (best.a[1] + best.e[1]) / 2, sp = Math.min(11, best.len * 0.3);
         for (const sg of [-1, 1]) tower(A, mx + ux * sg * sp - nx * 2.6, my + uy * sg * sp - ny * 2.6, 3.1, zt - 6, zt + 8.5, L.PALACE, cream, 6.5, L.COPPER, rot);
@@ -182,7 +182,7 @@ export function dressMonaco(K) {
         tower(A, mx - nx * 22, my - ny * 22, 7.5, zt - 1, zt + 5, L.BLANK, cream, 7, L.COPPER, rot);
       }
     }
-    const hp = K.marks.paris, fp = hp && K.foot.find(f => inPoly(f.P, 465, 270));
+    const hp = K.marks.paris, fp = hp && K.foot.find(f => f.mark === 'paris');
     if (fp) { let b = null; for (const p of fp.P) { const d = Math.hypot(p[0] - 480, p[1] - 320); if (!b || d < b.d) b = { d, p }; } const dx = fp.c[0] - b.p[0], dy = fp.c[1] - b.p[1], l = Math.hypot(dx, dy); tower(A, b.p[0] + dx / l * 5, b.p[1] + dy / l * 5, 4.2, fp.top - 3, fp.top + 6, L.BELLE2, srgb('#f6efdc'), 6, L.ZINC, Math.atan2(dy, dx)); }
     // the Prince's palace on the Rock: crenellated towers over the square
     for (const f of K.foot) if (f.mark === 'palace') { const xs = f.P.map(p => p[0]), ys = f.P.map(p => p[1]); for (const [x, y] of [[Math.min(...xs) + 6, Math.max(...ys) - 6], [Math.max(...xs) - 6, Math.max(...ys) - 8], [(Math.min(...xs) + Math.max(...xs)) / 2, Math.max(...ys) - 4]]) if (inPoly(f.P, x, y)) { box(accs[7], x, y, 4.2, 4.2, 0.3, f.top - 4, f.top + 9, L.STONE, srgb('#e8dcc0')); box(accs[7], x, y, 4.8, 4.8, 0.3, f.top + 9, f.top + 10.4, L.STONE, srgb('#efe4ca')); } }
@@ -490,7 +490,7 @@ function buildTunnel(K, { at, sweep, range, accs, flat }) {
     const lining = new THREE.Mesh(g, ctx.patch(new THREE.MeshBasicMaterial({ vertexColors: true, map: ctx.concreteMap, side: THREE.DoubleSide }), 'mctun', {
       vpars: 'varying vec3 vWPos;', vmain: 'vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;', fpars: 'varying vec3 vWPos;',
       color: 'diffuseColor.rgb *= (0.8 + 0.4 * vnoise(vec2(vWPos.x + vWPos.z, vWPos.y * 2.0) * 0.8)) * (0.92 + 0.08 * step(0.04, fract((vWPos.x + vWPos.z) / 2.4)));' }));
-    { const uvs = new Float32Array(pos.length / 3 * 2); for (let k = 0; k < uvs.length / 2; k++) { uvs[k * 2] = (pos[k * 3] + pos[k * 3 + 2]) / 3; uvs[k * 2 + 1] = pos[k * 3 + 1] / 3; } g.setAttribute('uv', new THREE.BufferAttribute(uvs, 2)); }
+    { const uvs = new Float32Array(pos.length / 3 * 2); for (let k = 0; k < uvs.length / 2; k++) { uvs[k * 2] = (pos[k * 3] - pos[k * 3 + 2]) / 2.2; uvs[k * 2 + 1] = pos[k * 3 + 1] / 2.2 + pos[k * 3] / 5; } g.setAttribute('uv', new THREE.BufferAttribute(uvs, 2)); }
     group.add(lining);
     // lamps: two rows of bright fittings on the soffit
     const lp = [], li = [];
