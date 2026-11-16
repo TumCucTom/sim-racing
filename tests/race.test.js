@@ -143,15 +143,16 @@ test('slipstream: reduced drag and a little less downforce in a wake, exactly 1 
   const { race, A, B, place } = pair();
   place(A, 100, 0, 60); place(B, 112, 0, 60);     // A is 12 m behind B
   race._aero();
-  assert.ok(A.car.dragK < 0.75 && A.car.dragK > 0.55, `dragK ${A.car.dragK}`);
+  assert.ok(A.car.dragK < 0.75 && A.car.dragK > 0.45, `dragK ${A.car.dragK}`);
   assert.ok(A.car.downK < 1 && A.car.downK > 0.85);
   assert.equal(B.car.dragK, 1); assert.equal(B.car.downK, 1);
   place(A, 100, 5.5, 60); race._aero();           // out of the wake sideways: almost nothing
   assert.ok(A.car.dragK > 0.97);
-  place(A, 0, 0, 60); race._aero();               // far behind: nothing at all
+  place(B, 400, 0, 60); race._aero();             // far behind: nothing at all
   assert.equal(A.car.dragK, 1);
   // strength falls with distance
   let last = 0;
+  place(B, 112, 0, 60);
   for (const gap of [70, 40, 20, 8]) { place(A, 112 - gap, 0, 60); race._aero(); assert.ok(A.wake > last); last = A.wake; }
 });
 

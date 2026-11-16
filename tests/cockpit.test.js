@@ -59,4 +59,5 @@ test('every car in the game has a cockpit class with a full set of ergonomics', 
   assert.equal(cockpitClass(CARS.gt3), 'gt');
   assert.equal(cockpitClass(CARS.hypercar), 'proto');
   assert.equal(cockpitClass(CARS.mini), 'road');
+  for (const id of CAR_ORDER) if (/supercar/i.test(CARS[id].klass)) assert.equal(cockpitClass(CARS[id]), 'road', id);
 });

@@ -15,7 +15,7 @@ const p = await b.newPage({ viewport: { width: +(process.env.W || 1280), height:
 const errs = [];
 p.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') errs.push(`[${m.type()}] ${m.text()}`); });
 p.on('pageerror', e => errs.push('[pageerror] ' + e.message));
-await p.goto(`http://127.0.0.1:${process.env.PORT || 5173}/?autostart&ai&${query}`);
+await p.goto(`http://127.0.0.1:${process.env.PORT || 5173}/?autostart&ai&${query}`, { timeout: 180000 });
 await p.waitForFunction(() => window.__game, null, { timeout: 60000 });
 const cars = carsArg === 'all' ? await p.evaluate(async () => (await import('/src/sim/cars.js')).CAR_ORDER) : carsArg.split(',');
 for (const id of cars) {
@@ -27,14 +27,14 @@ for (const id of cars) {
       const g = window.__game, car = g.sim.car, cams = ['chase', 'far', 'bonnet', 'cockpit', 'tv'];
       g.acc = 0;
       if (first) g.fastForward(7);
-      if (view === 'left' || view === 'right') { const sg = view === 'left' ? 1 : -1; for (let i = 0; i < 1500 && !(car.steer * sg > 0.16 && car.speed > 12); i++) g.fastForward(0.1); g.fastForward(0.25); }
+      if (view === 'left' || view === 'right') { const sg = view === 'left' ? 1 : -1; for (let i = 0; i < 1500 && !(car.steer * g.spec.steerLock * sg > 0.06 && car.speed > 12); i++) g.fastForward(0.1); g.fastForward(0.25); }
       else if (view === 'straight') { for (let i = 0; i < 600 && Math.abs(car.steer) > 0.02; i++) g.fastForward(0.1); }
       g.cam = cams.indexOf(view === 'bonnet' || view === 'chase' ? view : 'cockpit'); g.camInit = false;
       g.acc = -1e9;      // freeze the simulation, keep rendering
       return null;
     }, { view, first });
     first = false;
-    const t0 = Date.now(); await p.evaluate(() => new Promise((res) => { let n = 0; const f = () => (++n >= 14 ? res() : requestAnimationFrame(f)); requestAnimationFrame(f); }));
+    const t0 = Date.now(); await p.evaluate(() => new Promise((res) => { let n = 0; const f = () => (++n >= 7 ? res() : requestAnimationFrame(f)); requestAnimationFrame(f); }));
     const info = await p.evaluate(async () => {
       const g = window.__game, car = g.sim.car, d = (await import('/src/game/cockpit.js')).inCar.debug();
       return { car: g.spec.id, glb: !!g.model.glb, kmh: +(car.speed * 3.6).toFixed(0), steer: +car.steer.toFixed(3), roadWheelDeg: +(car.steer * g.spec.steerLock * 57.3).toFixed(1), wheelDeg: d ? +(d.wheelAngle * 57.3).toFixed(1) : null, rawWheelDeg: d ? +(d.rawWheelAngle * 57.3).toFixed(1) : null, yawRate: +car.r.toFixed(3), kit: d?.meshes ?? 0, calls: g.perf.calls, tris: g.perf.tris };

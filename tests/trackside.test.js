@@ -83,3 +83,27 @@ test('kerb types: rumble signal, sausage kerbs slow the car and are off track', 
   assert.ok(sim.car.rumble > 0.1, `rumble ${sim.car.rumble}`);
   assert.equal(sim.car.wheelsOff(), 0, 'kerbs count as track');
 });
+
+test('Suzuka crossover: the bridge clears the lower road and the two never get confused', async () => {
+  const { project } = await import('../src/sim/track.js');
+  const t = buildTrack('suzuka');
+  const gap2 = (i) => (t.x[i] - t.x[t.under[i]]) ** 2 + (t.y[i] - t.y[t.under[i]]) ** 2;
+  let up = -1; for (let i = 0; i < t.n; i++) if (t.deck[i] && (up < 0 || gap2(i) < gap2(up))) up = i;
+  const low = t.under[up];
+  assert.ok(Math.hypot(t.x[up] - t.x[low], t.y[up] - t.y[low]) < 6, 'the roads cross in plan');
+  assert.ok(t.z[up] - t.z[low] > 6, `clearance ${(t.z[up] - t.z[low]).toFixed(1)} m`);
+  for (let i = 0; i < t.n; i++) assert.ok(Math.abs(t.grade[i]) < 0.12, `gradient at ${i}`);
+  // a car driven along the lower road through the crossing stays on the lower road's samples and touches nothing
+  for (const [start, name] of [[low, 'lower'], [up, 'upper']]) {
+    const sim = new Sim(t, CARS.gt3); sim.reset({ s: (start - 70) * t.ds, d: 0, speed: 22 });
+    for (let k = 0; k < 300 * 6; k++) {
+      const c = sim.car, he = c.headErr; sim.step({ steer: Math.max(-1, Math.min(1, -0.25 * c.d - 2.5 * he)), throttle: c.vx < 22 ? 0.3 : 0, brake: 0 });
+      let gap = Math.abs(c.idx - start); gap = Math.min(gap, t.n - gap);
+      assert.ok(gap < 400, `${name} road: car jumped to sample ${c.idx}`);
+      assert.ok(c.wallContact <= 0, `${name} road: hit a wall at ${c.idx}`);
+    }
+    assert.ok(sim.progress > 110, `${name} road: drove through (${sim.progress.toFixed(0)} m)`);
+  }
+  const out = {}; project(t, t.x[low], t.y[low], low, out); assert.ok(Math.abs(out.idx - low) <= 1);
+  project(t, t.x[up], t.y[up], up, out); assert.ok(Math.abs(out.idx - up) <= 1);
+});

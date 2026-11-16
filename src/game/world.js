@@ -9,6 +9,7 @@ import * as TX from './textures.js';
 import { ASSETS, loadTexture, applyTextures } from './assets.js';
 import { getSky } from './sky.js';
 import { WX, WX_GLSL, wxUniforms } from './wx.js';
+import { monacoSetup } from './monaco.js';
 
 const hash2 = (ix, iy) => { let h = Math.imul(ix, 374761393) + Math.imul(iy, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 function vnoise(x, y) {
@@ -36,7 +37,8 @@ export function makeTerrainFn(track, { sea = false } = {}) {
   cx /= track.n; cy /= track.n;
   let zMin = Infinity, zMax = -Infinity, zMean = 0;
   for (let i = 0; i < track.n; i++) { zMin = Math.min(zMin, track.z[i]); zMax = Math.max(zMax, track.z[i]); zMean += track.z[i] / track.n; }
-  const amp = Math.max(0.12, Math.min(1.6, (zMax - zMin) / 23));
+  // surrounding relief follows the circuit's own: flat circuits (Monza, Silverstone) sit in flat country
+  const amp0 = Math.max(0.12, Math.min(1.6, (zMax - zMin) / 23)), amp = amp0 < 1 ? amp0 * amp0 : amp0;
   let ext = 0; for (let i = 0; i < track.n; i += 10) ext = Math.max(ext, Math.hypot(track.x[i] - cx, (track.y[i] - cy) * 1.4));
   // coastal circuits: the land falls away into the sea beyond the lowest part of the lap
   let sx = 0, sy = 0, lx0 = 0, ly0 = 0, ln = 0;
@@ -44,8 +46,20 @@ export function makeTerrainFn(track, { sea = false } = {}) {
     for (let i = 0; i < track.n; i++) if (track.z[i] < zMin + 0.12 * (zMax - zMin)) { lx0 += track.x[i]; ly0 += track.y[i]; ln++; }
     lx0 /= ln; ly0 /= ln; const d = Math.hypot(lx0 - cx, ly0 - cy) || 1; sx = (lx0 - cx) / d; sy = (ly0 - cy) / d;
   }
+  // real coastline (OSM, water on the right of each chain): signed distance, + = in the sea
+  const coast = sea && track.scene?.coast ? track.scene.coast.map(c => Float64Array.from(c, v => v / 10)) : null;
+  const seaDist = coast ? (x, y) => {
+    let bd = Infinity, sg = -1;
+    for (const c of coast) for (let k = 0; k + 3 < c.length; k += 2) {
+      const ax = c[k], ay = c[k + 1], ex = c[k + 2] - ax, ey = c[k + 3] - ay, px = x - ax, py = y - ay;
+      const u = Math.max(0, Math.min(1, (px * ex + py * ey) / (ex * ex + ey * ey))), dx = px - ex * u, dy = py - ey * u, d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; sg = ex * py - ey * px < 0 ? 1 : -1; }
+    }
+    return sg * Math.sqrt(bd);
+  } : null;
   return (x, y) => {
-    const i = nearestIndexGlobal(track, x, y);
+    let i = nearestIndexGlobal(track, x, y);
+    if (track.deck && track.deck[i]) i = track.under[i];          // crossover: the ground under a bridge belongs to the lower road
     const d = latOffset(track, i, x, y);
     const dist = Math.hypot(x - track.x[i], y - track.y[i]);
     const corr = (d > 0 ? track.wallL[i] : track.wallR[i]) + 1.5;
@@ -53,15 +67,19 @@ export function makeTerrainFn(track, { sea = false } = {}) {
     const rc = Math.hypot(x - cx, (y - cy) * 1.4);
     // surrounding land follows the circuit's own relief: flat circuits sit on flat land
     const far = zMean + amp * (22 * (vnoise(x / 420 + 3.1, y / 420 + 7.7) - 0.4) + 8 * (vnoise(x / 130, y / 130) - 0.4)) + 1.2 * vnoise(x / 28, y / 28)
-      + (60 + 90 * amp) * smooth(ext + 300, ext + 1200, rc) * (0.45 + 0.9 * vnoise(x / 300 + 11, y / 300 + 5));
+      + (25 + 110 * amp) * smooth(ext + 300, ext + 1200, rc) * (0.45 + 0.9 * vnoise(x / 300 + 11, y / 300 + 5));
     const t = smooth(corr, corr + 80, dist);
     let h = near + (far - near) * t;
+    let sd = -1;
     if (sea) {
-      const p = (x - lx0) * sx + (y - ly0) * sy, w = smooth(20, 260, p) * smooth(corr + 4, corr + 60, dist);
+      const p = (x - lx0) * sx + (y - ly0) * sy;
+      let w = smooth(20, 260, p) * smooth(corr + 4, corr + 60, dist);
+      // with a real coastline the quay drops straight into the harbour
+      if (seaDist) { sd = seaDist(x, y); w = smooth(0, 3, sd) * smooth(corr + 0.5, corr + 3, dist); }
       h += (zMin - 14 - h) * w;                       // sea bed
       h += (1 - smooth(-200, 500, p)) * smooth(corr + 30, corr + 400, dist) * 60;   // the town climbs the hill behind
     }
-    return { h, idx: i, dist, corr, t, zMin };
+    return { h, idx: i, dist, corr, t, zMin, sea: sd };
   };
 }
 
@@ -192,7 +210,9 @@ export function buildWorld(track, renderer, qualityIn) {
   const theme = THEMES[track.theme] || THEMES.default;
   const SD = { 1: { kerb: track.kerbL, col: track.kerbColL, apron: track.apronL, apronW: track.apronWL, ro: track.roL, roA: track.roAL, gA: track.gAL, gB: track.gBL, wall: track.wallL, bar: track.barL, edge: track.edgeL },
     '-1': { kerb: track.kerbR, col: track.kerbColR, apron: track.apronR, apronW: track.apronWR, ro: track.roR, roA: track.roAR, gA: track.gAR, gB: track.gBR, wall: track.wallR, bar: track.barR, edge: track.edgeR } };
-  const terrain = makeTerrainFn(track, { sea: urban });
+  // Monaco has its own ground model (src/game/monaco.js): OSM coastline, SRTM relief, terraces beside the road
+  const mc = urban && track.scene?.dem ? monacoSetup(track) : null;
+  const terrain = mc ? mc.terrain : makeTerrainFn(track, { sea: urban });
   const HW = track.halfWidth, KW = track.kerbWidth, hwA = track.hw, n = track.n;
   const wallAt = (side, i) => (side > 0 ? track.wallL[i] : track.wallR[i]);
   const gravelAt = (side, i) => SD[side].gB[i] > 0;
@@ -267,10 +287,11 @@ export function buildWorld(track, renderer, qualityIn) {
   const aspFallback = TX.asphaltTile(aniso);
   const oldU = { value: aspFallback.map }, avgU = { value: 0.068 };
   const asphaltMat = patch(new THREE.MeshStandardMaterial({ map: aspFallback.map, normalMap: aspFallback.normalMap, normalScale: new THREE.Vector2(0.5, 0.5), roughness: 0.86, metalness: 0 }), 'road', {
-    ...ROAD_V, uniforms: { uOld: oldU, uAvg: avgU },
-    fpars: 'uniform sampler2D uOld; uniform float uAvg; varying vec4 vRoad; varying float vRub; varying vec3 vWPos; float gRub; float gPaint;',
+    ...ROAD_V, uniforms: { uOld: oldU, uAvg: avgU, uUrban: { value: urban ? 1 : 0 }, uTun: { value: new THREE.Vector2(...(mc?.tun[0] ? [mc.tun[0][0] * track.ds, mc.tun[0][1] * track.ds] : [-9, -9])) } },
+    fpars: 'uniform sampler2D uOld; uniform float uAvg; uniform float uUrban; uniform vec2 uTun; varying vec4 vRoad; varying float vRub; varying vec3 vWPos; float gRub; float gPaint; float gTun;',
     color: `{
       vec2 m = vRoad.xy;                                   // metres across (+left) / along
+      gTun = smoothstep(uTun.x, uTun.x + 16.0, m.y) * (1.0 - smoothstep(uTun.y - 16.0, uTun.y, m.y));   // under cover: dry, lamp-lit
       vec3 a1 = diffuseColor.rgb;
       vec3 a2 = texture2D(map, m.yx / 23.0 + 0.37).rgb;    // same tile, large and rotated: breaks up repetition
       vec3 alb = a1 * mix(1.0, lum(a2) / uAvg, 0.55);
@@ -306,12 +327,23 @@ export function buildWorld(track, renderer, qualityIn) {
       float wear = smoothstep(1.2, 1.8, lum(a1) / uAvg + 0.8 * vnoise(m * vec2(7.0, 1.2)));
       gPaint = ln * (1.0 - 0.6 * wear);
       alb = mix(alb, vec3(0.7, 0.7, 0.68) * (0.8 + 0.2 * lum(a1) / uAvg), gPaint);
+      if (uUrban > 0.5) {
+        // street circuit: zebra crossings, a worn centre line and manhole covers
+        float zs = mod(m.y + 40.0, 211.0);
+        float zb = step(zs, 3.6) * step(0.5, fract(m.x / 1.0 + 0.25)) * step(abs(m.x), vRoad.w - 0.5);
+        float cl = step(abs(m.x), 0.07) * step(0.4, fract(m.y / 9.0)) * step(20.0, zs);
+        alb = mix(alb, vec3(0.6, 0.6, 0.57) * (0.7 + 0.3 * lum(a1) / uAvg), max(zb, cl * 0.5) * (0.75 - 0.5 * wear) * (1.0 - 0.6 * gRub));
+        vec2 mc = vec2(m.x - 2.6 * (hash12(vec2(floor(m.y / 47.0), 3.0)) - 0.5) * 2.0, mod(m.y, 47.0) - 23.5);
+        float mh = smoothstep(0.36, 0.33, length(mc));
+        alb = mix(alb, vec3(0.045, 0.04, 0.036) * (0.7 + 0.6 * step(0.5, fract(mc.x * 9.0)) * step(0.5, fract(mc.y * 9.0))), mh * 0.85);
+      }
       // rain: a water film darkens the surface (the rubbered line dries first on a damp
       // track), water stands along the edges (same function as the sim) and in low spots
-      if (uWet > 0.001) {
+      float wetK = uWet * (1.0 - gTun);
+      if (wetK > 0.001) {
         float dryL = clamp(g * 1.25, 0.0, 1.0) * uLineDry;
         float blot = vnoise(m * vec2(0.9, 0.11) + 7.0);
-        float film = clamp(uWet * 1.35 - dryL * 0.9 - (1.0 - uWet) * blot * 0.9, 0.0, 1.0);
+        float film = clamp(wetK * 1.35 - dryL * 0.9 - (1.0 - wetK) * blot * 0.9, 0.0, 1.0);
         float low = vnoise(m * vec2(0.33, 0.055) + 3.0) * 0.62 + vnoise(m * vec2(1.3, 0.35)) * 0.38;
         float pd = max(puddleDepth(m.y, m.x, vRoad.w), 0.8 * smoothstep(0.63, 0.78, low) * film) * uPuddle;
         gWet = film; gPud = clamp(pd, 0.0, 1.0);
@@ -323,7 +355,7 @@ export function buildWorld(track, renderer, qualityIn) {
     rough: `roughnessFactor = clamp(roughnessFactor - 0.3 * gRub - 0.22 * gPaint, 0.28, 1.0);
       roughnessFactor = mix(mix(roughnessFactor, 0.2 + 0.1 * roughnessFactor, gWet), 0.03, gPud);`,
     normal: 'normal = normalize(mix(normal, nonPerturbedNormal, clamp(0.55 * gRub + 0.7 * gPaint, 0.0, 1.0)));' + WET_NORMAL,
-    out: WET_REFLECT,
+    out: 'if (gTun > 0.001) outgoingLight = mix(outgoingLight, diffuseColor.rgb * vec3(2.6, 2.3, 1.8) * (0.72 + 0.28 * cos(vRoad.y * 0.698)), gTun);' + WET_REFLECT,
   });
   photo(asphaltMat, { map: [ASSETS.asphaltDiff, { aniso }], normalMap: [ASSETS.asphaltNor, { aniso, srgb: false }], roughnessMap: [ASSETS.asphaltRough, { aniso, srgb: false }] });
   loadTexture(ASSETS.asphaltOld, { aniso }).then((t) => { if (t) oldU.value = t; });
@@ -510,7 +542,7 @@ export function buildWorld(track, renderer, qualityIn) {
       const z = track.z[i], a = inner(i), b = Math.max(a + 0.2, wallAt(side, i)), mid = a + Math.min(1.2, (b - a) * 0.5);
       if (urban) o.push(side * a, z - 0.004, 0, side * (a + 0.03), z + 0.11, 0, side * b, z + 0.11, 0);      // raised pavement
       else o.push(side * a, z - 0.004, 0, side * mid, z - 0.018, 0, side * b, z - 0.05, 0);
-    }, { uMetric: 2.3, vScale: 2.3, flip: side < 0, rub }), vergeMat);
+    }, { uMetric: 2.3, vScale: 2.3, flip: side < 0, rub, mask: mc ? (i) => !mc.inTun(i) : track.deck ? (i) => !track.deck[i] : null }), vergeMat);
     // paved run-off from roA to the barrier (level with the pavement on street circuits)
     const up = urban ? 0.125 : 0;
     add(strip(track, ksEdge, (i, o) => { const z = track.z[i] + up, a = A.roA[i], b = Math.max(a + 0.1, wallAt(side, i)); o.push(side * a, z - 0.008, 0, side * (a + b) / 2, z - 0.016, 0, side * b, z - 0.03, 0); },
@@ -556,6 +588,7 @@ export function buildWorld(track, renderer, qualityIn) {
     const tyresOn = (side, i) => barAt(side, i) === BAR.TYRES, wallOn = (side, i) => barAt(side, i) === BAR.WALL || barAt(side, i) === BAR.TYRES;
     // debris fence where spectators would be: around the pits and on the outside of fast corners
     const fenceOn = (side, i) => {
+      if (mc?.inTun(i)) return false;
       const dPit = Math.min(i, n - i) * track.ds;
       if (dPit < 330 || urban || barAt(side, i) === BAR.WALL) return true;
       if (quality.detail < 1) return false;
@@ -571,7 +604,7 @@ export function buildWorld(track, renderer, qualityIn) {
           o.push(side * w, y, u0 + 0.02 * du, side * (w - 0.075), y + 0.085, u0 + 0.28 * du, side * (w - 0.075), y + bh - 0.085, u0 + 0.72 * du, side * w, y + bh, u0 + 0.98 * du);
         }
         o.push(side * (w + 0.11), z + top, 1, side * (w + 0.11), z, 1);     // posts side: closes the section from behind
-      }, { mask: i => barAt(side, i) === BAR.ARMCO, vScale: 4, flip: side > 0 }));
+      }, { mask: i => barAt(side, i) === BAR.ARMCO && !mc?.inTun(i), vScale: 4, flip: side > 0 }));
       // belting: the face of the tyre wall up to just below the top tyres, folded back over them
       beltGeo.push(strip(track, ksEdge, (i, o) => { const w = wallAt(side, i), z = track.z[i] - 0.05; o.push(side * (w - 0.74), z, 0, side * (w - 0.74), z + TH * 0.82, 0.9, side * (w - 0.7), z + TH * 0.86, 1); },
         { mask: i => tyresOn(side, i), vScale: 1, flip: side > 0 }));
@@ -632,6 +665,14 @@ export function buildWorld(track, renderer, qualityIn) {
     }
   }
 
+  // ---- crossover bridge deck: slab under the upper road, where verge and terrain are left out ----
+  if (track.deck) {
+    const g = strip(track, ksRoad, (i, o) => { const z = track.z[i], l = track.wallL[i] + 0.3, r = track.wallR[i] + 0.3; o.push(l, z + 0.9, 0, l, z - 0.9, 0.2, -r, z - 0.9, 0.8, -r, z + 0.9, 1); }, { mask: i => track.deck[i], vScale: 3 });
+    const top = strip(track, ksRoad, (i, o) => { const z = track.z[i] - 0.03; o.push(-track.wallR[i] - 0.3, z, 0, track.wallL[i] + 0.3, z, 1); }, { mask: i => track.deck[i], vScale: 3, flip: true });
+    const bm = new THREE.MeshStandardMaterial({ map: concreteFallback, color: 0xb9b9b4, roughness: 0.9, side: THREE.DoubleSide });
+    add(g, bm, { cast: true }); add(top, bm);
+  }
+
   // ---- bridges over the track (visual only) ----------------------------------------
   if (track.bridges?.length) {
     const steelB = wettable(new THREE.MeshStandardMaterial({ color: 0x8a8f96, roughness: 0.55, metalness: 0.5 }), 0.4), deckB = wettable(new THREE.MeshStandardMaterial({ color: 0xcfd2d6, roughness: 0.8 }), 0.4);
@@ -663,7 +704,8 @@ export function buildWorld(track, renderer, qualityIn) {
     const fd = 1 - 0.62 * f; r *= fd * (1 - 0.1 * f); g *= fd; b *= fd * (1 - 0.15 * f);     // forest floor / canopy tone
     out.push(r * (1 - rock) + 1.9 * rock, g * (1 - rock) + 1.5 * rock, b * (1 - rock) + 2.2 * rock);
   };
-  const tintUrban = (X, Y, h, out) => { const v = 0.5 + 0.25 * vnoise(X / 23, Y / 23) + 0.12 * vnoise(X / 4, Y / 4); out.push(v, v, v * 0.98); };
+  // streets and squares between the buildings: warm paving, darker tarmac patches, the odd garden
+  const tintUrban = (X, Y, h, out) => { const v = 0.34 + 0.2 * vnoise(X / 23, Y / 23) + 0.1 * vnoise(X / 4, Y / 4), gdn = smooth(0.66, 0.72, vnoise(X / 55 + 9, Y / 55 + 2)); out.push(v * (1 - 0.55 * gdn), v * (0.96 - 0.2 * gdn), v * (0.88 - 0.6 * gdn)); };
   let zMean = 0; for (let i = 0; i < n; i++) zMean += track.z[i] / n;
   const terrainMat = patch(new THREE.MeshStandardMaterial({ map: grassFallback, vertexColors: true, roughness: 0.96 }), 'terrain' + (track.theme || ''), {
     vpars: 'varying vec2 vWxz;', vmain: 'vWxz = (modelMatrix * vec4(position, 1.0)).xz;',
@@ -673,7 +715,8 @@ export function buildWorld(track, renderer, qualityIn) {
   });
   photo(terrainMat, { map: [ASSETS.grassDiff, { aniso }], normalMap: [ASSETS.grassNor, { aniso, srgb: false }] });
   let groundH;
-  {
+  if (mc) groundH = (X, Y, t = terrain(X, Y)) => t.h;
+  else {
     const g = track.grid, pad = 1700;
     const x0 = g.minX - pad, y0 = g.minY - pad, x1 = g.maxX + pad, y1 = g.maxY + pad;
     const cell = Math.max(14, Math.min(40, Math.sqrt((g.maxX - g.minX) * (g.maxY - g.minY) / 26000)));
@@ -714,7 +757,7 @@ export function buildWorld(track, renderer, qualityIn) {
         let last = 0;
         for (const r of rings) { const off = side * (w + r + 0.4), X = track.x[i] + nx * off, Y = track.y[i] + ny * off; last = groundH(X, Y); o.push(off, last, 0); }
         o.push(side * (w + 97), last - 6, 0);
-      }, { flip: side < 0, color: (X, Y, out) => (urban ? tintUrban : tint)(X, Y, terrain(X, Y).h, out) }));
+      }, { flip: side < 0, mask: track.deck ? (i) => !track.deck[i] : null, color: (X, Y, out) => (urban ? tintUrban : tint)(X, Y, terrain(X, Y).h, out) }));
     }
     const cg = mergeGeometries(geos.filter(Boolean));
     { const p = cg.attributes.position, u = cg.attributes.uv; for (let k = 0; k < p.count; k++) u.setXY(k, p.getX(k) / 2.3, -p.getZ(k) / 2.3); }
@@ -733,7 +776,7 @@ export function buildWorld(track, renderer, qualityIn) {
       [0.179, 0.984, 19, 1], [0.22, 0.984, 17, 1], [0.254, 0.984, 15, 1], [0.344, 0.984, 9, 1],
       [0.385, 0.984, 11, 0], [0.465, 0.984, 9, 0], [0.492, 0.741, 9, 0], [0.492, 0.937, 16, 1]];
     const rng = new RNG(4242);
-    const N = Math.round(Math.min(quality.treeCap, quality.trees * track.length / 1000 * (1 + 1.2 * Math.max(0, fbias))) * (urban ? 0.1 : 1) * theme.trees);
+    const N = Math.round(Math.min(quality.treeCap, quality.trees * track.length / 1000 * (1 + 1.2 * Math.max(0, fbias))) * (mc ? 0 : urban ? 0.1 : 1) * theme.trees);
     const gap = track.narrow ? 2.4 : 4.5;
     // two crossed quads with soft, outward-leaning normals
     const quad = (ang) => {
@@ -765,6 +808,7 @@ export function buildWorld(track, renderer, qualityIn) {
       const h = track.heading[i], X = track.x[i] - Math.sin(h) * off * side, Y = track.y[i] + Math.cos(h) * off * side;
       const t = terrain(X, Y);
       if (t.dist < t.corr + 3.5) continue;                       // inside some other part of the circuit
+      if (t.sea > 0) continue;                                    // in the harbour
       const f = forestAt(X, Y);
       if (rng.next() > (urban ? 0.5 : 0.07 + 0.93 * f)) continue;
       if (urban && off < wallAt(side, i) + 60) continue;
@@ -796,8 +840,8 @@ export function buildWorld(track, renderer, qualityIn) {
     }
   }
 
-  // ---- street circuit: city blocks behind the fences and the sea beyond the harbour ----
-  if (urban) {
+  // ---- generic street circuit (Monaco itself is built by src/game/monaco.js, further down) ----
+  if (urban && !mc) {
     const rng = new RNG(1929);
     // one bay x one floor of facade; tinted per building
     const mkFacade = (seed, balcony) => {
@@ -872,6 +916,7 @@ export function buildWorld(track, renderer, qualityIn) {
 
   // ---- night: floodlights along the start straight (built the first time they are needed) ----
   const nightMats = [];
+  const mcWorld = mc ? mc.build({ group, quality, patch, wettable, photo, aniso, nightMats, strip, skipOverride, wxUniforms, concreteMap: concreteFallback, asphaltMap: aspFallback.map, grassMap: grassFallback, TX }) : null;
   let night = null;
   function setNight(k) {
     for (const [m, e] of nightMats) m.emissiveIntensity = e * k;
@@ -964,7 +1009,7 @@ export function buildWorld(track, renderer, qualityIn) {
     roof.position.set(0, 13.4, -6.5); roof.rotation.x = -0.07; stand.add(roof);
     for (let k = -5; k <= 5; k++) { const col = new THREE.Mesh(new THREE.BoxGeometry(0.4, 13, 0.4), steel); col.position.set(k * L / 10.5, 6.5, -13.4); stand.add(col); }
     stand.position.set(-30, z0 - 0.4, -wl0 - 0.5); stand.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    if (L) sf.add(stand);
+    if (L && !mc) sf.add(stand);
 
     const pit = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(190, 6.5, 12), new THREE.MeshStandardMaterial({ color: 0xe8e8ea, roughness: 0.7 })); body.position.y = 3.25; pit.add(body);
@@ -975,7 +1020,7 @@ export function buildWorld(track, renderer, qualityIn) {
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(190.3, 0.5, 12.3), new THREE.MeshStandardMaterial({ color: 0xd22030, roughness: 0.5 })); stripe.position.y = 6.2; pit.add(stripe);
     pit.position.set(-20, z0 - 0.4, wr0 + 6.5); pit.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     const pitScale = [1, 0.55, 0.3].find(k => fits(-20 - 95 * k, -20 + 95 * k, wr0, wr0 + 13));
-    if (pitScale) { pit.scale.x = pitScale; sf.add(pit); }
+    if (pitScale && !mc) { pit.scale.x = pitScale; sf.add(pit); }
   }
 
   // ---- trackside boards: braking distance markers and sponsor hoardings -------------
@@ -997,7 +1042,7 @@ export function buildWorld(track, renderer, qualityIn) {
     }
     const rng = new RNG(99), names = ['VANTA', 'ARROW', 'VOLT-R', 'BRAWLER', 'FX RACING', 'KESTREL OIL', 'ANVIL TOOLS', 'RIDGE TYRES'];
     const cols = [['#0d3b66', '#faf0ca'], ['#d62828', '#ffffff'], ['#111111', '#ffd60a'], ['#f4f4f4', '#1d3557'], ['#1b4332', '#d8f3dc'], ['#ff7b00', '#111']];
-    for (let i = 60; i < n; i += 97) {
+    for (let i = 60; i < n && !mc; i += 97) {
       if (Math.abs(track.curv[i]) > 0.006) continue;
       const side = rng.next() > 0.5 ? 1 : -1, h = track.heading[i];
       const off = side * ((side > 0 ? track.wallL[i] : track.wallR[i]) + 0.6);
@@ -1019,6 +1064,7 @@ export function buildWorld(track, renderer, qualityIn) {
     tgt.copy(target).addScaledVector(lx, Math.round(px / texel) * texel - px).addScaledVector(ly, Math.round(py / texel) * texel - py);
     sunLight.target.position.copy(tgt);
     sunLight.position.copy(tgt).addScaledVector(sun, 320);
+    mcWorld?.update(target);
   }
 
   return { group, sky, sun, sunLight, hemi, flash, fogColor, terrain, brakeMarkers, updateSun, setSky, setWet, setNight, gridYaw };

@@ -23,7 +23,7 @@ npm run plot       # docs/learning-curve-gt3.svg, docs/benchmark-gt3.svg
 ```
 
 Controls: **WASD / arrows** drive (gamepad supported) · **Q / E** shift ·
-**M** auto/manual · **R** recover · **Enter** restart · **C** camera ·
+**M** auto/manual · **R** recover · **Enter** restart · **C** camera (chase → far → bonnet → cockpit → TV) ·
 **T** telemetry · **G** ghost (best / AI) · **I** AI autopilot · **Z** ABS ·
 **X** TC · **H** driving difficulty · **L** racing-line guide · **V** weather · **F** perf stats · **N** mute ·
 **1–9, 0** first ten cars · **[ ]** previous / next car (all sixteen) · **Esc** menu.
@@ -121,22 +121,22 @@ tuning, all laps inside track limits; `node tools/ai-laps.js`):
 
 | car | Ravenscar | Silverstone | Spa | Monza | Nordschleife | Monaco | Laguna Seca |
 |---|---|---|---|---|---|---|---|
-| FX-10 | 0:53.54 | 1:58.43 | 2:08.80 | 1:37.48 | 5:48.97 | 1:34.20 | 1:19.12 |
-| Aurelia LMH | 0:56.23 | 2:02.39 | 2:15.02 | 1:43.96 | 6:31.97 | 1:40.48 | 1:22.23 |
-| Audi R18 | 0:57.86 | 2:06.56 | 2:19.69 | 1:48.11 | 6:45.41 | 1:42.65 | 1:24.75 |
-| Arrow GT3-R | 1:04.49 | 2:19.78 | 2:34.69 | 1:57.29 | 7:27.72 | 1:47.06 | 1:32.31 |
-| Audi R8 LMS GT3 | 1:04.17 | 2:19.13 | 2:33.82 | 1:56.62 | 7:25.35 | 1:46.66 | 1:31.87 |
-| Lamborghini Huracán GT3 | 1:04.39 | 2:19.07 | 2:33.47 | 1:56.33 | 7:25.09 | 1:46.55 | 1:31.78 |
-| Mercedes-AMG GT3 | 1:04.82 | 2:19.21 | 2:34.02 | 1:57.12 | 7:26.17 | 1:46.92 | 1:32.17 |
-| Ferrari 296 GT3 | 1:04.22 | 2:18.97 | 2:33.33 | 1:56.29 | 7:24.95 | 1:46.56 | 1:31.70 |
-| McLaren 720S GT3 | 1:04.20 | 2:19.05 | 2:33.47 | 1:56.29 | 7:25.27 | 1:46.57 | 1:31.74 |
-| Ferrari 458 | 1:15.95 | 2:43.17 | 2:59.10 | 2:11.57 | 8:47.63 | 2:03.63 | 1:47.17 |
-| Huracán LP 610-4 | 1:16.77 | 2:45.89 | 3:01.52 | 2:12.82 | 8:48.83 | 2:02.43 |
-| Aventador SVJ | 1:17.14 | 2:45.75 | 3:01.00 | 2:11.09 | 8:27.01 | 1:58.10 |
-| Volt-R | 1:19.09 | 2:49.31 | 3:05.36 | 2:14.34 | 8:44.77 | 2:01.51 | 1:51.02 |
-| Vanta RS | 1:20.83 | 2:52.81 | 3:11.85 | 2:23.73 | 9:30.78 | 2:11.42 | 1:53.98 |
-| Brawler GT | 1:21.50 | 2:54.68 | 3:12.67 | 2:22.71 | 9:34.15 | 2:11.90 | 1:55.00 |
-| Mini Cooper S | 1:28.97 | 3:07.43 | 3:29.63 | 2:38.57 | 10:28.72 | 2:23.46 | 2:04.50 |
+| FX-10 | 0:53.54 | 1:58.43 | 2:08.89 | 1:37.50 | 5:48.99 | 1:34.06 | 1:19.12 |
+| Aurelia LMH | 0:56.23 | 2:02.39 | 2:15.12 | 1:44.00 | 6:31.81 | 1:40.28 | 1:22.23 |
+| Audi R18 | 0:57.86 | 2:06.56 | 2:19.81 | 1:48.16 | 6:45.21 | 1:42.43 | 1:24.74 |
+| Arrow GT3-R | 1:04.49 | 2:19.78 | 2:34.72 | 1:57.35 | 7:27.40 | 1:46.86 | 1:32.31 |
+| Audi R8 LMS GT3 | 1:04.17 | 2:19.13 | 2:33.90 | 1:56.68 | 7:25.08 | 1:46.46 | 1:31.86 |
+| Lamborghini Huracán GT3 | 1:04.39 | 2:19.07 | 2:33.60 | 1:56.39 | 7:24.81 | 1:46.34 | 1:31.78 |
+| Mercedes-AMG GT3 | 1:04.82 | 2:19.21 | 2:34.20 | 1:57.19 | 7:25.88 | 1:46.74 | 1:32.16 |
+| Ferrari 296 GT3 | 1:04.22 | 2:18.97 | 2:33.45 | 1:56.34 | 7:24.67 | 1:46.35 | 1:31.70 |
+| McLaren 720S GT3 | 1:04.20 | 2:19.05 | 2:33.62 | 1:56.34 | 7:24.95 | 1:46.36 | 1:31.74 |
+| Ferrari 458 | 1:15.95 | 2:43.17 | 2:59.25 | 2:11.66 | 8:47.33 | 2:03.33 | 1:47.16 |
+| Huracán LP 610-4 | 1:16.77 | 2:45.89 | 3:01.66 | 2:12.87 | 8:48.53 | 2:02.08 | 1:48.51 |
+| Aventador SVJ | 1:17.14 | 2:45.75 | 3:01.16 | 2:11.15 | 8:26.76 | 1:57.80 | 1:48.73 |
+| Volt-R | 1:19.09 | 2:49.31 | 3:05.56 | 2:14.40 | 8:44.47 | 2:01.23 | 1:51.02 |
+| Vanta RS | 1:20.83 | 2:52.81 | 3:12.05 | 2:23.80 | 9:30.21 | 2:11.05 | 1:53.98 |
+| Brawler GT | 1:21.50 | 2:54.68 | 3:12.89 | 2:22.82 | 9:33.68 | 2:11.58 | 1:54.99 |
+| Mini Cooper S | 1:28.97 | 3:07.43 | 3:30.05 | 2:38.72 | 10:28.12 | 2:22.95 | 2:04.50 |
 
 **GT3 class.** The five real GT3 cars added in 0.9.0 are specified from published homologation
 figures (wheelbase, dimensions, engine type and rev range, homologated weight) at typical
@@ -167,11 +167,34 @@ model has no suspension, so kerb-riding and crest behaviour are missing.
 |---|---|---|---|
 | Ravenscar Ridge | 2.91 km | Original design: 10 turns, hairpin, esses, flat-out kink | designed, 23 m relief |
 | Silverstone GP | 5.89 km | Surveyed centreline + widths (TUMFTM racetrack-database, LGPL-3.0) | hand-approximated (nearly flat) |
-| Spa-Francorchamps | 7.00 km | same | EU-DEM 25 m terrain model, 106 m relief |
-| Monza | 5.79 km | same | EU-DEM 25 m |
-| Nürburgring Nordschleife | 20.75 km | OpenStreetMap centreline (ODbL) | EU-DEM 25 m, 288 m relief |
-| Monaco | 3.31 km | OpenStreetMap street centrelines (ODbL), official 3.337 km | SRTM 30 m, ~53 m relief, noisy between buildings so gradient is capped at 11 % |
-| Laguna Seca | 3.60 km | OpenStreetMap raceway centreline (ODbL), official 3.602 km, anticlockwise | USGS 3DEP 10 m (`ned10m`), 57 m relief; the Corkscrew drops 17.3 m in 140 m (peak gradient 16 %) |
+| Spa-Francorchamps | 7.00 km | same | EU-DEM 25 m terrain model: 105 m relief, max 13 % (Raidillon), under 10 % elsewhere |
+| Monza | 5.79 km | same | EU-DEM 25 m: 13 m relief, max 1.8 % |
+| Nürburgring Nordschleife | 20.75 km | OpenStreetMap centreline (ODbL) | EU-DEM 25 m: 288 m relief, max 15.6 % up, 11 % down |
+| Monaco | 3.31 km | OpenStreetMap street centrelines (ODbL), official 3.337 km | SRTM 30 m, scaled to the real 42 m relief (rooftops inflate it), max 7.3 %; the tunnel stretch is bridged |
+| Laguna Seca | 3.60 km | OpenStreetMap raceway centreline (ODbL), official 3.602 km, anticlockwise | USGS 3DEP 10 m (`ned10m`), 57 m relief; the Corkscrew drops 17.5 m in 140 m (peak gradient 16 %), under 14 % elsewhere |
+
+#### Grand Prix circuits added from the TUMFTM database (9 of the 20 asked for)
+| Circuit (`?track=`) | Length | Elevation | GT3 AI lap |
+|---|---|---|---|
+| Circuit of the Americas (`cota`) | 5.51 km, anticlockwise | USGS 3DEP 10 m: 29.6 m relief, 11.8 % up Turn 1 | 2:23.20 |
+| Hungaroring (`hungaroring`) | 4.38 km | EU-DEM 25 m scaled to 35 m relief, max 6.3 % | 1:59.15 |
+| Autódromo Hermanos Rodríguez (`mexico`) | 4.30 km | SRTM 30 m scaled to 4 m (flat) | 1:50.32 |
+| Circuit Gilles Villeneuve (`montreal`) | 4.36 km | SRTM 30 m scaled to 5 m (flat) | 1:44.79 |
+| Bahrain International Circuit (`bahrain`) | 5.41 km | SRTM 30 m scaled to 17 m, max 3.0 % | 2:11.47 |
+| Interlagos (`interlagos`) | 4.31 km, anticlockwise | SRTM 30 m scaled to 43 m, max 9.6 % | 1:46.02 |
+| Shanghai International Circuit (`shanghai`) | 5.45 km | SRTM 30 m: 3.6 m (flat) | 2:16.63 |
+| Red Bull Ring (`redbullring`) | 4.32 km | EU-DEM 25 m scaled to 65 m, max 11 % | 1:37.87 |
+| Suzuka (`suzuka`) | 5.81 km, figure of eight | SRTM 30 m scaled to 40 m, max 7.3 %; the crossover bridge is a 6.5 m hump added to the upper road | 2:13.63 |
+
+All nine: centreline and widths are TUMFTM survey data (half-width capped at 9.9 m), lap length within 0.1 % of
+the official figure (tested), barrier lines and gravel beds from OpenStreetMap after georeferencing (residual
+1.4–2.8 m), kerbs rule-placed in red/white, **no hand-authored corner data yet** (so no paved run-off, astro-turf
+or sausage kerbs: what OSM does not map as gravel is grass), generic scenery (Bahrain uses the dry theme, the
+others the default forest/grass; no floodlit night setting, no Foro Sol, no Suzuka Ferris wheel). Bahrain's OSM
+"sand" polygons are the desert and were dropped. Four circuits ask the AI for extra margin (`aiGrip` 0.93–0.96).
+Stored compactly (`src/sim/tracks/gp/`, 131 kB for nine). **Not added:** Jeddah, Albert Park, Miami, Imola,
+Barcelona, Zandvoort, Baku, Singapore, Las Vegas, Lusail, Yas Marina — they need OpenStreetMap loop-building
+per venue (TUMFTM has none or an outdated layout) and that work was not reached.
 
 What "real" means here, precisely: the **plan-view layout is real survey or
 map data** (lap lengths within 1 % of official figures — tested), and elevation
@@ -180,7 +203,33 @@ smoothed. Track width is surveyed for the TUMFTM circuits and estimated for
 the Nordschleife, Monaco and Laguna Seca. Buildings and scenery are generated,
 themed per circuit (forest at the Nordschleife, apartment blocks at Monaco, dry
 golden hills with scattered oaks at Laguna Seca) but not replicas: no Monaco
-tunnel or harbour, no Eau Rouge grandstands.
+landmarks, no Eau Rouge grandstands. Monaco's surroundings are OpenStreetMap building
+footprints extruded to their tagged heights, the real harbour outline with moored yachts and an
+enclosed tunnel (`tools/monaco-scene.mjs` → `monaco.scene.json`).
+
+#### Elevation: a fitted profile, not a clipped one
+A 10–30 m terrain model sampled along a road is the road plus noise: grid steps, the hillside the
+road is cut into, tree canopy, rooftops, bridges. `fitElevation` in `src/sim/track.js` therefore fits a
+**periodic smoothing spline** to the samples (exactly a 4th-order low-pass on a closed lap; cutoff
+wavelength per circuit: 110 m for the 10 m model at Laguna Seca, 200 m for EU-DEM at Spa and the
+Nordschleife, 350 m for SRTM in Monaco, 600 m at Monza), made robust by pulling samples more than 2.5 m
+off the fit back to it, with tunnel stretches bridged. Where the fit still exceeds the circuit's
+realistic gradient (or a vertical curvature no racing surface has) only that stretch is refitted with
+a longer cutoff — nothing is clipped — and Monaco and Monza are scaled to their published relief.
+
+| Circuit | Relief before → after | Max gradient | RMS gradient | Crests + dips per km |
+|---|---|---|---|---|
+| Spa | 106.0 → 105.4 m | 19.8 → 13.1 % (was a false −19.8 % after Bruxelles) | 6.21 → 5.64 % | 3.1 → 2.6 |
+| Monza | 17.4 → 13.0 m | 5.0 → 1.8 % | 1.64 → 0.76 % | 4.1 → 1.7 |
+| Nordschleife | 288.2 → 287.5 m | 19.9 → 15.6 % up, 11.0 % down | 6.54 → 6.10 % | 3.1 → 2.5 |
+| Monaco | 49.3 → 42.0 m | 11.4 → 7.3 % | 4.33 → 3.45 % | 3.6 → 2.4 |
+| Laguna Seca | 57.2 → 57.4 m | 16.3 → 16.1 % (Corkscrew only; 13.3 % elsewhere) | 6.05 → 6.18 % | 4.4 → 5.0 |
+
+Ravenscar (analytic) and Silverstone (hand profile, 11 m) are unchanged. Still wrong: Raidillon peaks at
+13 % against a real 17–18 % (the 25 m model cannot resolve it and the fit will not invent it), Beau
+Rivage at 6 % against about 10 %, and nothing here is a survey. The landscape around flat circuits is
+now flat too (it used to get 60–130 m hills regardless); there is no vertical exaggeration, camber or
+banking in the renderer.
 
 #### Trackside: kerbs, run-off, gravel, barriers
 What lies beside the road is data per circuit, per corner and per side
@@ -206,7 +255,7 @@ from two sources that the data keeps apart:
 | Spa | 13 gravel beds (the 2022 layout with gravel back at Les Combes, Bruxelles, Pouhon, Fagnes, Stavelot, Blanchimont), barriers over 98 % (fit 1.6 m) | paved run-off at La Source, Eau Rouge / Raidillon, Les Combes, Bus Stop; red/yellow kerbs; yellow sausage kerbs and serrated kerbs at the Bus Stop; TecPro at the escape areas | endurance pit lane, Raidillon's exact new run-off shape |
 | Monza | 11 gravel beds (Curva Grande, Roggia exit, both Lesmos, Ascari, behind the Parabolica asphalt), barriers on 44 % of the lap (fit 1.4 m) | paved escape areas at the Rettifilo and Roggia with TecPro, sausage and serrated kerbs at both chicanes, paved strip in front of the Parabolica gravel, pit wall | polystyrene boards / escape-road slalom, the old banking |
 | Nordschleife | barrier lines for 97 % of the lap (clamped to 3.2–30 m from the road edge), 7 gravel beds (Hatzenbach entry, Aremberg, Brünnchen, Pflanzgarten, GP link), section names | small gravel beds at Adenauer Forst and Bergwerk | the Karussell's concrete banking; kerbs still stand on both sides of every corner (the AI tuning depends on that layout) |
-| Monaco | centreline only | barriers at the kerb everywhere; three escape roads as short paved spurs (Sainte Dévote, Mirabeau, Nouvelle Chicane) closed by TecPro; sausage kerbs at the chicane and the swimming pool | real street widths (uniform 9.4 m), tunnel, the Rascasse and Noghès escape pockets |
+| Monaco | centreline; 686 building footprints (357 with tagged height, the rest guessed from area), the coastline / quays of Port Hercule, the tunnel's station range (1,542–1,904 m) | barriers at the kerb everywhere; three escape roads as short paved spurs (Sainte Dévote, Mirabeau, Nouvelle Chicane) closed by TecPro; sausage kerbs at the chicane and the swimming pool | real street widths (uniform 9.4 m), the Rascasse and Noghès escape pockets; façades, yachts and the tunnel interior are generic (procedural windows, box hulls, a plain box section); no palm trees, grandstands, pit building or Casino / Piscine landmarks |
 | Laguna Seca | centreline, barrier lines for 97 % of the lap, the Corkscrew gravel | gravel at Turns 2, 3, 4, 5, 6, 9, 10 and 11 (which corners have it; depth follows the surveyed barrier), serrated Corkscrew kerbs, two footbridges (positions approximate) | widths per section are estimates |
 | Ravenscar (fictional) | — | designed: paved run-off with a gravel band at Anvil, Crow's Nest and Home, gravel wedges elsewhere, pit wall. Kerbs and the first 2 m of verge are untouched so the RL benchmark is bit-identical | — |
 
@@ -253,6 +302,34 @@ high quality. Eleven of the sixteen cars use detailed third-party glTF models
 (Draco-compressed, wheels cut out and re-rigged offline by
 `tools/models-build.mjs`); every asset, author and licence is listed in
 [ASSETS.md](ASSETS.md).
+
+### In-car cameras
+**C** cycles chase, far, bonnet, cockpit and trackside TV. The two in-car views need no per-car
+tuning (`src/game/cockpit*.js`): the body, whether a glTF model or a code-generated shell, is
+rasterised once into a 2.5 cm height map, and the roof, windscreen header and base, belt line and
+glasshouse width are read off it. From those come the **eye point** (left seat; the Mini is
+right-hand drive; offset-centre in the prototypes, central in the single-seater; a fixed distance
+behind the header but kept within the part of the wheelbase where a driver sits, about 20 cm under
+the roof skin, never less than 12 cm above the scuttle), the **bonnet camera** (centreline, 15 cm
+above everything around the base of the screen; a nose camera on the formula car) and a convex
+*cabin hull*. A **procedural cockpit** is built on the same measurements and shown only in the
+driver's-eye view: dashboard, instrument cluster drawn live to one canvas texture at 20 Hz (dials
+in road cars; rev bar, gear, speed, lap time and ABS / TC lamps on a race logger; on the wheel
+itself in the prototypes and the formula car), steering column and wheel (round with an airbag
+hub, or a flat butterfly wheel with buttons, rotaries, paddles and shift LEDs), gloved hands at
+nine and three with two-bone IK arms, A-pillars, header, mirror, roof lining and door tops, a
+roll cage and window net in GT cars, and a gear lever the inboard hand reaches for in the
+manual cars. While you are inside, everything the exterior model has within the hull (its own
+static interior and steering wheel, opaque or tinted glass, the roof) is clipped away per
+fragment, so no model shows a second wheel, and what you see through the openings is the real
+model: bonnet, wings and door mirrors. The wheel turns the road-wheel angle times a steering ratio
+(14:1 road, 11:1 GT, 9:1 prototype, 7:1 formula), eased towards 126° / 115° / 109° / 103° so the
+hands can stay on the rim; the camera rides on the sprung body (the cabin stays put, the horizon pitches and
+rolls), looks a little into the corner and moves a couple of centimetres with the g-forces. The
+cockpit is drawn in the near half of the depth range, so rain streaks and wheel spray appear
+through the windows and never inside the cabin.
+Per-car exceptions go in `spec.cockpit` (`side`, `eye` nudge, any ergonomic field); see
+`tools/cockpit-shots.mjs` for the check that photographs every car.
 
 ### Weather and time of day
 Six conditions, chosen in the menu, with **V** while driving, or by URL
@@ -330,6 +407,146 @@ separate mixes. **Nobody has listened to this**: this environment has no audio
 output, so everything was tuned by spectra and level meters. AUDIO.md lists
 what to listen for first and the known weak spots.
 
+## Race mode
+
+Wheel-to-wheel racing against a field of AI cars: **Race** in the menu (2–20 cars, laps, your grid slot,
+opponents of the same car / same class / mixed classes, five AI levels) or by URL, e.g.
+`?race=12&laps=5&grid=6&field=class&aiskill=0.95&track=spa&car=gt3` (`&ai` puts an AI in your car as well, so a
+whole race can be watched or run headless; `&seed=`, `&order=quali|reverse|random`, `&cam=`, `&follow=`,
+`&director`, `&tags=0`). The hot-lap mode is unchanged and a solo `Sim` is bit-for-bit what it was (hash test).
+
+**Simulation** (`src/sim/race.js`, DOM-free, deterministic, 300 Hz). A `Race` is N solo `Sim`s stepped in a
+fixed order, plus three stages the solo car never sees:
+
+- *Contact.* Body rectangles (`spec.body` length × width), bounding-circle broad phase, separating-axis
+  narrow phase, one impulse per pair and step with restitution 0.18 and Coulomb friction 0.35 applied at the
+  contact point, so an off-centre hit yaws both cars, then a positional push-out split by inverse mass.
+  Tests: linear and angular momentum conserved to 1e-9, kinetic energy never rises in the impulse stage, no
+  tunnelling at 300 km/h closing speed, bodies never stay overlapped for more than 10 steps.
+- *Slipstream.* `Vehicle.dragK` / `downK` (exactly 1 in free air): up to −40 % drag and −12 % downforce
+  directly behind another car, falling with distance (90 m) and sideways offset.
+- *Race logic.* Staggered two-wide grid behind the line, five red lights then a seeded random hold, per-driver
+  reaction times, positions by race distance, gaps and intervals from 25 m time stamps, sector / lap / best
+  lap per car (the solo lap timer), blue flags, finish when the leader completes the distance (everyone else
+  finishes the lap they are on), classification, marshals who put a spun or stuck car back on the road off
+  the racing line when no one is about to arrive (four times, then DNF), and track limits: every third
+  four-wheels-off excursion not caused by a contact costs 5 s.
+
+**Racecraft** (`src/sim/drivers/racecraft.js`). `RaceDriver` wraps the tuned racing-line `BaselineDriver`: in
+free air it *is* that driver, bit for bit (test). Thirty times a second it decides which path and which
+speed to feed it:
+
+- *Path* = racing line + a lateral offset, in a lane that leaves a car's width to anyone alongside (their
+  path is predicted as the line's shape at their present offset, clamped to the road). The offset moves at a
+  human rate on the straights and is held through corners. Speed profiles are precomputed for the line
+  shifted by ±1.5, ±3 and ±6 m (clamped to the road), with less grip off line (and the wet model's drying
+  line), so a car that is off line brakes for the corner it will actually drive.
+- *Following.* Match the car ahead's pace as a fraction of what I could do *where it is* (so I brake where it
+  braked, not when); the closer, the less surplus. Into slow corners the gap must open for both cars to fit at
+  apex speed (the accordion). In a wake the profile is cut by the downforce lost at that speed and braking
+  starts earlier; no-ABS cars are threshold-braked; braking for traffic is limited to what cornering leaves of
+  the friction circle. Stopped or spun cars ahead raise a local yellow.
+- *Overtaking.* Close up in the tow, pull out late (the tow is behind the car, not beside it), take the inside
+  for the next braking zone when within range, use the braking the tune keeps in reserve, and back out if not
+  alongside by turn-in; two abreast into a corner the car behind concedes unless it is on the inside with its
+  nose well alongside; hairpins and chicanes are single file. Held up into a corner that leads onto a
+  straight, a driver drops back before the apex to get a run on the exit.
+- *Defending.* One move to the inside on the approach to a braking zone when a car is close behind, held to
+  the apex; never against a lapping car or a faster class; room is always left to a car alongside.
+- *Start.* Lanes are kept off the grid; the field funnels onto the line only near the first corner, with
+  bigger gaps and earlier braking until it is through.
+- *Personality* (seeded): skill (share of the validated tune, never more than 100 %), aggression,
+  consistency (lap-to-lap pace noise), mistakes (a late-braking error per braking zone, likelier under
+  pressure, rarer with skill, smaller in cars without ABS or with a lot of downforce), reaction time.
+  The grid is qualifying order with noise. Nobody is given grip or power they would not have alone.
+
+**Game** (`src/game/racemode.js`, `racehud.js`, `tvcam.js`, `src/audio/opponents.js`). Every car has its own
+model (GLB files are loaded once and their geometry shared), a colour and a number board (**Y**), brake
+lights, turning wheels, and within 90–160 m tyre smoke, skid marks and spray; beyond 60 / 120 / 200 m
+(low / medium / high) a car is drawn as three boxes. HUD: start lights, position / lap / gaps, timing tower
+(**P**), a dot per car on the map, CAR LEFT / RIGHT, flags, results. **J** / **K** follow another car (the
+cluster, engine audio and all cameras including the cockpit follow), **U** own car, **B** extra cameras
+(heli, side, front, rear, orbit), **O** TV director (picks the closest fight and cuts between cameras).
+The three nearest opponents are heard through cheap oscillator voices with distance roll-off, pan and
+Doppler; contacts trigger the impact sound.
+
+Scripting, for filming: `__game.startRace({ n, laps, grid, klass, skill, seed, order, ai })`,
+`__game.followCar(i | 'leader' | 'player' | 'battle' | 'next' | 'prev' | 'p3')`,
+`__game.setCamera('chase' | 'far' | 'bonnet' | 'cockpit' | 'tv' | 'heli' | 'side' | 'front' | 'rear' | 'orbit' | 'director')`,
+`__game.fastForward(seconds)` (the whole race, deterministic with `&ai`), `__game.setTimeScale(k)`,
+`__game.setTags(false)`, `__game.raceInfo()`. `tools/race-shot.mjs` drives these from a headless browser.
+
+### Measured race statistics
+
+`node tools/race-sim.js --track spa --n 12 --laps 5 --seeds 1,2,3,4,5` (all-AI races in Node, default AI level
+0.96, GT3 class unless noted). Overtakes are on-track position changes after lap 1 (clean = no contact
+between the two within 4 s and the passed car at racing speed); contacts by closing speed at the contact
+point: light < 2 m/s, medium 2–6, heavy > 6. Means per race.
+
+| race | seeds | finished | overtakes (clean) | contacts L / M / H | heavy per car-lap | off-tracks | spins | respawns | DNF |
+|---|---|---|---|---|---|---|---|---|---|
+| Ravenscar, 12 cars, 5 laps | 5 | 5/5 | 4.2 (3.0) | 0.8 / 1.8 / 0.0 | 0.000 | 0.6 | 0.6 | 0.2 | 0 |
+| Spa, 12 cars, 5 laps | 5 | 5/5 | 0.6 (0.4) | 0.8 / 1.8 / 0.4 | 0.007 | 0.4 | 1.0 | 1.0 | 0 |
+| Monza, 12 cars, 5 laps | 5 | 5/5 | 2.0 (1.0) | 2.0 / 0.4 / 0.2 | 0.003 | 0.6 | 0.4 | 0.2 | 0 |
+| Monza, reverse grid | 3 | 3/3 | 3.7 (1.3) | 3.3 / 0.3 / 0.0 | 0.000 | 0.7 | 0.0 | 0.0 | 0 |
+| Laguna Seca, 12 cars, 5 laps | 3 | 3/3 | 0.0 (0.0) | 0.0 / 0.7 / 0.0 | 0.000 | 0.0 | 0.0 | 0.0 | 0 |
+| Silverstone, 20 cars, 5 laps | 3 | 3/3 | 9.7 (9.3) | 0.0 / 0.3 / 0.0 | 0.000 | 0.0 | 0.0 | 0.0 | 0 |
+| Spa, mixed classes (prototypes, GT3, road cars), 5 laps | 3 | 3/3 | 1.7 (1.0) | 0.7 / 0.7 / 2.0 | 0.033 | 1.3 | 0.7 | 0.3 | 0 |
+| Monaco, 12 cars, 5 laps | 3 | 3/3 | 0.0 (0.0) | 0.7 / 0.7 / 0.0 | 0.000 | 0.0 | 0.0 | 0.0 | 0 |
+| Nordschleife, 8 cars, 1 lap | 3 | 3/3 | 0.0 (0.0) | 0.7 / 2.0 / 2.0 | 0.250 | 4.7 | 5.0 | 3.7 | 0 |
+| Ravenscar in rain, 12 cars, 5 laps | 3 | 3/3 | 0.7 (0.7) | 0.0 / 0.3 / 0.0 | 0.000 | 0.0 | 0.7 | 0.7 | 0 |
+| Spa in a storm, 12 cars, 3 laps | 2 | 2/2 | 0.0 (0.0) | 0.5 / 0.0 / 0.0 | 0.000 | 0.0 | 0.0 | 0.0 | 0 |
+
+All 38 races finished with every car classified; no deadlocks. In the mixed-class races two or three cars
+are lapped by the prototypes.
+
+*Top AI level in every class* (`--diff 1.0`, 8 identical cars, 3 laps, 1 on the Nordschleife; 7 circuits dry and
+6 in rain; 2 seeds each; totals over the 26 races of a class): Formula spins 14.5 / barrier hits 7.5 (before
+the fixes below: 103 / 39), hypercar 10 / 6.5, LMP1 3 / 0, GT3 7.5 / 3; no DNF. What remains is the
+Nordschleife in every class (3–6.5 spins a race) and the Formula car at Monaco in the rain (5.5); every other
+combination is at most 1.5 spins a race and most are zero. The owner's report "the top AI keeps crashing the
+F1 car" had three causes: braking for traffic at full pedal in a car without ABS (now threshold braking from
+the live wheel loads, within the friction circle), no allowance for the downforce lost in a wake (now taken off
+the speed profile in proportion to how much of the car's grip is aero), and offset lanes that put a wheel on
+the grass (wider margin, and a reflex that steers back when the car is about to run out of road). Skill can
+no longer exceed the validated tune.
+
+*Physics cost*: 1.4 µs per car per 300 Hz step in Node on the development machine, racecraft included, i.e.
+0.08 ms per 60 Hz frame for 12 cars and 0.14 ms for 20 (solo: 0.01–0.03 ms). In the software-GL test browser
+(no GPU, machine shared with other rendering jobs) a 12-car race at Spa at low quality ran at 10–12 fps:
+10–21 ms of CPU a frame, of which 0.65–0.8 ms is the race physics (30 physics steps a frame at that rate,
+i.e. about 1.9 µs per car-step in the browser), 310–650 draw calls and 0.23–0.47 M triangles depending on
+the camera. Frame rates on real GPUs were not measured.
+
+*Trackside TV camera* (`src/game/tvcam.js`, `node tools/tv-los.mjs`; one AI lap per circuit, a ray from the
+camera to the car against the built world every 0.25 s): car visible **before → after**: Ravenscar 77.5 → 100 %,
+Silverstone 73.6 → 100 %, Spa 75.1 → 100 %, Monza 79.1 → 100 %, Laguna Seca 92.7 → 100 %, Monaco 74.1 → 99.5 %
+(the tunnel: the camera rides behind the car there), Nordschleife 78.6 → 100 %. Posts are validated against the scene (nothing within
+2.5 m, standing on whatever is beneath, sight of the road); at run time a post that is about to lose the car
+is left for one that will keep it, with a helicopter and then an on-track fallback.
+
+### Where the racing is still weak
+
+- **Processional among equal cars.** With a qualifying-order grid, 12 GT3 cars at Spa change places 0.6 times
+  in five laps and from a reverse grid at Monza the slowest car still wins from pole: a faster car closes up,
+  shows its nose and is usually refused. Passing needs a clear pace or straight-line advantage (20 cars at
+  Silverstone: 9.7 a race). There is no cut-back / switchback planning beyond "drop back before the apex",
+  no late-apex defending, and out-braking is conservative because the inside lane's speed profile is that of
+  a smooth shifted line, not of a real dive.
+- **The Nordschleife in traffic** is the one place where races are scruffy in every class: narrow, fast, and
+  the line follower's tuning there is already marginal; two heavy contacts and five spins per 8-car lap.
+- **Mixed classes**: lapping works, but a heavy contact every other race, typically a prototype arriving on a
+  road car that is 40 % slower in a fast corner.
+- A car that is hit is not damaged; contact is a rigid-body impulse on the chassis (no deformation, no
+  wheel-to-wheel, no height: a formula car's open wheels are a box). Slipstream is one cone; no side draft.
+- Marshals are a teleport (after 4–12 s, to a safe spot within 160 m), there is no pit lane, no fuel or tyre
+  strategy, no safety car, no jump starts (cars are held until the lights go out), penalties are only for
+  track limits.
+- The AI avoids a parked or slow human and brakes for an early-braking one, but it assumes a car alongside
+  keeps its lane: turn in on it and it will hit you. It reads positions and speeds, not intent.
+- Opponent models that keep their own livery (Huracán, R8, the prototypes, the formula car) cannot be
+  recoloured; the number boards tell them apart. Opponent audio is two oscillators and a filter per car.
+
 ## Reinforcement learning
 
 The AI driver is trained with PPO on the **same** `src/sim` code the game runs.
@@ -383,6 +600,14 @@ GPU has not been measured.
   Assetto Corsa Competizione level. Lighting, surfaces and ten car models
   are photographic or authored assets; trackside scenery is generated, trees
   are photo cards, and no venue is a replica.
+- **The cockpit is one procedural kit in four styles** (road, GT, prototype, single-seater), fitted
+  to each car by measurement. It is not that car's real dashboard: every GT3 car has the same
+  wheel and logger, every road car the same binnacle; the pillars are straight beams on the
+  measured screen corners, not the model's own; no model's authored interior is used, even where
+  it has one. The interior mirror shows a painted gradient, not a reflection; there are no wipers
+  and the rain beads are on the camera lens, not the glass; the driver has arms but no body or
+  legs; hands stay at nine and three (no hand-over-hand), so the wheel stops turning visibly
+  beyond roughly a third of full lock in road cars.
 - **Car models do not all match the car simulated.** Only openly licensed
   models whose authorship looked genuine were used: the Arrow GT3-R is a road 911
   (no wing or race livery); the Audi R8, Huracán and AMG GT are road-car models wearing a
@@ -398,7 +623,7 @@ GPU has not been measured.
   above 3,600 rpm), the AMG GT3 is mostly a Mustang recording, and the recordings are
   road cars free-revving, not race cars on load.
 - **Circuits**: real layouts and (mostly) real elevation, generated
-  scenery. Monaco has no tunnel or harbour; Silverstone's elevation is
+  scenery. Monaco's buildings are OSM footprints with generic façades, not models of the real ones; Silverstone's elevation is
   approximated; width at the Nordschleife, Monaco and Laguna Seca is estimated.
 - **Trackside**: gravel beds and barrier lines are OpenStreetMap geometry of unknown date;
   paved run-off, kerb types and colours are from memory and kerb positions are rule-made, so

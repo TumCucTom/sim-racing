@@ -1,0 +1,98 @@
+{
+ "ravenscar": {
+  "samples": 502,
+  "beforePct": 77.5,
+  "afterPct": 100,
+  "heliPct": 0,
+  "cuts": 27,
+  "minDistance": 15.4,
+  "stations": 26,
+  "validPosts": 25,
+  "rejected": 1,
+  "occluders": 83,
+  "blockedAt": []
+ },
+ "silverstone": {
+  "samples": 1115,
+  "beforePct": 73.6,
+  "afterPct": 100,
+  "heliPct": 0,
+  "cuts": 54,
+  "minDistance": 12.3,
+  "stations": 54,
+  "validPosts": 53,
+  "rejected": 1,
+  "occluders": 121,
+  "blockedAt": []
+ },
+ "spa": {
+  "samples": 1234,
+  "beforePct": 75.1,
+  "afterPct": 100,
+  "heliPct": 5.7,
+  "cuts": 96,
+  "minDistance": 12,
+  "stations": 64,
+  "validPosts": 61,
+  "rejected": 3,
+  "occluders": 144,
+  "blockedAt": []
+ },
+ "monza": {
+  "samples": 947,
+  "beforePct": 79.1,
+  "afterPct": 100,
+  "heliPct": 1.4,
+  "cuts": 57,
+  "minDistance": 15.9,
+  "stations": 53,
+  "validPosts": 51,
+  "rejected": 2,
+  "occluders": 148,
+  "blockedAt": []
+ },
+ "nordschleife": {
+  "samples": 2400,
+  "beforePct": 78.6,
+  "afterPct": 100,
+  "heliPct": 4.7,
+  "cuts": 185,
+  "minDistance": 10.6,
+  "stations": 189,
+  "validPosts": 189,
+  "rejected": 0,
+  "occluders": 268,
+  "blockedAt": []
+ },
+ "monaco": {
+  "samples": 851,
+  "beforePct": 74.1,
+  "afterPct": 99.5,
+  "heliPct": 8.7,
+  "cuts": 38,
+  "minDistance": 9.5,
+  "stations": 30,
+  "validPosts": 26,
+  "rejected": 4,
+  "occluders": 105,
+  "blockedAt": [
+   1549,
+   1558,
+   1550,
+   1559
+  ]
+ },
+ "laguna": {
+  "samples": 738,
+  "beforePct": 92.7,
+  "afterPct": 100,
+  "heliPct": 2.3,
+  "cuts": 37,
+  "minDistance": 13.5,
+  "stations": 33,
+  "validPosts": 32,
+  "rejected": 1,
+  "occluders": 127,
+  "blockedAt": []
+ }
+}

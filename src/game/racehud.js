@@ -68,7 +68,7 @@ export class RaceHUD {
     // start lights
     const L = this.$('r-lights');
     if (!race.green) { L.style.display = 'flex'; L.classList.remove('go'); this.lamps.forEach((l, i) => l.classList.toggle('on', i < race.lightsOn)); this.goT = 1.4; }
-    else if (this.goT > 0) { this.goT -= dt; L.classList.add('go'); this.lamps.forEach(l => l.classList.remove('on')); if (this.goT <= 0) L.style.display = 'none'; }
+    else if (this.goT > 0) { this.goT -= dt; if (race.raceTime > 2.5) this.goT = 0; L.classList.add('go'); this.lamps.forEach(l => l.classList.remove('on')); if (this.goT <= 0) L.style.display = 'none'; }
     // proximity
     const l = this.$('r-left'), r = this.$('r-right');
     l.className = prox.left ? (prox.left < 1.2 ? 'on close' : 'on') : ''; r.className = prox.right ? (prox.right < 1.2 ? 'on close' : 'on') : '';

@@ -27,7 +27,8 @@ export function cockpitClass(spec) {
   const k = `${spec.klass || ''} ${spec.name || ''}`;
   if (spec.body.style === 'formula' || /single-seater|formula/i.test(k)) return 'formula';
   if (/prototype|hypercar|LMP|LMH|LMDh/i.test(k)) return 'proto';
-  if (spec.body.style === 'gt' || /GT[234]\b|race car|touring car/i.test(k)) return 'gt';
+  if (/GT[234]\b|race car|touring car|cup car/i.test(k)) return 'gt';
+  if (spec.body.style === 'gt' && !/supercar|road car|stock/i.test(k)) return 'gt';
   return 'road';
 }
 
@@ -41,6 +42,8 @@ export function fitCabin(hm, spec) {
   const band = (x, z0, z1) => { let m = 0; for (let z = z0; z <= z1 + 1e-6; z += cell) m = Math.max(m, top(x, z)); return m; };
   const area = (xa, xb, zmax) => { let m = 0; for (let x = xa; x <= xb + 1e-6; x += cell) m = Math.max(m, band(x, 0, zmax)); return m; };
   const side = ov.side ?? (klass === 'formula' ? 0 : -1);
+  // pitch for the bonnet / nose camera: the far edge of the bodywork sits about a fifth of the way up the picture
+  const aim = (c) => { let m = -1.2; for (let x = c[0] + 0.25; x <= a + 1.3; x += cell) { const y = band(x, 0, 0.3); if (y > 0.15) m = Math.max(m, Math.atan2(y - c[1], x - c[0])); } return clamp(m + 0.2, -0.33, -0.09); };
   const fit = { klass, side, E, a, bb, open: klass === 'formula' };
 
   if (klass === 'formula') {
@@ -52,7 +55,7 @@ export function fitCabin(hm, spec) {
     const ey = clamp(Math.max(rim, scuttle) + 0.135, 0.66, 0.86);
     Object.assign(fit, { H, rim: rim || 0.58, scuttle: scuttle || 0.56, halfW: 0.24, eye: [ex, ey, 0] });
     // nose camera: on the scuttle ahead of the cockpit, clear of everything around it
-    const nx0 = ex + 0.72; fit.bonnet = [nx0, area(nx0 - 0.12, nx0 + 0.45, 0.14) + 0.13, 0]; fit.bonnetPitch = -0.1;
+    const nx0 = ex + 0.72; fit.bonnet = [nx0, area(nx0 - 0.12, nx0 + 0.45, 0.14) + 0.13, 0]; fit.bonnetPitch = aim(fit.bonnet);
     fit.planes = [];
     return nudge(fit, ov);
   }
@@ -123,7 +126,7 @@ export function fitCabin(hm, spec) {
   hull.push([1, 0, 0, -fit.xFront], [-1, 0, 0, fit.xRear]);
   fit.planes = hull;
   // bonnet camera: on the centreline just above the base of the windscreen, clear of glass, wipers and bonnet
-  const bx = cowl.x - 0.06; fit.bonnet = [bx, area(bx - 0.14, bx + 0.4, 0.22) + 0.15, 0]; fit.bonnetPitch = -0.13;
+  const bx = cowl.x; fit.bonnet = [bx, area(bx - 0.1, bx + 0.4, 0.22) + 0.14, 0]; fit.bonnetPitch = aim(fit.bonnet);
   return nudge(fit, ov);
 }
 

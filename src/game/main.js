@@ -21,7 +21,7 @@ const GradeShader = {
       vec2 d=vUv-0.5; x*=1.0-dot(d,d)*vignette;
       gl_FragColor=vec4(x,c.a); }`,
 };
-import { buildTrack, nearestIndexGlobal, TRACKS, TRACK_ORDER } from '../sim/track.js';
+import { buildTrack, nearestIndexGlobal, TRACKS, TRACK_ORDER, TRACK_GROUPS, TRACK_KM } from '../sim/track.js';
 import { CARS, CAR_ORDER, CAR_GROUPS } from '../sim/cars.js';
 import { Sim } from '../sim/sim.js';
 import { SIM_DT, peakPower } from '../sim/vehicle.js';
@@ -42,6 +42,7 @@ import { Props } from './props.js';
 import { buildLineGuide } from './lineviz.js';
 import { AudioEngine } from '../audio/audio.js';
 import { RaceMode } from './racemode.js';
+import { TvCam } from './tvcam.js';
 import { CONDITIONS, CONDITION_ORDER, patchFog } from './wx.js';
 import { Weather, LensShader } from './weather.js';
 import { wetFor } from '../sim/wet.js';
@@ -176,7 +177,7 @@ class Game {
       wrap.appendChild(el);
     } }
     const ts = document.getElementById('track');
-    for (const id of TRACK_ORDER) { const o = document.createElement('option'); o.value = id; o.textContent = `${TRACKS[id].name}${TRACKS[id].real ? ' — ' + TRACKS[id].country : ' (original)'}`; ts.appendChild(o); }
+    for (const [label, ids] of TRACK_GROUPS) { const g = document.createElement('optgroup'); g.label = label; for (const id of ids) { const o = document.createElement('option'); o.value = id; o.textContent = `${TRACKS[id].name}${TRACKS[id].real ? ' — ' + TRACKS[id].country : ' (original)'}${TRACK_KM[id] ? ' · ' + TRACK_KM[id].toFixed(2) + ' km' : ''}`; g.appendChild(o); } ts.appendChild(g); }
     ts.value = this.trackId;
     ts.onchange = () => this.setTrack(ts.value);
     this.updateTrackInfo();
@@ -509,8 +510,8 @@ class Game {
     const fx = Math.cos(yaw), fz = -Math.sin(yaw);
     // in-car cameras (src/game/cockpit.js): sets the pose for 'cockpit' / 'bonnet', shows or hides the cockpit kit
     const inFov = inCar.update({ renderer: this.renderer, scene: this.scene, composer: this.composer, camera: cam, model: this.model, spec: this.spec, car, mode: this.paused ? 'menu' : mode, dt,
-      info: { lapTime: this.sim.lapStart === null ? null : this.sim.lapTime, lastLap: this.sim.lastLap } });
-    if (this.hudCockpit !== (inFov !== null && mode === 'cockpit')) { this.hudCockpit = !this.hudCockpit; const cl = this.hud.cl.style; cl.transformOrigin = '100% 100%'; cl.transform = this.hudCockpit ? 'scale(0.62)' : ''; cl.opacity = this.hudCockpit ? 0.85 : 1; }
+      info: { lapTime: this.sim.lapStart === null ? null : this.sim.lapTime, lastLap: this.sim.lastLap, delta: this.rec.delta(this.sim, this.tel.ref()) } });
+    const hudIn = inFov !== null && mode === 'cockpit'; if (this.hudCockpit !== hudIn) { this.hudCockpit = hudIn; const cl = this.hud.cl.style; cl.transformOrigin = '100% 100%'; cl.transform = this.hudCockpit ? 'scale(0.62)' : ''; cl.opacity = this.hudCockpit ? 0.85 : 1; }
     if (this.paused) {
       // showroom orbit behind the menu
       const a = performance.now() * 0.00012;
@@ -532,16 +533,15 @@ class Game {
     } else if (mode === 'bonnet' || mode === 'cockpit') {
       fov = inFov;
     } else {
-      let best = this.tvPosts[0], bd = Infinity;
-      for (const p of this.tvPosts) { const d = p.distanceToSquared(pos); if (d < bd) { bd = d; best = p; } }
-      cam.position.copy(best); cam.lookAt(pos.x, pos.y + 0.6, pos.z);
-      fov = THREE.MathUtils.clamp(2 * Math.atan(9 / Math.sqrt(bd)) * 57.3, 7, 50);
+      // trackside camera with a checked line of sight to the car (tvcam.js)
+      if (!this.tv || this.tv.world !== this.world) this.tv = new TvCam(this.track, this.world);
+      fov = this.tv.update(dt, pos, car, cam);
     }
     if (mode !== 'tv') {
       // engine / road vibration grows with speed; kerbs and grass rattle the camera
       const t = performance.now() * 0.001, k = Math.min(1, spd / 75), off = car.surf && (car.surf[0] || car.surf[1] || car.surf[2] || car.surf[3]) ? Math.min(1, spd / 25) : 0;
-      const inCar = mode === 'bonnet' || mode === 'cockpit';
-      const amp = (mode === 'cockpit' ? 0.0025 : inCar ? 0.007 : 0.0035) * k * k + off * (mode === 'cockpit' ? 0.008 : inCar ? 0.016 : 0.008);
+      const onBoard = mode === 'bonnet' || mode === 'cockpit';
+      const amp = (mode === 'cockpit' ? 0.0025 : onBoard ? 0.007 : 0.0035) * k * k + off * (mode === 'cockpit' ? 0.008 : onBoard ? 0.016 : 0.008);
       cam.position.y += amp * (Math.sin(t * 61) + 0.6 * Math.sin(t * 37.3));
       cam.rotation.z += amp * 0.35 * Math.sin(t * 29.1); cam.rotation.x += amp * 0.25 * Math.sin(t * 43.7);
     }

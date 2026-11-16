@@ -204,7 +204,7 @@ function kerbRuns(side) {
 }
 const osm = {
   note: 'Derived from OpenStreetMap (ODbL) by tools/trackside-osm.mjs. Offsets in metres from the centreline along the track normal; indices are 1 m samples.',
-  georef: G.fixed ? { lat0, lon0, note: 'centreline is OSM geometry in this projection: no fit needed' } : { lat0: +lat0.toFixed(6), lon0: +lon0.toFixed(6), rotDeg: +(G.th * 180 / Math.PI).toFixed(3), residual: +G.err.toFixed(2), matched: +(G.inl / G.total).toFixed(3) },
+  georef: G.fixed ? { lat0, lon0, note: 'centreline is OSM geometry in this projection: no fit needed' } : { lat0: +lat0.toFixed(6), lon0: +lon0.toFixed(6), rotDeg: +(G.th * 180 / Math.PI).toFixed(3), th: +G.th.toFixed(6), t: [+G.tx.toFixed(2), +G.ty.toFixed(2)], c: [+G.cs[0].toFixed(2), +G.cs[1].toFixed(2)], residual: +G.err.toFixed(2), matched: +(G.inl / G.total).toFixed(3) },
   step: STEP, n,
   gravelL: runs('L', 'gravel'), gravelR: runs('R', 'gravel'), pavedL: runs('L', 'paved'), pavedR: runs('R', 'paved'),
   wallL: wallRuns('L'), wallR: wallRuns('R'), kerbL: kerbRuns('L'), kerbR: kerbRuns('R'),
@@ -215,7 +215,7 @@ for (const side of ['L', 'R']) for (const r of osm['gravel' + side]) console.log
 for (const side of ['L', 'R']) for (const r of osm['paved' + side]) console.log(`  paved  ${side} s=${r[0]}..${r[0] + r[1].length * STEP}  inner ${Math.min(...r[1])}  outer max ${Math.max(...r[2])}`);
 if (WRITE) {
   if (!G.fixed && (G.err > 4 || G.inl < 0.9 * G.total)) { console.log('georeference not trustworthy: not written'); process.exit(1); }
-  const file = new URL(`../src/sim/tracks/${id}.json`, import.meta.url), def = JSON.parse(fs.readFileSync(file));
+  const f0 = new URL(`../src/sim/tracks/${id}.json`, import.meta.url), file = fs.existsSync(f0) ? f0 : new URL(`../src/sim/tracks/gp/${id}.json`, import.meta.url), def = JSON.parse(fs.readFileSync(file));
   def.trackside = { ...(def.trackside || {}), osm };
   fs.writeFileSync(file, JSON.stringify(def));
   console.log(' written to', file.pathname);

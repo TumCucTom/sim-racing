@@ -20,7 +20,7 @@ export const GRID_GAP = 8;            // metres between consecutive grid slots (
 const GRID_FIRST = 4;                 // pole position: car centre this far behind the line
 const BIN = 25, BIN0 = 400;           // gap timing: time stamps every 25 m of race distance
 const RESTITUTION = 0.18, FRICTION = 0.35, SLOP = 0.01, CORRECT = 0.6;
-const WAKE_LEN = 90, WAKE_DRAG = 0.40, WAKE_DOWN = 0.12;
+const WAKE_LEN = 120, WAKE_DRAG = 0.50, WAKE_DOWN = 0.12;
 const HOLD = { steer: 0, throttle: 0, brake: 1 };
 const COAST = { steer: 0, throttle: 0, brake: 0 };
 
@@ -68,7 +68,7 @@ export class Race {
     this.raceTime = this.green ? 0 : -this.greenTime;
     this.leaderFinished = false; this.leaderFinishTime = null; this.over = false; this.finishers = 0;
     this.events = []; this.pairT = new Map();
-    this.overtakes = 0; this.cleanOvertakes = 0; this.overtakeLog = []; this.rel = null;
+    this.overtakes = 0; this.cleanOvertakes = 0; this.strictOvertakes = 0; this.strictClean = 0; this.overtakeLog = []; this.rel = null;
     this.order = this.cars.map((_, i) => i);
     for (const c of this.cars) {
       const g = gridSlot(t, c.index, o.gridGap);
@@ -81,7 +81,7 @@ export class Race {
         gapLeader: 0, interval: 0, lapsDown: 0, blue: false, wake: 0,
         hit: 0, hitSide: 0, lastContactT: -1e9, contacts: 0,
         stuckT: 0, wrongT: 0, waitT: 0, needRespawn: false, respawns: 0, lastRespawnT: -1e9,
-        offs: 0, strikes: 0, penalty: 0, lastOff: 0, lastOffT: -1e9,
+        offs: 0, strikes: 0, penalty: 0, lastOff: 0, lastOffT: -1e9, walls: 0, lastWallT: -1e9, spins: 0, spinning: false,
         lapTimes: [], bestLap: null, nextBin: 0, lastPos: c.index + 1,
       });
       c.ctrl.steer = 0; c.ctrl.throttle = 0; c.ctrl.brake = 1;
@@ -242,7 +242,7 @@ export class Race {
     const cars = this.cars, n = cars.length;
     for (let i = 0; i < n; i++) {
       const F = cars[i]; if (F.retired) continue;
-      const f = F.car; let k = 0;
+      const f = F.car; let k = 0, kd = 0;
       for (let j = 0; j < n; j++) {
         if (j === i) continue;
         const Ld = cars[j]; if (Ld.retired) continue;
@@ -252,12 +252,14 @@ export class Race {
         const cy = Math.cos(l.yaw), sy = Math.sin(l.yaw);
         const back = -(dx * cy + dy * sy); if (back < 1.5 || back > WAKE_LEN) continue;
         const lat = -dx * sy + dy * cy, sg = 1.2 + 0.045 * back, q = 1 - back / WAKE_LEN;
-        let w = q * Math.pow(q, 0.25) * Math.exp(-(lat * lat) / (sg * sg)) * Math.min(1, (v - 15) / 25);
-        w *= Math.min(1, Math.sqrt(Ld.spec.CdA / F.spec.CdA));
+        const shape = Math.exp(-(lat * lat) / (sg * sg)) * Math.min(1, (v - 15) / 25) * Math.min(1, Math.sqrt(Ld.spec.CdA / F.spec.CdA));
+        const w = Math.pow(q, 0.8) * shape;
         if (w > k) k = w;
+        // the tow reaches a long way back; the loss of downforce is a close-range effect
+        if (back < 90) { const qd = 1 - back / 90, wd = qd * Math.pow(qd, 0.25) * shape; if (wd > kd) kd = wd; }
       }
       F.wake = k;
-      f.dragK = 1 - WAKE_DRAG * k; f.downK = 1 - WAKE_DOWN * k;
+      f.dragK = 1 - WAKE_DRAG * k; f.downK = 1 - WAKE_DOWN * kd;
     }
   }
 
@@ -272,6 +274,9 @@ export class Race {
         if (c.strikes % 3 === 0) { c.penalty += 5; this.onEvent?.('penalty', c); }
       }
     }
+    // incident counters: barrier hits (above walking pace) and spins
+    if (car.impact > 1.5 && this.time - c.lastWallT > 1) { c.walls++; c.lastWallT = this.time; }
+    const sp = Math.abs(car.headErr) > 1.25; if (sp && !c.spinning) c.spins++; c.spinning = sp;
     if (c.finished) return;
     if (this.raceTime > 6) {
       if (Math.abs(car.vx) < 2.5) c.stuckT += dt; else if (c.stuckT > 0) c.stuckT = Math.max(0, c.stuckT - 4 * dt);
@@ -384,10 +389,16 @@ export class Race {
         const now = diff > 5 ? 1 : diff < -5 ? -1 : was;
         if (now !== was) {
           const by = now > 0 ? a : b2, on = now > 0 ? b2 : a;
-          if (by.sim.lap >= 1 && on.sim.lap >= 1 && this.time - on.lastRespawnT > 6 && this.time - by.lastRespawnT > 6 && !on.needRespawn && on.car.vx > 8) {
+          // (the passed car must be racing: on the road, pointing the right way, not just respawned;
+          // slow is fine, a chicane apex is 40 km/h)
+          if (by.sim.lap >= 1 && on.sim.lap >= 1 && this.time - on.lastRespawnT > 6 && this.time - by.lastRespawnT > 6 && !on.needRespawn
+            && on.car.vx > 3 && Math.abs(on.car.headErr) < 0.8 && !on.sim.offTrack) {
             const ev = this.pairT.get(i * 64 + j), touched = !!ev && this.time - ev.tLast < 4;
-            const clean = !touched && on.car.vx > 0.7 * by.car.vx && this.time - on.lastOffT > 4;
-            this.overtakes++; if (clean) this.cleanOvertakes++;
+            const clean = !touched && on.car.vx > 0.5 * by.car.vx && this.time - on.lastOffT > 4 && this.time - by.lastOffT > 4;
+            // the first version of this counter also required the passed car to be above 8 m/s, and 70 % of
+            // the passer's speed to be "clean": kept as the strict count, for comparison with older tables
+            const strict = on.car.vx > 8, cleanStrict = strict && clean && on.car.vx > 0.7 * by.car.vx;
+            this.overtakes++; if (clean) this.cleanOvertakes++; if (strict) this.strictOvertakes++; if (cleanStrict) this.strictClean++;
             this.overtakeLog.push({ t: this.raceTime, by: by.index, on: on.index, s: by.car.s, lap: by.sim.lap, clean });
           }
         }
@@ -418,7 +429,7 @@ export class Race {
       index: c.index, name: c.name, car: c.spec.id, carName: c.spec.name, player: c.player, grid: c.gridPos,
       laps: c.finished ? c.finishLaps : Math.max(0, c.sim.lap), finished: c.finished, retired: c.retired, reason: c.retireReason,
       time: c.finished ? c.finishTime + c.penalty : null, penalty: c.penalty, dist: c.dist,
-      bestLap: c.bestLap, lapTimes: c.lapTimes.slice(), contacts: c.contacts, offs: c.offs, strikes: c.strikes, respawns: c.respawns,
+      bestLap: c.bestLap, lapTimes: c.lapTimes.slice(), contacts: c.contacts, offs: c.offs, strikes: c.strikes, respawns: c.respawns, walls: c.walls, spins: c.spins,
     }));
     const key = (r) => (r.finished ? 2 : r.retired ? 0 : 1);
     rows.sort((a, b) => {

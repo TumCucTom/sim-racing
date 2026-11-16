@@ -3,7 +3,8 @@
 //                          [--wx rain] [--diff 0.96] [--grid quali|reverse|random] [--seeds 1,2,3] [--verbose] [--json out.json]
 // Overtakes are on-track position changes after lap 1 (start shuffle excluded; a car that is
 // stopped or was just respawned does not count). "clean" = no contact between the two within 4 s
-// and the passed car at racing speed. Contact severity by closing speed at the contact point:
+// the passed car on the road and at least half the passer's speed; "strict" = the first version of the counter:
+// passed car above 8 m/s, and 70 % of the passer's speed to be clean). Contact severity by closing speed at the contact point:
 // light < 2 m/s, medium 2-6 m/s, heavy > 6 m/s.
 import fs from 'node:fs';
 import { buildTrack } from '../src/sim/track.js';
@@ -31,8 +32,9 @@ export function runRace({ track = 'ravenscar', n = 12, laps = 5, car = 'gt3', kl
     usPerCarStep: wall * 1000 / (race.tick * n),
     winner: cls[0].name + ' (' + cls[0].car + ', grid ' + cls[0].grid + ')', winTime: cls[0].time,
     order: cls.map(r => `${r.pos}.${r.name}[${r.car} g${r.grid}${r.retired ? ' DNF' : r.finished ? '' : ' NC'}]`),
-    overtakes: race.overtakes, clean: race.cleanOvertakes, contacts: sev, contactsLap1: sevL1,
+    overtakes: race.overtakes, clean: race.cleanOvertakes, strict: race.strictOvertakes, strictClean: race.strictClean, contacts: sev, contactsLap1: sevL1,
     offs: cls.reduce((a, r) => a + r.offs, 0), strikes: cls.reduce((a, r) => a + r.strikes, 0), penalties: cls.reduce((a, r) => a + r.penalty, 0),
+    walls: cls.reduce((a, r) => a + r.walls, 0), spins: cls.reduce((a, r) => a + r.spins, 0),
     respawns: cls.reduce((a, r) => a + r.respawns, 0), dnf: cls.filter(r => r.retired).length, notFinished: cls.filter(r => !r.finished && !r.retired).length,
     lapped: cls.filter(r => r.finished && r.laps < cls[0].laps).length,
     bestLap: bests[0], slowestBest: bests[bests.length - 1], spreadPct: bests.length > 1 ? (bests[bests.length - 1] / bests[0] - 1) * 100 : 0,
@@ -53,8 +55,8 @@ if (isMain) {
   for (const seed of seeds) {
     const r = runRace({ ...cfg, seed });
     console.log(`${cfg.track} ${cfg.n}x${cfg.klass === 'same' ? cfg.car : cfg.klass} ${cfg.laps}L ${r.wx} seed ${seed}: ${r.finished ? 'finished' : 'TIMEOUT'} ${fmt(r.winTime)}  winner ${r.winner}` +
-      `  overtakes ${r.overtakes} (clean ${r.clean})  contacts L/M/H ${r.contacts.light}/${r.contacts.medium}/${r.contacts.heavy} (lap1 ${r.contactsLap1.light}/${r.contactsLap1.medium}/${r.contactsLap1.heavy})` +
-      `  offs ${r.offs} pen ${r.penalties}s  respawns ${r.respawns}  DNF ${r.dnf} NC ${r.notFinished} lapped ${r.lapped}  best ${fmt(r.bestLap)} spread ${r.spreadPct.toFixed(1)}%` +
+      `  overtakes ${r.overtakes} (clean ${r.clean}; strict ${r.strict}/${r.strictClean})  contacts L/M/H ${r.contacts.light}/${r.contacts.medium}/${r.contacts.heavy} (lap1 ${r.contactsLap1.light}/${r.contactsLap1.medium}/${r.contactsLap1.heavy})` +
+      `  offs ${r.offs} pen ${r.penalties}s  walls ${r.walls} spins ${r.spins} respawns ${r.respawns}  DNF ${r.dnf} NC ${r.notFinished} lapped ${r.lapped}  best ${fmt(r.bestLap)} spread ${r.spreadPct.toFixed(1)}%` +
       `  AI: passes ${r.passes} aborts ${r.aborts} defends ${r.defends} mistakes ${r.mistakes}  ${r.usPerCarStep.toFixed(2)} us/car-step`);
     if (verbose) {
       for (const c of r.cls) console.log(`   P${String(c.pos).padStart(2)} ${c.name.padEnd(11)} ${c.car.padEnd(8)} grid ${String(c.grid).padStart(2)} laps ${c.laps} ${c.retired ? 'DNF ' + c.reason : c.finished ? fmt(c.time) + (c.penalty ? ` (+${c.penalty}s)` : '') : 'not classified'}  best ${fmt(c.bestLap)}  contacts ${c.contacts} offs ${c.offs} respawns ${c.respawns}`);
@@ -64,7 +66,7 @@ if (isMain) {
   }
   if (seeds.length > 1) {
     const avg = (f) => out.reduce((a, r) => a + f(r), 0) / out.length;
-    console.log(`  mean of ${out.length}: overtakes ${avg(r => r.overtakes).toFixed(1)} (clean ${avg(r => r.clean).toFixed(1)})  contacts/car/lap ${avg(r => r.contactsPerCarLap).toFixed(3)}  heavy/car/lap ${avg(r => r.heavyPerCarLap).toFixed(4)}  offs ${avg(r => r.offs).toFixed(1)}  respawns ${avg(r => r.respawns).toFixed(1)}  DNF ${avg(r => r.dnf).toFixed(1)}`);
+    console.log(`  mean of ${out.length}: overtakes ${avg(r => r.overtakes).toFixed(1)} (clean ${avg(r => r.clean).toFixed(1)}; strict ${avg(r => r.strict).toFixed(1)}/${avg(r => r.strictClean).toFixed(1)})  contacts/car/lap ${avg(r => r.contactsPerCarLap).toFixed(3)}  heavy/car/lap ${avg(r => r.heavyPerCarLap).toFixed(4)}  offs ${avg(r => r.offs).toFixed(1)}  walls ${avg(r => r.walls).toFixed(1)}  spins ${avg(r => r.spins).toFixed(1)}  respawns ${avg(r => r.respawns).toFixed(1)}  DNF ${avg(r => r.dnf).toFixed(1)}`);
   }
   const jf = arg('json', null); if (jf) fs.writeFileSync(jf, JSON.stringify(out, null, 1));
 }

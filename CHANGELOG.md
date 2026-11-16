@@ -3,6 +3,100 @@
 All notable changes, newest first. Numbers quoted here were measured by the
 tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
 
+## Unreleased — race mode: a field of AI cars, contact, slipstream, racecraft
+- **Multi-car racing** (`src/sim/race.js`): N cars at 300 Hz in a fixed order, deterministic and DOM-free.
+  Car-to-car contact (oriented rectangles, impulse with restitution and friction at the contact point,
+  momentum-conserving, no energy gain, no tunnelling at 300 km/h closing), slipstream (`Vehicle.dragK` /
+  `downK`, exactly 1 in free air), staggered grid, start lights, positions, gaps, classification, blue flags,
+  marshals for stuck cars, track-limit penalties. A solo `Sim` is bit-identical to before (hash test).
+- **Racecraft** (`src/sim/drivers/racecraft.js`): on top of the tuned racing-line driver (and identical to it
+  in free air): awareness of the cars around in track coordinates, pace-matched following, lanes that leave
+  a car's width, tow, pulling out late, taking the inside for the braking zone, backing out, conceding,
+  one defensive move, lane-keeping starts, local yellows, seeded personalities. No rubber-banding.
+- **In the game** (`src/game/racemode.js`, `racehud.js`, `src/audio/opponents.js`): **Race** in the menu (2–20
+  cars, laps, grid slot, same car / class / mixed, AI level) and `?race=12&laps=5&grid=6&field=class&aiskill=0.95`
+  (`&ai` for an all-AI race). A model, colour and number board per car, LOD boxes at distance, brake lights,
+  smoke and spray; start lights, timing tower, map dots, CAR LEFT / RIGHT, results; follow any car with every
+  camera (**J** / **K** / **U**), extra cameras (**B**), TV director (**O**); the three nearest opponents are
+  audible. Scriptable for filming: `__game.startRace / followCar / setCamera / fastForward / setTimeScale`.
+- **Measured** (`node tools/race-sim.js`, 38 all-AI races, every one finished, no DNF): 12 GT3 over 5 laps:
+  Ravenscar 4.2 overtakes and 2.6 contacts a race (none heavy), Monza 2.0 and 2.6, Spa 0.6 and 3.0; 20 cars
+  at Silverstone 9.7 overtakes, 0.3 contacts; Monaco no overtakes, 1.4 light or medium contacts. Weak spots,
+  reported in the README: equal cars rarely pass each other, and the Nordschleife in traffic is scruffy
+  (2 heavy contacts and 5 spins per 8-car lap). Physics: 1.4 µs per car-step, 0.14 ms a frame for 20 cars.
+- **Top AI level no longer crashes the single-seater** (owner report). 8 Formula cars at level 1.0 over 13
+  circuit / weather combinations, 2 seeds each: spins 103 -> 14.5, barrier hits 39 -> 7.5. Causes: full-pedal
+  braking for traffic without ABS, no allowance for downforce lost in a wake, offset lanes on the grass.
+  Still untidy: the Nordschleife (all classes) and the Formula car at Monaco in rain.
+- **Trackside TV camera sees the car** (`src/game/tvcam.js`; owner report "blocked or clipped into something").
+  Posts are checked against the built scene, the line of sight is ray-cast four times a second with a look
+  ahead, with helicopter and on-track fallbacks. Car visible over a lap (`node tools/tv-los.mjs`): Ravenscar
+  77.5 -> 100 %, Silverstone 73.6 -> 100 %, Spa 75.1 -> 100 %, Monza 79.1 -> 100 %, Laguna Seca 92.7 -> 100 %,
+  Monaco 74.1 -> 99.5 %, Nordschleife 78.6 -> 100 %.
+- 11 new tests (`tests/race.test.js`).
+
+## Unreleased — a driver's seat in every car
+- **Cockpit view rebuilt** (`src/game/cockpit.js`, `cockpit-fit.js`, `cockpit-scan.js`; **C** cycles chase,
+  far, bonnet, cockpit, TV). The first attempt put the eye at the windscreen and floated a wheel in front of
+  it. Now the body is rasterised once into a 2.5 cm top-down height map (2–50 ms per car in the software-GL
+  test browser, cached per car) and the cabin is measured from it: roof, windscreen header and base, belt
+  line, glasshouse width and plan sweep of the screen. No car is hand-placed; `spec.cockpit` can override
+  (`side`, `eye` nudge, any ergonomic field). The Mini is right-hand drive, everything else with two seats
+  is left-hand drive, the prototypes sit offset-centre, the single-seater central.
+- **Seating.** Eye = header minus a class distance (0.33 m road, 0.44 m GT, 0.45 m prototype), clamped to
+  the stretch of wheelbase where a driver can sit (0.36–0.50 of the wheelbase ahead of the rear axle for
+  road cars, 0.33–0.47 GT, 0.36–0.56 prototype), 20–21 cm under the roof skin above the seat and never less
+  than 12.5 cm above the scuttle. The single-seater's eyes are 0.47 m ahead of the airbox peak, 13.5 cm
+  above the cockpit rim. Open-top cars (the 458 is a Spider) are detected and get no roof.
+- **A procedural cockpit**, built on first use and shown only in that view: dashboard and scuttle,
+  instrument cluster drawn to one 512×192 canvas at 20 Hz (rev counter, speedometer, gear, shift lights,
+  ABS / TC lamps; a race logger with rev bar, gear, speed, lap time, gap to the reference lap and pedal
+  bars in GT cars; on the wheel in prototypes and the formula car), steering column, round road wheel or
+  flat butterfly wheel with buttons, rotaries, paddles and ten shift LEDs, gloved hands on the rim with
+  two-bone IK arms, A-pillars, header, mirror, roof lining, door tops, sun strip, a roll cage and window
+  net in GT cars, a centre screen in road cars, and a gear lever the inboard hand goes to on each change
+  in the three manual cars. Paddles flick on a shift.
+- **The model's own cabin is cut away while you sit in it.** A convex hull (windscreen plane, two
+  side-glass planes, front and rear limits) is clipped per fragment out of every material of the exterior
+  model, so third-party models never show a second, static steering wheel, and opaque or tinted glass
+  cannot black out the view. What you see through the openings is the real model: bonnet, wings, door
+  mirrors, front tyres on the formula car. The ambient-occlusion pass is skipped in this view (it cannot
+  see the clipping). The kit sits beside the car in the scene graph, casts no shadow and is not seen by
+  the wet-road reflection camera. It is drawn in the near half of the depth range, so rain streaks and the
+  car's own spray show through the windows and never inside the cabin (before that, the cockpit greyed out
+  in the wet).
+- **Steering wheel**: road-wheel angle × ratio (14 road, 11 GT, 9 prototype, 7 formula), eased with a tanh
+  towards 126° / 115° / 109° / 103° so the hands never leave nine and three, 40 ms lag. Positive steer is
+  left and turns the wheel anticlockwise as the driver sees it; `tools/cockpit-shots.mjs` prints steer,
+  road-wheel and steering-wheel angle with each photograph.
+- **Camera**: rides the sprung body, so the cabin is fixed and the horizon pitches and rolls; 58–62°
+  vertical field of view; looks up to 11° into the corner, moves up to 3 cm with the g-forces and tilts up
+  to 1.7°; kerb and speed shake is between a third and a half of the bonnet camera's.
+- **Bonnet camera**: on the centreline 14 cm above everything around the base of the windscreen (nose
+  camera ahead of the cockpit on the formula car), pitched so the far edge of the bodywork sits low in the
+  frame. Near plane 7 cm in the cockpit, 10 cm on the bonnet, 30 cm elsewhere as before.
+- The HUD's dial shrinks in the cockpit view, where the dash shows the same numbers.
+- Tests: `tests/cockpit.test.js` (seating on a synthetic saloon and roadster, overrides, class of every car).
+
+## Unreleased — nine Grand Prix circuits (of twenty requested)
+- **Added**: Circuit of the Americas, Hungaroring, Mexico City, Montreal, Bahrain, Interlagos, Shanghai,
+  Red Bull Ring, Suzuka (`cota`, `hungaroring`, `mexico`, `montreal`, `bahrain`, `interlagos`, `shanghai`,
+  `redbullring`, `suzuka`): TUMFTM centreline and widths, lengths within 0.1 % of official, direction checked
+  (COTA and Interlagos anticlockwise), terrain-model elevation through `fitElevation` with per-circuit limits
+  and published relief, OSM barrier lines and gravel via `tools/trackside-osm.mjs`. All 16 cars lap each
+  cleanly, the GT3 also in rain, and a 12-car three-lap GT3 race finishes on each with no wall contact or DNF.
+- **Suzuka's crossover**: the upper road is lifted 6.5 m onto a bridge deck (`def.crossover`; `track.deck`,
+  `track.under`), verge and terrain are left out under the deck, and a test drives both roads through the
+  crossing checking the car is never snapped to, or stopped by, the other one.
+- **Compact circuit format** (`src/sim/tracks/gp/*.json`, `tools/add-circuit.mjs`): centreline as base64
+  byte deltas in decimetres, heights as uint16; 131 kB for nine circuits. Circuits are only offered once
+  marked `ready`. Hosted page 15.29 MB (limit 16). The seven older circuits were not re-encoded.
+- Menu grouped (Original / Grand Prix circuits / Other) with country and length. `tools/ai-laps.js` takes a
+  circuit list. `lineDriverOptions` honours a per-circuit `aiGrip` margin (used by four circuits).
+- **Not done**: the other eleven circuits (Jeddah, Albert Park, Miami, Imola, Barcelona, Zandvoort, Baku,
+  Singapore, Las Vegas, Lusail, Yas Marina), hand-authored corner data, scenery themes, night floodlighting,
+  in-game screenshots of the new circuits.
+
 ## Unreleased — trackside from data, and Laguna Seca
 - **Kerbs, run-off, gravel and barriers are now data per circuit, per corner and per side**
   (`src/sim/trackside.js`), shared by physics and renderer, instead of one curvature rule and a uniform
@@ -44,8 +138,23 @@ tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
   relief, the Corkscrew drops 17.3 m in 140 m with a peak gradient of 16.3 %. Widths are estimates.
   Every car laps it cleanly (GT3 1:32.3 dry, 1:49.2 in rain).
 - Tools: `tools/trackside-map.mjs` (top-down PNG of the trackside as the physics sees it),
-  `tools/trackside-shot.mjs` (screenshots with a free camera). 5 new tests (`tests/trackside.test.js`),
-  49 in all.
+  `tools/trackside-shot.mjs` (screenshots with a free camera). 5 new tests (`tests/trackside.test.js`);
+  `npm test` passes (53 tests with the other work in flight).
+- **Elevation is fitted, not clipped** (owner feedback: "elevation looks exaggerated"). Three circuits sat
+  on the old gradient cap, i.e. terrain-model noise was being clipped rather than removed. `fitElevation`
+  fits a periodic smoothing spline (cutoff 110–600 m by terrain-model resolution), robust to rooftops and
+  bridges, bridges tunnels, and lengthens the cutoff locally where a circuit's realistic gradient or
+  vertical-curvature limit is exceeded. Spa 19.8 → 13.1 % max (the −19.8 % was a false drop after
+  Bruxelles), Monza 17.4 → 13.0 m relief and 5.0 → 1.8 %, Nordschleife 19.9 → 15.6 % up / 11.0 % down,
+  Monaco 49.3 → 42.0 m and 11.4 → 7.3 %, Laguna unchanged in substance (Corkscrew 17.5 m in 140 m).
+  Before / after table in the README. The landscape around flat circuits no longer grows hills. AI lap
+  times moved by under 0.2 %; all 16 cars remain clean on all 7 circuits; no driver table changed.
+- **Monaco rebuilt from OpenStreetMap** (owner feedback: "Monaco looks pretty dire"): 686 real building
+  footprints extruded (tagged heights where present) with procedural Mediterranean façades and tiled
+  roofs, the real coastline of Port Hercule with quay walls, water and moored yachts, an enclosed tunnel
+  over stations 1,542–1,904 m with lamp rows, zebra crossings, a centre line and manhole covers on the
+  road. Physics walls are unchanged. Not done: palm trees, grandstands, pit building, recognisable
+  landmarks (Casino, Piscine), hillside backdrop beyond 330 m.
 - Not done: real kerb positions, vertical kerb dynamics, the Karussell banking, barrier types that differ
   in a crash, Monaco's real widths. Version number not bumped (other work is in flight).
 
