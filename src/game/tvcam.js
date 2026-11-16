@@ -152,4 +152,56 @@ export class TvCam {
     cam.lookAt(carPos.x, carPos.y + 0.6, carPos.z);
     return fov;
   }
+  // Static trackside camera: a fixed position AND a fixed framing at each post (no pan, no
+  // zoom); the cars drive through the picture. The frame is composed once, at the cut: it looks
+  // down the track from the post towards the approaching car, wide enough to hold both the car
+  // and the piece of road in front of the post. It cuts to the next post when the car has left
+  // the frame, is hidden for half a second or has become too small. Same validated posts and
+  // line-of-sight tests as the tracking camera, which also serves as the fallback (helicopter).
+  updateStatic(dt, carPos, car, cam) {
+    if (performance.now() - this.occT > 4000) { this.refreshOccluders(); this.occT = performance.now(); }
+    const S = this.st || (this.st = { post: null, aim: new THREE.Vector3(), m: new THREE.Matrix4(), f: new THREE.Vector3(), r: new THREE.Vector3(), u: new THREE.Vector3(), tanH: 1, tanV: 1, fov: 40, t: 0, hold: 0, hid: 0, retry: 0 });
+    S.t += dt; S.hold += dt;
+    // where is the car in the current frame? (x, y in units of the half picture; depth along the lens)
+    const inFrame = (post, margin) => {
+      A.subVectors(carPos, post.pos); const z = A.dot(S.f); if (z < 4) return false;
+      return Math.abs(A.dot(S.r)) < z * S.tanH * margin && Math.abs(A.dot(S.u) + 0.6) < z * S.tanV * margin;
+    };
+    let cut = !S.post;
+    if (S.post && S.t >= CHECK) {
+      S.t = 0;
+      const d = S.post.pos.distanceTo(carPos), seen = this.visible(S.post.pos, carPos);
+      S.hid = seen ? 0 : S.hid + CHECK;
+      if (!inFrame(S.post, 1.04) || S.hid >= 0.5 || d > 360) cut = true;
+    }
+    if (cut && (S.post || (S.retry -= dt) <= 0)) {
+      const t = this.track, st0 = Math.round(car.idx * this.nSt / t.n), aspect = cam.aspect || 1.78;
+      let best = null, budget = 3;
+      for (const k of [1, 2, 0, 3, -1]) {                       // a post the car is driving towards, before one it has passed
+        const st = ((st0 + k) % this.nSt + this.nSt) % this.nSt;
+        if (this.posts[st] === undefined && budget-- <= 0) continue;
+        const p = this.post(st); if (!p || p === S.post) continue;
+        const d = p.pos.distanceTo(carPos); if (d < 22 || d > 300 || !this.visible(p.pos, carPos)) continue;
+        // the car should still be coming: at least 1.2 s short of the post's own piece of road
+        let ahead = (p.i - car.idx) * t.ds; ahead -= Math.round(ahead / t.length) * t.length;
+        if (k > 0 && ahead < Math.max(0, car.vx) * 1.2) continue;
+        best = p; break;
+      }
+      if (best) {
+        // frame: the car now and the road at (a little before) the post, with room around both
+        this.trackPoint(best.i - Math.round(12 / t.ds), 0.6, B); A.copy(carPos); A.y += 0.6;
+        S.aim.copy(A).lerp(B, 0.55);
+        const va = D.subVectors(A, best.pos).normalize().clone(), vb = D.subVectors(B, best.pos).normalize();
+        const spread = Math.acos(Math.max(-1, Math.min(1, va.dot(vb))));
+        const hf = Math.max(0.42, Math.min(1.25, spread * 1.25 + 0.2));             // horizontal field of view, radians
+        S.tanH = Math.tan(hf / 2); S.tanV = S.tanH / aspect; S.fov = 2 * Math.atan(S.tanV) * 57.2958;
+        S.m.lookAt(best.pos, S.aim, cam.up); S.m.extractBasis(S.r, S.u, S.f); S.f.negate();
+        S.post = best; S.hold = 0; S.hid = 0; S.t = 0; this.stats.switches++; this.init = false; this.cur = null; this.heli = false;
+      } else if (S.post && S.hid < 0.5 && inFrame(S.post, 1.6) && S.post.pos.distanceTo(carPos) < 360) { /* nothing better yet: hold the shot a little longer */ }
+      else { S.post = null; S.retry = 1; }
+    }
+    if (!S.post) return this.update(dt, carPos, car, cam);       // no post sees the car: tracking camera / helicopter
+    cam.position.copy(S.post.pos); cam.lookAt(S.aim);
+    return S.fov;
+  }
 }

@@ -7,7 +7,7 @@
 //
 //   __game.startRace({ n, laps, grid, klass, skill, seed, order, ai })   start (or restart) a race
 //   __game.followCar(i | 'leader' | 'player' | 'battle' | 'next' | 'prev' | 'p3')   car to watch
-//   __game.setCamera('chase' | 'far' | 'bonnet' | 'cockpit' | 'tv' | 'heli' | 'side' | 'front' | 'rear' | 'orbit' | 'director')
+//   __game.setCamera('chase' | 'far' | 'bonnet' | 'cockpit' | 'tv' | 'tvstatic' | 'heli' | 'side' | 'front' | 'rear' | 'orbit' | 'director')
 //   __game.fastForward(seconds)      advance the whole race without rendering (deterministic with &ai)
 //   __game.setTimeScale(k)           slow motion / fast forward of the rendered race
 //   __game.raceInfo()                time, order, gaps and current battles
@@ -297,7 +297,7 @@ export class RaceMode {
     else if (EXTRA_CAMS.includes(name)) { this.extraCam = name; g.cam = Math.max(0, this.CAMS.indexOf('tv')); }
     else return false;
     g.camInit = false; this.cut = 3;
-    g.hud.toast(`Camera: ${name}`, 1.2);
+    g.hud.toast(`Camera: ${{ tv: 'Trackside (tracking)', tvstatic: 'Trackside (static)' }[name] || name}`, 1.2);
     return true;
   }
 
@@ -369,6 +369,7 @@ export class RaceMode {
       if (m.tag && this.tagsOn && d2 < 140 * 140 && d2 > 16) { m.tag.visible = true; m.tag.position.set(car.x, h + c.spec.body.height + 0.55, -car.y); }
       o.position.set(car.x, h, -car.y); o.rotation.set(-gr * she, car.yaw, gr * che, 'YXZ');
       const braking = car.brake > 0.05;
+      if (m.lamps) m.lamps.brake = braking; else g.wx.lampsFor(m, c.spec);   // two headlights, two tail lights on every car, near or far
       if (far) { m.lod.userData.tail.emissiveIntensity = braking ? 3 : 0.3; continue; }
       const spec = c.spec, soft = spec.body.style === 'formula' ? 0.12 : spec.body.style === 'gt' ? 0.3 : 1, delta = car.steer * spec.steerLock;
       m.chassis.rotation.z = clamp(car.axF * 0.0032 * soft, -0.05, 0.05); m.chassis.rotation.x = clamp(car.ayF * 0.0042 * soft, -0.07, 0.07);

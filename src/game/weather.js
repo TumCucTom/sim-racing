@@ -113,7 +113,7 @@ function makeGlows(n) {
   g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
   g.setAttribute('size', new THREE.BufferAttribute(new Float32Array(n), 1));
   g.setAttribute('face', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));   // +1 shines forward, -1 backward
-  const m = new THREE.ShaderMaterial({
+  const m = GLOW_MAT || (GLOW_MAT = new THREE.ShaderMaterial({
     uniforms: { scale: { value: 600 } },
     vertexShader: `attribute float size, face; attribute vec3 color; varying vec3 vC; uniform float scale;
       void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0);
@@ -127,9 +127,71 @@ function makeGlows(n) {
       #include <colorspace_fragment>
     }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
-  });
+  }));
   const p = new THREE.Points(g, m); p.frustumCulled = false; p.renderOrder = 7;
   return p;
+}
+let GLOW_MAT = null, POOL_MAT = null, POOL_GEO = null;
+
+// Fake headlight pool for cars that do not carry real lights: an additive patch on the road
+// ahead with two overlapping lobes (left and right lamp). One shared texture and material.
+function poolMaterial() {
+  if (POOL_MAT) return POOL_MAT;
+  const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64; const c = cv.getContext('2d');
+  c.fillStyle = '#000'; c.fillRect(0, 0, 128, 64); c.globalCompositeOperation = 'lighter';
+  for (const y of [23, 41]) {                       // u = distance ahead, v = across
+    c.save(); c.translate(0, y); c.scale(1, 0.26);
+    const g = c.createRadialGradient(30, 0, 2, 44, 0, 78); g.addColorStop(0, 'rgba(255,244,222,.95)'); g.addColorStop(0.35, 'rgba(255,240,214,.4)'); g.addColorStop(1, 'rgba(255,240,214,0)');
+    c.fillStyle = g; c.fillRect(0, -120, 128, 240); c.restore();
+  }
+  const fade = c.createLinearGradient(0, 0, 14, 0); fade.addColorStop(0, 'rgba(0,0,0,1)'); fade.addColorStop(1, 'rgba(0,0,0,0)');
+  c.globalCompositeOperation = 'source-over'; c.fillStyle = fade; c.fillRect(0, 0, 14, 64);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  POOL_GEO = new THREE.PlaneGeometry(24, 7.5); POOL_GEO.rotateX(-Math.PI / 2); POOL_GEO.translate(12, 0, 0);
+  POOL_MAT = new THREE.MeshBasicMaterial({ map: tex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3, opacity: 0 });
+  return POOL_MAT;
+}
+
+// optional per-car lamp positions (metres, car frame): fx / rx = ahead of / behind the centre, fy / ry height, fz / rz half spacing
+const LAMP_POS = {
+  formula: { fy: 0.42, fz: 0.28, ry: 0.5, rz: 0.3 }, lmp1: { fy: 0.5, fz: 0.78, ry: 0.55, rz: 0.82 }, hypercar: { fy: 0.5, fz: 0.76, ry: 0.6, rz: 0.78 },
+  huracan: { fy: 0.6, fz: 0.72, ry: 0.84, rz: 0.6 }, huracan610: { fy: 0.6, fz: 0.72, ry: 0.84, rz: 0.6 }, svj: { fy: 0.58, fz: 0.74, ry: 0.82, rz: 0.62 },
+  gt3: { ry: 0.82, rz: 0.6 }, r8lms: { ry: 0.86, rz: 0.62 },
+};
+
+// Lamps of one car: two headlights, two tail / brake lamps and the rain light as glow sprites,
+// plus the fake pool. Attached to the detailed model and to its distant stand-in alike.
+class CarLamps {
+  constructor(model, spec) {
+    this.model = model; this.spec = spec; this.brake = false; this.real = false; this.nodes = [];
+    const b = spec.body, L = b.length, W = b.width, o = LAMP_POS[spec.id] || {};
+    const fy = o.fy ?? Math.min(0.72, b.height * 0.5), fz = o.fz ?? W * 0.36, ry = o.ry ?? fy + 0.16, rz = o.rz ?? fz * 0.9;
+    this.proto = makeGlows(5); this.geo = this.proto.geometry;
+    const P = this.geo.attributes.position;
+    P.setXYZ(0, (o.fx ?? L / 2 - 0.12), fy, -fz); P.setXYZ(1, (o.fx ?? L / 2 - 0.12), fy, fz);            // headlights
+    P.setXYZ(2, -(o.rx ?? L / 2 + 0.02), ry, -rz); P.setXYZ(3, -(o.rx ?? L / 2 + 0.02), ry, rz);        // tail / brake lamps
+    P.setXYZ(4, -L / 2 - 0.04, b.style === 'formula' ? 0.36 : Math.max(0.3, ry - 0.3), 0);            // rain light
+    this.geo.attributes.face.array.set([1, 1, -1, -1, -1]);
+    this.head = [fy, fz];
+  }
+  attach(parent) {
+    if (!parent || this.nodes.some(n => n.parent === parent)) return;
+    const p = this.nodes.length ? new THREE.Points(this.geo, this.proto.material) : this.proto; p.frustumCulled = false; p.renderOrder = 7; p.layers.enable(REFL_LAYER);
+    const pool = new THREE.Mesh((poolMaterial(), POOL_GEO), POOL_MAT); pool.position.set(this.spec.body.length / 2 + 0.3, 0.06, 0); pool.renderOrder = 3; pool.userData.pool = true; pool.userData.shared = true;
+    parent.add(p, pool); this.nodes.push(p, pool);
+  }
+  update(c, time) {
+    const C = this.geo.attributes.color, S = this.geo.attributes.size, k = c.night, on = k > 0.2 ? 1 : 0;
+    const dim = Math.max(k, c.rain * 0.45);            // lamps only bloom when the light is low
+    const hl = on * (0.5 + 1.5 * k), br = this.brake ? (0.45 + 1.8 * dim) : 0.3 * on * (0.4 + k);
+    const rl = c.rain > 0 && Math.floor(time * 8) % 2 === 0 ? 3.2 : 0;
+    for (const i of [0, 1]) { C.setXYZ(i, 6 * hl, 5.4 * hl, 4.2 * hl); S.setX(i, 0.22 + 0.2 * k); }
+    for (const i of [2, 3]) { C.setXYZ(i, 4 * br, 0.22 * br, 0.1 * br); S.setX(i, this.brake ? 0.16 + 0.16 * dim : 0.13); }
+    C.setXYZ(4, 3 * rl, 0.15 * rl, 0.07 * rl); S.setX(4, 0.24);
+    C.needsUpdate = true; S.needsUpdate = true;
+    for (const n of this.nodes) if (n.userData.pool) n.visible = !!on && !this.real;
+  }
+  dispose() { for (const n of this.nodes) n.parent?.remove(n); this.geo.dispose(); this.nodes.length = 0; }
 }
 
 export class Weather {
@@ -141,7 +203,7 @@ export class Weather {
     this.flash = 0; this.strikeT = 0; this.nextStrike = 5; this.flickers = [];
     this.reflRT = null; this.vcam = new THREE.PerspectiveCamera(); this.vcam.layers.set(REFL_LAYER);
     this.lens = null; this.grade = null;
-    this.head = null; this.glows = null; this.model = null;
+    this.heads = []; this.lamps = new Set(); this.model = null;
     this.baseFog = new THREE.Color();
     this._v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
     getSky(game.renderer).whenReady(() => { if (this.cond.photo) this.apply(); });
@@ -223,33 +285,32 @@ export class Weather {
 
   // The car has been (re)built: move the lamps over and make it visible to the mirror camera.
   attachCar(model, spec) {
-    if (this.head) { this.head.parent?.remove(this.head, this.head.target); this.head.dispose(); this.head = null; }
-    if (this.glows) { this.glows.parent?.remove(this.glows); this.glows.geometry.dispose(); this.glows.material.dispose(); this.glows = null; }
+    for (const h of this.heads) { h.parent?.remove(h, h.target); h.dispose(); } this.heads = [];
     this.model = model; this.spec = spec;
-    const b = spec.body, L = b.length, W = b.width, lowNose = b.style === 'formula';
-    const fy = lowNose ? 0.42 : Math.min(0.72, b.height * 0.5), fz = lowNose ? 0.28 : W * 0.36;
-    this.glows = makeGlows(5);
-    const P = this.glows.geometry.attributes.position;
-    P.setXYZ(0, L / 2 - 0.12, fy, -fz); P.setXYZ(1, L / 2 - 0.12, fy, fz);            // headlights
-    P.setXYZ(2, -L / 2 - 0.02, fy + 0.08, -fz); P.setXYZ(3, -L / 2 - 0.02, fy + 0.08, fz);   // brake lamps
-    P.setXYZ(4, -L / 2 - 0.04, lowNose ? 0.36 : fy - 0.2, 0);                              // rain light
-    this.glows.geometry.attributes.face.array.set([1, 1, -1, -1, -1]);
-    model.root.add(this.glows);
-    this.head = new THREE.SpotLight(0xfff0d8, 0, 150, 0.5, 0.75, 1.6);
-    this.head.position.set(L / 2 - 0.2, fy, 0); this.head.target.position.set(L / 2 + 30, -0.8, 0);
-    model.root.add(this.head, this.head.target);
-    this.head.layers.enable(REFL_LAYER);
+    const lamps = this.lampsFor(model, spec), [fy, fz] = lamps.head, L = spec.body.length;
+    for (const l of this.lamps) l.real = l === lamps;
+    // real beams only for the followed car: one per headlight, toed out a little so the two pools read separately
+    for (const side of [-1, 1]) {
+      const h = new THREE.SpotLight(0xfff0d8, 0, 150, 0.4, 0.8, 1.6);
+      h.position.set(L / 2 - 0.2, fy, side * fz); h.target.position.set(L / 2 + 30, -0.8, side * (fz + 2.6));
+      model.root.add(h, h.target); h.layers.enable(REFL_LAYER); this.heads.push(h);
+    }
     this.tagCar();
     this.applyLamps();
+  }
+  // Lamp glows (and the fake light pool) for any car model; race mode calls this for every car on the grid.
+  lampsFor(model, spec) {
+    if (!model.lamps) { model.lamps = new CarLamps(model, spec); this.lamps.add(model.lamps); }
+    model.lamps.attach(model.root); if (model.lod) model.lamps.attach(model.lod);
+    return model.lamps;
   }
   // GLB bodies arrive asynchronously, so the tagging is repeated for a while after a change.
   tagCar() { this.model?.root.traverse(o => { if (o.isMesh || o.isPoints) o.layers.enable(REFL_LAYER); }); this.tagged = 0; }
 
   applyLamps() {
-    if (!this.head) return;
+    if (!this.heads.length) return;
     const k = this.cond.night;
-    this.head.intensity = k > 0.2 ? 900 * Math.min(1, k * 1.2) : 0;
-    this.head.visible = k > 0.2;
+    for (const h of this.heads) { h.intensity = k > 0.2 ? 620 * Math.min(1, k * 1.2) : 0; h.visible = k > 0.2; }
   }
 
   // Lightning now (also used by tools to capture a strike).
@@ -300,16 +361,15 @@ export class Weather {
       if (this.sky) this.sky.material.uniforms.flash.value = f;
     }
     // lamps
-    if (this.glows) {
-      const C = this.glows.geometry.attributes.color, S = this.glows.geometry.attributes.size, k = c.night, on = k > 0.2 ? 1 : 0;
-      const dim = Math.max(k, c.rain * 0.45);            // lamps only bloom when the light is low
-      const hl = on * (0.5 + 1.5 * k), br = car.brake > 0.05 ? (0.3 + 1.8 * dim) : 0.12 * on;
-      const rl = c.rain > 0 && Math.floor(this.time * 8) % 2 === 0 ? 3.2 : 0;
-      for (const i of [0, 1]) { C.setXYZ(i, 6 * hl, 5.4 * hl, 4.2 * hl); S.setX(i, 0.3 + 0.35 * k); }
-      for (const i of [2, 3]) { C.setXYZ(i, 4 * br, 0.22 * br, 0.1 * br); S.setX(i, 0.16 + 0.16 * dim); }
-      C.setXYZ(4, 3 * rl, 0.15 * rl, 0.07 * rl); S.setX(4, 0.24);
-      C.needsUpdate = true; S.needsUpdate = true;
-      this.glowScale = g.renderer.domElement.height * 0.9; this.glows.material.uniforms.scale.value = this.glowScale;
+    if (this.lamps.size) {
+      for (const l of this.lamps) {
+        if (l.model.disposed) { l.dispose(); this.lamps.delete(l); continue; }
+        if (l.model === this.model) l.brake = car.brake > 0.05;
+        if (l.model.lod) l.attach(l.model.lod);          // the distant stand-in is made after the model
+        l.update(c, this.time);
+      }
+      if (POOL_MAT) POOL_MAT.opacity = 0.5 * Math.min(1, c.night * 1.2);
+      this.glowScale = g.renderer.domElement.height * 0.9; if (GLOW_MAT) GLOW_MAT.uniforms.scale.value = this.glowScale;
     }
     // lens pass
     if (this.lens) {
@@ -326,7 +386,7 @@ export class Weather {
       }
       U.rays.value = rays; U.rayThr.value = c.rayThr ?? 1.1;
       // beads on the lens build up while it rains (not on the trackside TV camera's long lens)
-      const want = c.rain > 0 && camMode !== 'tv' && !paused ? c.rain : 0;
+      const want = c.rain > 0 && camMode !== 'tv' && camMode !== 'tvstatic' && !paused ? c.rain : 0;
       U.drops.value += (want - U.drops.value) * Math.min(1, dt * (want > U.drops.value ? 0.35 : 2));
     }
   }
@@ -351,10 +411,10 @@ export class Weather {
     WX.uReflMat.value.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(vc.projectionMatrix).multiply(vc.matrixWorldInverse);
     const auto = r.shadowMap.autoUpdate, prev = r.getRenderTarget(), ca = r.getClearAlpha(), cc = r.getClearColor(new THREE.Color());
     r.shadowMap.autoUpdate = false;
-    if (this.glows) this.glows.material.uniforms.scale.value = (this.glowScale || 600) * rt.height / r.domElement.height;   // point sizes are in pixels of the target
+    if (GLOW_MAT) GLOW_MAT.uniforms.scale.value = (this.glowScale || 600) * rt.height / r.domElement.height;   // point sizes are in pixels of the target
     r.setRenderTarget(rt); r.setClearColor(0x000000, 0); r.clear();
     r.render(g.scene, vc);
     r.setRenderTarget(prev); r.setClearColor(cc, ca); r.shadowMap.autoUpdate = auto;
-    if (this.glows) this.glows.material.uniforms.scale.value = this.glowScale || 600;
+    if (GLOW_MAT) GLOW_MAT.uniforms.scale.value = this.glowScale || 600;
   }
 }

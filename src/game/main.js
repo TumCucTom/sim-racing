@@ -67,7 +67,8 @@ const QUALITY = {
   high: { shadows: true, shadowMap: 4096, shadowRange: 110, trees: 1500, treeCap: 20000, detail: 2, maxDpr: 2, bloom: true },
 };
 const params = new URLSearchParams(location.search);
-const CAMS = ['chase', 'far', 'bonnet', 'cockpit', 'tv'];
+const CAMS = ['chase', 'far', 'bonnet', 'cockpit', 'tv', 'tvstatic'];
+const CAM_NAMES = { tv: 'Trackside (tracking)', tvstatic: 'Trackside (static)' };
 
 class Game {
   constructor() {
@@ -136,7 +137,7 @@ class Game {
 
   bindKeys() {
     const k = this.input;
-    k.on('KeyC', () => { this.cam = (this.cam + 1) % CAMS.length; this.camInit = false; this.hud.toast(`Camera: ${CAMS[this.cam]}`, 1.2); });
+    k.on('KeyC', () => { this.cam = (this.cam + 1) % CAMS.length; this.camInit = false; this.hud.toast(`Camera: ${CAM_NAMES[CAMS[this.cam]] || CAMS[this.cam]}`, 1.2); });
     k.on('KeyT', () => this.tel.toggle());
     k.on('KeyR', () => this.recover());
     k.on(['Enter', 'Backspace'], () => { if (!this.paused) this.restart(); });
@@ -523,9 +524,10 @@ class Game {
     } else {
       // trackside camera with a checked line of sight to the car (tvcam.js)
       if (!this.tv || this.tv.world !== this.world) this.tv = new TvCam(this.track, this.world);
-      fov = this.tv.update(dt, pos, car, cam);
+      if (mode === 'tvstatic') { fov = this.tv.updateStatic(dt, pos, car, cam); if (this.tv.st?.post) { cam.fov = fov; cam.updateProjectionMatrix(); } }   // fixed framing: no zoom glide
+      else { if (this.tv.st) this.tv.st.post = null; fov = this.tv.update(dt, pos, car, cam); }
     }
-    if (mode !== 'tv') {
+    if (mode !== 'tv' && mode !== 'tvstatic') {
       // engine / road vibration grows with speed; kerbs and grass rattle the camera
       const t = performance.now() * 0.001, k = Math.min(1, spd / 75), off = car.surf && (car.surf[0] || car.surf[1] || car.surf[2] || car.surf[3]) ? Math.min(1, spd / 25) : 0;
       const onBoard = mode === 'bonnet' || mode === 'cockpit';

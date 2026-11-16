@@ -134,7 +134,7 @@ export class Menu {
         const v = d[k], [a, b] = this.range[k], e = this.statEls[k], ok = Number.isFinite(v);
         let f = ok && b > a ? (v - a) / (b - a) : 0; if (low) f = 1 - f;
         e.querySelector('b').innerHTML = ok ? `${v.toFixed(dig)}<u>${unit}</u>` : '–';
-        e.querySelector('i').style.width = `${ok ? 10 + 90 * Math.sqrt(f) : 0}%`;
+        e.querySelector('i').style.width = `${ok ? 12 + 88 * f : 0}%`;
       }
     }
     for (const [rootId, v] of [['m-wx', g.wxId], ['m-diff', g.diffId], ['m-q', g.qualityName]])

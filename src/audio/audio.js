@@ -164,7 +164,7 @@ export class AudioEngine {
     const load = car.limiterOn || car.shiftTimer > 0 ? 0 : Math.max(-0.3, Math.min(1, tq));
     if (car.gear !== this.lastGear) { this.trigger('shift', spec.shiftTime < 0.1 ? 0.9 : 0.35); this.lastGear = car.gear; }
     if (car.impact > 0.8) this.trigger('impact', car.impact / 7);
-    const tv = cam === 'tv', cockpit = cam === 'bonnet' || cam === 'cockpit';
+    const tv = cam === 'tv' || cam === 'tvstatic', cockpit = cam === 'bonnet' || cam === 'cockpit';
     const set = {
       rpm: Math.max(spec.engine.electric ? 0 : spec.engine.idle * 0.9, car.rpm), throttle: car.limiterOn ? 0 : car.throttle, load,
       speed: v, squeal, scrub, grass: grass * vf, gravel: gravel * vf, kerb: Math.min(1, kerb) * (v > 3 ? 1 : 0),

@@ -472,6 +472,7 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
 //               [x, y, z, width, height] in the model's own metres, facing backwards
 //   shadow      [length, width] of the soft contact shadow in metres (default: model bounds)
 //   ao          { url, w, l } baked ground-shadow texture laid under the model (model axes)
+//   atlas       { mat }: a blended colour-atlas material to split into paint / opaque / glass (see splitAtlas)
 //   kit         GT3 race kit (splitter, skirts, diffuser strakes, swan-neck wing) built around a road-car
 //               model: { wingY, deckY } = heights of the wing and of the rear deck its pylons stand on (m),
 //               wingX = how far ahead of the tail the wing sits, span, splitter / skirts: false to omit
@@ -486,9 +487,9 @@ const GLB_MODELS = {
   // Audi R8 (second generation road car) by jasonjliang, CC BY 4.0 — carries the GT3 race kit
   r8lms: { url: 'models/r8lms.glb', kit: { wingY: 1.2, deckY: 0.98, wingX: 0.02 }, lamps: [[-2.1, 0.8, -0.6, 0.34, 0.035], [-2.1, 0.8, 0.6, 0.34, 0.035]] },
   // Lamborghini Huracán (road car) by jkazulyblanco, CC BY 4.0 — carries the GT3 race kit
-  huracan: { url: 'models/huracan.glb', kit: { wingY: 1.2, deckY: 0.93, wingX: 0.04 }, lamps: [[-2.1, 0.79, -0.56, 0.36, 0.03], [-2.1, 0.79, 0.56, 0.36, 0.03]] },
+  huracan: { url: 'models/huracan.glb', atlas: { mat: 'lambert15SG' }, kit: { wingY: 1.2, deckY: 0.93, wingX: 0.04 }, lamps: [[-2.1, 0.79, -0.56, 0.36, 0.03], [-2.1, 0.79, 0.56, 0.36, 0.03]] },
   // the same Huracán model as it was made: the LP 610-4 road car, no race kit
-  huracan610: { url: 'models/huracan.glb', lamps: [[-2.1, 0.79, -0.56, 0.36, 0.03], [-2.1, 0.79, 0.56, 0.36, 0.03]] },
+  huracan610: { url: 'models/huracan.glb', atlas: { mat: 'lambert15SG' }, lamps: [[-2.1, 0.79, -0.56, 0.36, 0.03], [-2.1, 0.79, 0.56, 0.36, 0.03]] },
   // Mercedes-AMG GT (road car) by Yan Carvalho, CC BY 4.0 — carries the GT3 race kit
   amggt3: { url: 'models/amggt3.glb', paint: ['Material.001'], glass: ['Material'], tyre: ['Material.023'], tail: ['Material.014', 'Material.034'], paintProps: { metalness: 0.7, roughness: 0.42 }, kit: { wingY: 1.25, deckY: 0.95, wingX: 0.05 } },
   // Honda Civic Type R (FK8) by shindedhirendra780, CC BY 4.0
@@ -502,6 +503,39 @@ const GLB_MODELS = {
   // "Generic Electric sedan" by Antonis_zks, CC BY 4.0
   ev: { url: 'models/ev.glb', paint: ['Material.018'], glass: ['Material.020'], tyre: ['Material.002'], tail: ['Material.067'] },
 };
+// Some models keep paint, trim and glass in ONE alpha-blended material with a colour-atlas
+// texture (the Huracán: the glass texels have alpha 0, so the windows were invisible, and the whole
+// body was drawn blended, without depth writes). Sort the triangles by what their texel is - body
+// colour, see-through, anything else - and give each group a proper material: the car's paint,
+// the shared glass, and an opaque copy of the original.
+function splitAtlas(o, mats) {
+  const g = o.geometry, src = o.material, img = src.map?.image, uv = g.attributes.uv;
+  if (!img || !uv || !g.index) return;
+  if (!g.userData.atlas) {
+    let px, w, h;
+    try {
+      const cv = document.createElement('canvas'); w = cv.width = Math.min(512, img.width); h = cv.height = Math.min(512, img.height);
+      const c = cv.getContext('2d', { willReadFrequently: true }); c.drawImage(img, 0, 0, w, h); px = c.getImageData(0, 0, w, h).data;
+    } catch (e) { return; }
+    const idx = g.index.array, nT = idx.length / 3, cls = new Uint8Array(nT), count = [0, 0, 0];
+    for (let t = 0; t < nT; t++) {
+      let u = 0, v = 0; for (let k = 0; k < 3; k++) { u += uv.getX(idx[t * 3 + k]); v += uv.getY(idx[t * 3 + k]); }
+      u = u / 3; v = v / 3; u -= Math.floor(u); v -= Math.floor(v);
+      const p = (Math.min(h - 1, Math.floor(v * h)) * w + Math.min(w - 1, Math.floor(u * w))) * 4, r = px[p], gg = px[p + 1], b = px[p + 2];
+      cls[t] = px[p + 3] < 128 ? 2 : (r > 88 && gg < r * 0.42 && gg > 12 && b < 40 ? 0 : 1);   // paint is the atlas's orange
+      count[cls[t]]++;
+    }
+    const out = new (idx.constructor)(idx.length), at = [0, count[0] * 3, (count[0] + count[1]) * 3];
+    for (let t = 0; t < nT; t++) { const a = at[cls[t]]; out[a] = idx[t * 3]; out[a + 1] = idx[t * 3 + 1]; out[a + 2] = idx[t * 3 + 2]; at[cls[t]] += 3; }
+    g.setIndex(new THREE.BufferAttribute(out, 1)); g.clearGroups();
+    g.addGroup(0, count[0] * 3, 0); g.addGroup(count[0] * 3, count[1] * 3, 1); g.addGroup((count[0] + count[1]) * 3, count[2] * 3, 2);
+    const solid = src.clone(); solid.transparent = false; solid.depthWrite = true; solid.alphaTest = 0; solid.opacity = 1;
+    g.userData.atlas = solid;
+  }
+  mats.paint.side = src.side; mats.glass.side = src.side;
+  o.material = [mats.paint, g.userData.atlas, mats.glass];
+}
+
 const WHEEL_NODES = ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr'];
 function glbConfig(spec) {
   const c = GLB_MODELS[spec.id];
@@ -532,6 +566,7 @@ function attachGLB(model, spec, cfg, { a, bb, color }) {
     car.traverse(o => {
       if (!o.isMesh) return;
       const r = roleOf(o); if (r) { mats[r].side = o.material.side; o.material = mats[r]; }
+      else if (cfg.atlas && o.material.name === cfg.atlas.mat) splitAtlas(o, mats);
       o.castShadow = true; o.receiveShadow = true; o.userData.shared = true;   // geometry is shared with the cache
     });
     // nose along +X, then measure in the car's root frame
