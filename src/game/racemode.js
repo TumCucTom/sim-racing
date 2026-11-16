@@ -101,17 +101,16 @@ export class RaceMode {
 
   // ------------------------------------------------------------------ menu and keys
   buildMenu() {
-    const row = document.querySelector('#menu .rowb'); if (!row) return;
+    const box = document.getElementById('raceopts'), acts = document.getElementById('m-actions'); if (!box || !acts) return;
     const c = this.cfg, opt = (v, label, sel) => `<option value="${v}"${sel ? ' selected' : ''}>${label}</option>`;
     const ns = []; for (let i = 2; i <= 20; i++) ns.push(opt(i, i, i === c.n));
-    row.insertAdjacentHTML('afterend', `<div class="rowb" id="racerow">
-      <button class="go" id="race-go">Race</button>
+    box.insertAdjacentHTML('beforeend', `<div id="racerow">
       <label>Cars <select id="race-n">${ns.join('')}</select></label>
       <label>Laps <select id="race-laps">${[1, 2, 3, 5, 8, 10, 15, 20, 30].map(v => opt(v, v, v === c.laps)).join('')}</select></label>
       <label>Start from <select id="race-grid"></select></label>
-      <label>Opponents <select id="race-klass">${[['same', 'Same car'], ['class', 'Same class'], ['mixed', 'Mixed classes']].map(([v, l]) => opt(v, l, v === c.klass)).join('')}</select></label>
-      <label>AI level <select id="race-skill">${SKILLS.map(([v, l]) => opt(v, l, Math.abs(v - c.skill) < 0.011)).join('')}</select></label>
-      <button class="alt" id="race-watch">Watch an AI race</button></div>`);
+      <label class="w">Opponents <select id="race-klass">${[['same', 'Same car'], ['class', 'Same class'], ['mixed', 'Mixed classes']].map(([v, l]) => opt(v, l, v === c.klass)).join('')}</select></label>
+      <label class="w">AI level <select id="race-skill">${SKILLS.map(([v, l]) => opt(v, l, Math.abs(v - c.skill) < 0.011)).join('')}</select></label></div>`);
+    acts.insertAdjacentHTML('beforeend', '<button type="button" class="go" id="race-go">Race</button><button type="button" class="alt" id="race-watch">Watch an AI race</button>');
     const $ = (id) => document.getElementById(id);
     const grids = () => { const g = $('race-grid'), cur = this.cfg.grid; g.innerHTML = opt('last', 'the back', cur === 'last') + Array.from({ length: this.cfg.n }, (_, i) => opt(i + 1, i === 0 ? 'pole' : `P${i + 1}`, String(cur) === String(i + 1))).join(''); };
     grids();

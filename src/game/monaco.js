@@ -35,7 +35,8 @@ export function monacoSetup(track) {
   const sc = track.scene, W = sc.win, n = track.n;
   let zMin = Infinity; for (let i = 0; i < n; i++) zMin = Math.min(zMin, track.z[i]);
   const SEA = zMin - 3;
-  const tun = sc.tunnel.filter(([a, b]) => b - a >= 60), under = sc.tunnel.filter(([a, b]) => b - a < 60);
+  // the hotel stands over the road some 25 m before OSM's tunnel way begins: the covered section starts there
+  const tun = sc.tunnel.filter(([a, b]) => b - a >= 60).map(([a, b]) => [a - 24, b]), under = sc.tunnel.filter(([a, b]) => b - a < 60);
   const inTun = (i) => { for (const [a, b] of tun) if (i >= a && i <= b) return true; return false; };
   // the ground over the tunnel starts a few metres inside each portal (the portal structure covers the join)
   const podium = (i) => { for (const [a, b] of tun) if (i >= a + 7 && i <= b - 7) return true; return false; };

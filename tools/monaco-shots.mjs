@@ -39,7 +39,7 @@ for (const sh of shots) {
     return { i: i0 };
   }, [station, view]);
   await p.waitForTimeout(info.game ? 6000 : 4000);
-  await p.screenshot({ path: `${dir}/${name}.png`, timeout: 240000 });
+  try { await p.screenshot({ path: `${dir}/${name}.png`, timeout: 150000 }); } catch (e) { console.log(name, 'SCREENSHOT FAILED'); continue; }
   const st = await p.evaluate(() => { const g = window.__game; return { calls: g.perf.calls, tris: g.perf.tris, fps: +g.perf.fps.toFixed(1) }; });
   console.log(name, JSON.stringify(info), JSON.stringify(st));
 }

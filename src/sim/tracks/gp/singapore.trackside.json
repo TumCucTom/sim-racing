@@ -1,0 +1,159 @@
+{
+ "note": "Marina Bay: walls at the kerb all the way round. Only the centreline is OpenStreetMap geometry. Hand-authored from memory, not surveyed: kerbs on the inside of corners only, escape roads (stations approximate). Elevation is modelled flat (the Anderson Bridge hump is ignored).",
+ "style": {
+  "kerb": "red-white",
+  "exitKerbCurv": 1,
+  "kerbCurv": 0.02
+ },
+ "night": true,
+ "corners": [
+  {
+   "n": "Sheares (T1)",
+   "s": [
+    281,
+    315
+   ],
+   "src": "memory",
+   "spur": [
+    [
+     "R",
+     276,
+     60,
+     9,
+     0
+    ]
+   ]
+  },
+  {
+   "n": "T3",
+   "s": [
+    406,
+    471
+   ],
+   "src": "memory"
+  },
+  {
+   "n": "T5",
+   "s": [
+    815,
+    856
+   ],
+   "src": "memory"
+  },
+  {
+   "n": "Memorial (T7)",
+   "s": [
+    1668,
+    1689
+   ],
+   "src": "memory",
+   "spur": [
+    [
+     "R",
+     1662,
+     50,
+     9,
+     0
+    ]
+   ]
+  },
+  {
+   "n": "T8",
+   "s": [
+    1886,
+    1907
+   ],
+   "src": "memory"
+  },
+  {
+   "n": "T9",
+   "s": [
+    2075,
+    2116
+   ],
+   "src": "memory"
+  },
+  {
+   "n": "Singapore Sling (T10)",
+   "s": [
+    2535,
+    2560
+   ],
+   "src": "memory"
+  },
+  {
+   "n": "Anderson Bridge (T12)",
+   "s": [
+    2736,
+    2752
+   ],
+   "src": "memory"
+  },
+  {
+   "n": "Fullerton hairpin (T13)",
+   "s": [
+    2929,
+    2960
+   ],
+   "src": "memory"
+  },
+  {
+   "n": "T14",
+   "s": [
+    3485,
+    3505
+   ],
+   "src": "memory",
+   "spur": [
+    [
+     "L",
+     3488,
+     50,
+     9,
+     0
+    ]
+   ]
+  },
+  {
+   "n": "T16-17",
+   "s": [
+    4225,
+    4340
+   ],
+   "src": "memory",
+   "kc": [
+    [
+     4220,
+     4345,
+     "red-white",
+     "rumble"
+    ]
+   ]
+  },
+  {
+   "n": "T18-19",
+   "s": [
+    4593,
+    4721
+   ],
+   "src": "memory"
+  },
+  {
+   "n": "Pit straight",
+   "src": "memory",
+   "r": [
+    [
+     "L",
+     4760,
+     200,
+     "wall",
+     null,
+     {
+      "barrier": "wall",
+      "keep": true
+     }
+    ]
+   ]
+  }
+ ]
+}

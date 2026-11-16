@@ -16,7 +16,7 @@ const ZONES = [
   [660, 880, 1, 'garden'],                                      // Massenet: terraces below the Hermitage
   [880, 1020, 1, 'garden'], [880, 960, -1, 'open'],             // Casino square
   [1000, 1140, -1, 'garden'], [1120, 1215, 1, 'open'],          // Mirabeau and its escape road
-  [1215, 1420, 1, 'garden'], [1215, 1420, -1, 'garden'],        // Fairmont hairpin
+  [1215, 1420, 1, 'garden'], [1215, 1340, -1, 'stand'], [1340, 1420, -1, 'garden'],        // Fairmont hairpin
   [1420, 1545, 1, 'open'], [1420, 1545, -1, 'garden'],          // Portier
   [1900, 2090, 1, 'open'], [2090, 2200, -1, 'open'],            // tunnel exit, chicane escape road
   [2180, 2400, 1, 'stand'], [2400, 2625, -1, 'stand'], [2400, 2990, 1, 'stand'],
@@ -29,10 +29,10 @@ const MARKS = [
   { at: [465, 270], name: 'paris', h: 27, style: { body: L.BELLE2, ground: L.ARCADE, top: L.CORNICE, topH: 1.6, roof: 'mansard', tint: '#f6efdc' } },
   { at: [522, 382], name: 'onemc', h: 27, style: { body: L.GLASS, ground: L.SHOPS, top: L.PARAPET, topH: 1.2, roof: 'flat', tint: '#efe9dc', pent: true } },
   { at: [520, 468], name: 'metropole', h: 24, style: { body: L.BELLE, ground: L.ARCADE, top: L.CORNICE, topH: 1.6, roof: 'mansard', tint: '#f1dfb8' } },
-  { at: [670, 330], name: 'fairmont', top: 30.5, style: { body: L.HOTEL, ground: L.HOTEL, top: L.PARAPET, topH: 1.2, roof: 'flat', tint: '#f2e7cf' } },
+  { at: [670, 330], name: 'fairmont', top: 39, style: { body: L.HOTEL, ground: L.HOTEL, top: L.PARAPET, topH: 1.2, roof: 'flat', tint: '#f2e7cf' } },
   { at: [574, 182], name: 'star', top: 31, style: { body: L.BANDS, ground: L.CONCRETE, top: L.PARAPET, topH: 1.2, roof: 'flat', tint: '#f0e6d2' } },
   { at: [642, 205], name: 'auditorium', top: 27, style: { body: L.GLASS, ground: L.CONCRETE, top: L.PARAPET, topH: 1.2, roof: 'flat', tint: '#e9e4d8' } },
-  { at: [652, 470], name: 'sardanapale', h: 14, style: { body: L.HOTEL, ground: L.SHOPS, top: L.PARAPET, topH: 1.2, roof: 'flat', tint: '#f2e7cf' } },
+  { at: [652, 470], name: 'sardanapale', h: 20, style: { body: L.HOTEL, ground: L.SHOPS, top: L.PARAPET, topH: 1.2, roof: 'flat', tint: '#f2e7cf' } },
   { at: [137, -455], name: 'rascasse', h: 7.5, style: { body: L.PLAIN, ground: L.SHOPS, top: L.PARAPET, topH: 0.8, roof: 'flat', tint: '#f3ead6' } },
 ];
 

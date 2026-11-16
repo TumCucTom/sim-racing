@@ -212,7 +212,8 @@ export function buildWorld(track, renderer, qualityIn) {
     '-1': { kerb: track.kerbR, col: track.kerbColR, apron: track.apronR, apronW: track.apronWR, ro: track.roR, roA: track.roAR, gA: track.gAR, gB: track.gBR, wall: track.wallR, bar: track.barR, edge: track.edgeR } };
   // Monaco has its own ground model (src/game/monaco.js): OSM coastline, SRTM relief, terraces beside the road
   const mc = urban && track.scene?.dem ? monacoSetup(track) : null;
-  const terrain = mc ? mc.terrain : makeTerrainFn(track, { sea: urban });
+  // (the falls-away-into-the-sea landscape needs relief to find the shore: flat street circuits stay on level ground)
+  const terrain = mc ? mc.terrain : makeTerrainFn(track, { sea: urban && Math.max(...track.z) - Math.min(...track.z) > 5 });
   const HW = track.halfWidth, KW = track.kerbWidth, hwA = track.hw, n = track.n;
   const wallAt = (side, i) => (side > 0 ? track.wallL[i] : track.wallR[i]);
   const gravelAt = (side, i) => SD[side].gB[i] > 0;
@@ -926,7 +927,8 @@ export function buildWorld(track, renderer, qualityIn) {
       const steelN = new THREE.MeshStandardMaterial({ color: 0x3a3d44, roughness: 0.5, metalness: 0.6 });
       const headMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(9, 8.2, 6.4), fog: false });
       const poles = [], heads = [];
-      const span = Math.min(Math.round(300 / track.ds), Math.floor(n / 4)), step = Math.max(1, Math.round(46 / track.ds));
+      // night-race circuits (track.night) are floodlit all the way round; the others only along the start straight
+      const span = track.night ? Math.floor(n / 2) : Math.min(Math.round(300 / track.ds), Math.floor(n / 4)), step = Math.max(1, Math.round((track.night ? 38 : 46) / track.ds));
       let k2 = 0;
       for (let q = -span; q <= span; q += step, k2++) {
         const i = ((q % n) + n) % n, side = k2 % 2 ? 1 : -1, h = track.heading[i], off = side * (wallAt(side, i) + 1.6);
@@ -941,9 +943,11 @@ export function buildWorld(track, renderer, qualityIn) {
         }
       }
       night.add(new THREE.Mesh(mergeGeometries(poles), steelN), new THREE.Mesh(mergeGeometries(heads), headMat));
+      // the wash of a fully floodlit circuit: an even cool-white fill (four point lights cannot cover a lap)
+      if (track.night) night.add(new THREE.HemisphereLight(0xf2f4ff, 0x6a6d78, 1.5));
     }
     night.visible = true;
-    for (const o of night.children) if (o.isLight) o.intensity = 450 * k;
+    for (const o of night.children) if (o.isLight) o.intensity = (o.isHemisphereLight ? 1.5 : 450) * k;
   }
 
   // ---- start/finish furniture ---------------------------------------------------
