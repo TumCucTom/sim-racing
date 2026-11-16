@@ -120,6 +120,7 @@ function makeGlows(n) {
         // a lamp is only seen from the side it points to
         float f = dot(normalize(mat3(modelViewMatrix) * vec3(face, 0.0, 0.0)), normalize(-mv.xyz));
         vC = color * smoothstep(0.0, 0.3, f);
+        mv.xyz -= normalize(mv.xyz) * min(0.45, 0.2 * length(mv.xyz));   // drawn a little towards the eye, so bodywork just in front of the lamp does not swallow it
         gl_PointSize = min(240.0, size * scale / max(0.5, -mv.z)); gl_Position = projectionMatrix * mv; }`,
     fragmentShader: `varying vec3 vC; void main(){ float d = length(gl_PointCoord - 0.5) * 2.0; float a = pow(max(0.0, 1.0 - d), 3.0) + 0.6 * smoothstep(0.22, 0.0, d);
       gl_FragColor = vec4(vC * a, 1.0);
@@ -155,7 +156,7 @@ function poolMaterial() {
 // optional per-car lamp positions (metres, car frame): fx / rx = ahead of / behind the centre, fy / ry height, fz / rz half spacing
 const LAMP_POS = {
   formula: { fy: 0.42, fz: 0.28, ry: 0.5, rz: 0.3 }, lmp1: { fy: 0.5, fz: 0.78, ry: 0.55, rz: 0.82 }, hypercar: { fy: 0.5, fz: 0.76, ry: 0.6, rz: 0.78 },
-  huracan: { fy: 0.6, fz: 0.72, ry: 0.84, rz: 0.6 }, huracan610: { fy: 0.6, fz: 0.72, ry: 0.84, rz: 0.6 }, svj: { fy: 0.58, fz: 0.74, ry: 0.82, rz: 0.62 },
+  huracan: { fx: 1.85, fy: 0.62, fz: 0.7, ry: 0.84, rz: 0.6 }, huracan610: { fx: 1.85, fy: 0.62, fz: 0.7, ry: 0.84, rz: 0.6 }, svj: { fy: 0.58, fz: 0.74, ry: 0.82, rz: 0.62 },
   gt3: { ry: 0.82, rz: 0.6 }, r8lms: { ry: 0.86, rz: 0.62 },
 };
 
@@ -165,12 +166,13 @@ class CarLamps {
   constructor(model, spec) {
     this.model = model; this.spec = spec; this.brake = false; this.real = false; this.nodes = [];
     const b = spec.body, L = b.length, W = b.width, o = LAMP_POS[spec.id] || {};
+    const mid = spec.wheelbase * (0.5 - spec.frontWeight);        // the body sits around the wheelbase midpoint, the origin is the centre of mass
     const fy = o.fy ?? Math.min(0.72, b.height * 0.5), fz = o.fz ?? W * 0.36, ry = o.ry ?? fy + 0.16, rz = o.rz ?? fz * 0.9;
     this.proto = makeGlows(5); this.geo = this.proto.geometry;
     const P = this.geo.attributes.position;
-    P.setXYZ(0, (o.fx ?? L / 2 - 0.12), fy, -fz); P.setXYZ(1, (o.fx ?? L / 2 - 0.12), fy, fz);            // headlights
-    P.setXYZ(2, -(o.rx ?? L / 2 + 0.02), ry, -rz); P.setXYZ(3, -(o.rx ?? L / 2 + 0.02), ry, rz);        // tail / brake lamps
-    P.setXYZ(4, -L / 2 - 0.04, b.style === 'formula' ? 0.36 : Math.max(0.3, ry - 0.3), 0);            // rain light
+    P.setXYZ(0, mid + (o.fx ?? L / 2 - 0.12), fy, -fz); P.setXYZ(1, mid + (o.fx ?? L / 2 - 0.12), fy, fz);            // headlights
+    P.setXYZ(2, mid - (o.rx ?? L / 2 + 0.02), ry, -rz); P.setXYZ(3, mid - (o.rx ?? L / 2 + 0.02), ry, rz);        // tail / brake lamps
+    P.setXYZ(4, mid - L / 2 - 0.04, b.style === 'formula' ? 0.36 : Math.max(0.3, ry - 0.3), 0);            // rain light
     this.geo.attributes.face.array.set([1, 1, -1, -1, -1]);
     this.head = [fy, fz];
   }

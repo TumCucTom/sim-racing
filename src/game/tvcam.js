@@ -181,7 +181,7 @@ export class TvCam {
         const st = ((st0 + k) % this.nSt + this.nSt) % this.nSt;
         if (this.posts[st] === undefined && budget-- <= 0) continue;
         const p = this.post(st); if (!p || p === S.post) continue;
-        const d = p.pos.distanceTo(carPos); if (d < 22 || d > 300 || !this.visible(p.pos, carPos)) continue;
+        const d = p.pos.distanceTo(carPos); if (d < 22 || d > 240 || !this.visible(p.pos, carPos)) continue;
         // the car should still be coming: at least 1.2 s short of the post's own piece of road
         let ahead = (p.i - car.idx) * t.ds; ahead -= Math.round(ahead / t.length) * t.length;
         if (k > 0 && ahead < Math.max(0, car.vx) * 1.2) continue;

@@ -367,7 +367,8 @@ export function buildCarModel(spec, { ghost = false, colorOverride = null } = {}
       const mm = box(0.12, 0.09, 0.18, proto ? new THREE.MeshStandardMaterial({ color: 0xffd400, roughness: 0.4 }) : paintMat, mx, ms.pts[proto ? 6 : 5][1] + (proto ? 0.16 : 0.05), sgn * (ms.pts[proto ? 6 : 5][0] + 0.08)); chassis.add(mm);
     }
     // grille / intakes
-    chassis.add(box(0.06, proto ? 0.08 : 0.2, b.width * 0.5, black, front - 0.03, fs.pts[0][1] + (proto ? 0.07 : 0.16), 0));
+    // (its face stands 2 cm proud of the nose tip: flush with the rounded nose it z-fought in a cross pattern)
+    chassis.add(box(0.1, proto ? 0.08 : 0.2, b.width * 0.5, black, front - 0.03, fs.pts[0][1] + (proto ? 0.07 : 0.16), 0));
     chassis.add(box(0.06, 0.12, b.width * 0.7, black, rear + 0.02, rs.pts[0][1] + 0.08, 0));
     // exhausts
     if (!spec.engine.electric) for (const sgn of b.style === 'hatch' ? [0.25, 0, -0.25] : [1, -1]) {

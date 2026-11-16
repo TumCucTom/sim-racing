@@ -89,6 +89,8 @@
   #keys { display:none; position:absolute; z-index:2; top:52px; right:max(20px, env(safe-area-inset-right, 0px)); width:min(560px, calc(100% - 40px)); max-height:calc(100% - 70px); overflow:auto; background:rgba(13,16,22,.95); border:1px solid var(--line); border-radius:12px; padding:14px 16px; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:5px 18px; font-size:12.5px; box-shadow:0 18px 50px rgba(0,0,0,.5); }
   #menu.help #keys { display:grid; animation:m-in .2s both; }
   kbd { background:rgba(255,255,255,.14); border-radius:3px; padding:1px 5px; font:11px ui-monospace, monospace; margin-right:2px; }
+  #menu #raceopts h5 { margin-top:12px; }
+  @media (min-width: 1700px) and (min-height: 950px) { #menu { --rail:390px; --side:470px; } #menu .m-top, #menu .m-left, #menu .m-right, #menu .m-hero, #keys { zoom:1.25; } }
   @keyframes m-in { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
   @media (prefers-reduced-motion: reduce) { #menu *, .card { animation:none !important; transition:none !important; } }
   @media (max-width: 1000px), (max-height: 560px) {
@@ -99,6 +101,7 @@
     #menu .m-carname .b { display:none; } #menu .m-carname .k { font-size:10px; margin-top:3px; }
     #menu .stats { padding:7px 8px; gap:6px 8px; border-radius:9px; } #menu .stat span { font-size:8.5px; letter-spacing:.04em; } #menu .stat b { font-size:13px; margin-bottom:3px; } #menu .stat b u { font-size:9px; margin-left:1px; }
     #menu h5 { margin:8px 0 4px; } #menu .circuit { padding:7px 8px; } #tracknote { display:none; } #menu .chips button span { display:none; } #menu .chips button { padding:5px 0; }
+    #aiinfo { display:none; } #m-trackcv { max-height:72px; width:auto; max-width:100%; margin:auto; } #menu h1 { font-size:14px; } #menu .cmeta { font-size:11px; margin-top:3px; } #menu .cbody { margin-top:5px; } #menu .tabs button { font-size:9.5px; letter-spacing:.04em; }
     #menu .seg button { padding:5px 6px; font-size:11.5px; } #menu button.go { padding:9px 12px; font-size:15px; } #menu .m-actions { padding-top:6px; } #keys { top:40px; }
   }
   @media (max-width: 620px) {
