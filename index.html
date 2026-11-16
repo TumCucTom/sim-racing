@@ -24,24 +24,90 @@
   #cluster { position:absolute; right:8px; bottom:6px; width:380px; height:180px; }
   #toast { position:absolute; left:50%; top:16%; transform:translateX(-50%); background:rgba(10,13,18,.82); padding:9px 18px; border-radius:6px; font-size:17px; font-weight:600; opacity:0; transition:opacity .3s; white-space:pre-line; text-align:center; }
   #perf { position:absolute; right:12px; top:170px; font:11px/1.4 ui-monospace, monospace; background:rgba(10,13,18,.7); padding:6px 8px; border-radius:6px; white-space:pre; display:none; }
-  #menu { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:linear-gradient(180deg, rgba(8,10,14,.55), rgba(8,10,14,.86)); pointer-events:auto; overflow:auto; }
+  /* ---- front end (pre-race menu): the 3D showroom stays visible in the middle ---- */
+  #menu { --acc:#ffd166; --ink:#e8ecf1; --mut:rgba(232,236,241,.62); --line:rgba(255,255,255,.12); --surf:rgba(13,16,22,.66); --rail:clamp(210px, 23vw, 310px); --side:clamp(268px, 27vw, 372px);
+    position:fixed; inset:0; display:grid; grid-template-columns:var(--rail) minmax(0, 1fr) var(--side); grid-template-rows:auto minmax(0, 1fr); pointer-events:auto; overflow:hidden; color:var(--ink);
+    padding:0 max(0px, env(safe-area-inset-right, 0px)) 0 max(0px, env(safe-area-inset-left, 0px));
+    background:linear-gradient(90deg, rgba(7,9,13,.94) 0, rgba(7,9,13,.8) calc(var(--rail) * .8), rgba(7,9,13,0) calc(var(--rail) + 9vw), rgba(7,9,13,0) calc(100% - var(--side) - 9vw), rgba(7,9,13,.8) calc(100% - var(--side) * .8), rgba(7,9,13,.94) 100%),
+      linear-gradient(180deg, rgba(7,9,13,.72) 0, rgba(7,9,13,0) 22%, rgba(7,9,13,0) 62%, rgba(7,9,13,.8) 100%); }
   #menu.hidden { display:none; }
-  #menu .inner { width:min(1080px, 100%); box-sizing:border-box; padding-block:18px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); margin:auto; }
-  #menu h1 { margin:0; font-size:34px; letter-spacing:.02em; } #menu h1 small { font-size:14px; font-weight:400; opacity:.7; margin-left:10px; }
-  #menu p.sub { margin:6px 0 14px; opacity:.78; font-size:14px; }
-  #cars { max-height:min(58vh, 620px); overflow-y:auto; padding-right:6px; scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.35) transparent; }
-  #cars h4 { margin:10px 0 6px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; opacity:.7; font-weight:600; } #cars h4:first-child { margin-top:0; }
-  #cars .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:10px; padding-top:2px; }
-  .card { background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.14); border-radius:8px; padding:11px 12px; cursor:pointer; transition:background .15s, border-color .15s, transform .15s; }
-  .card:hover { background:rgba(255,255,255,.14); transform:translateY(-2px); } .card.sel { border-color:#ffd166; background:rgba(255,209,102,.13); }
-  .card h3 { margin:0 0 2px; font-size:17px; } .card .k { font-size:11px; opacity:.72; min-height:28px; } .card .b { font-size:12px; opacity:.85; margin:6px 0; min-height:48px; }
-  .card table { width:100%; font-size:11.5px; border-collapse:collapse; font-variant-numeric:tabular-nums; } .card td { padding:1px 0; } .card td:last-child { text-align:right; font-weight:600; }
-  #menu .rowb { display:flex; gap:10px; align-items:center; margin-top:14px; flex-wrap:wrap; }
-  #menu button.go { background:#ffd166; color:#151515; border:0; font-size:17px; font-weight:700; padding:11px 26px; border-radius:6px; cursor:pointer; }
-  #menu select, #menu button.alt { background:rgba(255,255,255,.1); color:#fff; border:1px solid rgba(255,255,255,.25); border-radius:6px; padding:9px 12px; font-size:13px; cursor:pointer; }
-  #menu select option { color:#111; }
-  #keys { margin-top:14px; display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:3px 18px; font-size:12.5px; opacity:.88; }
+  body.menu-open #ui { visibility:hidden; }
+  #menu * { box-sizing:border-box; }
+  #menu button, #menu select { font:inherit; color:inherit; }
+  #menu :focus-visible { outline:2px solid var(--acc); outline-offset:2px; }
+  #menu .m-top { grid-column:1 / -1; display:flex; align-items:center; gap:16px; padding:12px 20px 8px; }
+  #menu .brand { display:flex; align-items:baseline; gap:10px; margin-right:auto; white-space:nowrap; }
+  #menu .brand b { font-size:17px; letter-spacing:.3em; font-weight:800; } #menu .brand b i { color:var(--acc); font-style:normal; }
+  #menu .brand span { font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--mut); }
+  #menu .seg { display:inline-flex; background:rgba(255,255,255,.07); border:1px solid var(--line); border-radius:8px; padding:2px; gap:2px; }
+  #menu .seg button { background:none; border:0; border-radius:6px; padding:6px 12px; font-size:12.5px; font-weight:600; color:var(--mut); cursor:pointer; white-space:nowrap; transition:background .15s, color .15s; flex:1; }
+  #menu .seg button:hover { color:var(--ink); } #menu .seg button.on { background:var(--acc); color:#14161a; }
+  #menu #m-mode button { padding:7px 20px; font-size:13px; letter-spacing:.06em; text-transform:uppercase; }
+  #menu .ghost { background:rgba(255,255,255,.07); border:1px solid var(--line); border-radius:8px; padding:7px 13px; font-size:12.5px; cursor:pointer; } #menu .ghost:hover, #menu .ghost.on { background:rgba(255,255,255,.16); }
+  #menu .m-left { display:flex; flex-direction:column; min-height:0; padding:4px 0 14px 20px; }
+  #menu .tabs { display:flex; flex-wrap:wrap; gap:4px 12px; padding:4px 0 8px; border-bottom:1px solid var(--line); margin-bottom:8px; }
+  #menu .tabs button { background:none; border:0; padding:4px 0; font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--mut); cursor:pointer; border-bottom:2px solid transparent; }
+  #menu .tabs button:hover { color:var(--ink); } #menu .tabs button.on { color:var(--ink); border-bottom-color:var(--acc); }
+  #cars { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:4px; padding:2px 8px 2px 2px; scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.3) transparent; }
+  .card { display:grid; grid-template-columns:4px minmax(0, 1fr) auto; gap:0 10px; align-items:center; text-align:left; width:100%; background:rgba(255,255,255,.045); border:1px solid transparent; border-radius:8px; padding:8px 10px 8px 0; cursor:pointer; transition:background .15s, border-color .15s, transform .15s; animation:m-in .28s both; }
+  .card i { grid-row:1 / 3; align-self:stretch; border-radius:8px 0 0 8px; background:var(--c, #888); opacity:.85; }
+  .card b { font-size:14px; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .card small { grid-column:2; font-size:11px; color:var(--mut); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .card em { grid-row:1 / 3; grid-column:3; font-style:normal; font-size:12px; font-variant-numeric:tabular-nums; color:var(--mut); }
+  .card:hover { background:rgba(255,255,255,.1); transform:translateX(2px); } .card.sel { background:rgba(255,209,102,.14); border-color:rgba(255,209,102,.75); } .card.sel em { color:var(--acc); }
+  #menu .m-hero { position:relative; min-width:0; min-height:0; pointer-events:none; display:flex; flex-direction:column; justify-content:space-between; padding:6px 22px 16px; }
+  #menu .m-carname { animation:m-in .35s both; } #menu .m-carname h2 { margin:0; font-size:clamp(22px, 3.2vw, 44px); font-weight:800; letter-spacing:-.01em; line-height:1.05; text-shadow:0 2px 18px rgba(0,0,0,.6); }
+  #menu .m-carname .k { margin-top:6px; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--acc); font-weight:700; text-shadow:0 1px 8px rgba(0,0,0,.8); }
+  #menu .m-carname .b { margin-top:6px; max-width:44ch; font-size:13.5px; color:rgba(232,236,241,.86); text-shadow:0 1px 8px rgba(0,0,0,.9); }
+  #menu .stats { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:10px 16px; background:var(--surf); border:1px solid var(--line); border-radius:12px; padding:12px 16px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
+  #menu .stat span { display:block; font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--mut); white-space:nowrap; }
+  #menu .stat b { display:block; font-size:17px; font-variant-numeric:tabular-nums; margin:1px 0 5px; white-space:nowrap; } #menu .stat b u { text-decoration:none; font-size:11px; font-weight:500; color:var(--mut); margin-left:3px; }
+  #menu .bar { height:4px; border-radius:2px; background:rgba(255,255,255,.13); overflow:hidden; } #menu .bar i { display:block; height:100%; width:0; border-radius:2px; background:linear-gradient(90deg, #e8a93a, var(--acc)); transition:width .45s cubic-bezier(.2,.7,.2,1); }
+  #menu .m-right { display:flex; flex-direction:column; min-height:0; padding:4px 20px 14px 0; }
+  #menu .m-scroll { flex:1; min-height:0; overflow-y:auto; padding:2px 6px 2px 2px; scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.3) transparent; }
+  #menu h5 { margin:12px 0 6px; font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--mut); font-weight:700; } #menu h5:first-child { margin-top:2px; }
+  #menu .circuit { background:var(--surf); border:1px solid var(--line); border-radius:12px; padding:10px 12px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
+  #menu .pick { display:flex; gap:6px; } #menu .pick select { flex:1; min-width:0; } #menu .pick button { width:34px; padding:0; font-size:16px; }
+  #menu select { background:rgba(255,255,255,.08); border:1px solid var(--line); border-radius:8px; padding:7px 9px; font-size:13px; cursor:pointer; } #menu select:hover { background:rgba(255,255,255,.14); } #menu select option, #menu select optgroup { color:#111; background:#fff; }
+  #menu .cbody { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1.05fr); gap:10px; align-items:center; margin-top:8px; }
+  #m-trackcv { width:100%; aspect-ratio:4 / 3; display:block; }
+  #menu h1 { margin:0; font-size:16px; font-weight:750; line-height:1.15; } #menu h1 small { display:none; }
+  #menu .cmeta { margin:5px 0 0; padding:0; list-style:none; font-size:12px; color:var(--mut); font-variant-numeric:tabular-nums; } #menu .cmeta b { color:var(--ink); font-weight:600; }
+  #tracknote, #aiinfo { display:block; margin:7px 0 0; font-size:10.5px; line-height:1.35; color:rgba(232,236,241,.5); }
+  #menu .chips { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:5px; }
+  #menu .chips button { display:flex; flex-direction:column; align-items:center; gap:3px; background:rgba(255,255,255,.06); border:1px solid var(--line); border-radius:9px; padding:7px 0 5px; font-size:10px; color:var(--mut); cursor:pointer; transition:background .15s, color .15s, border-color .15s; min-width:0; }
+  #menu .chips svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+  #menu .chips button:hover { color:var(--ink); background:rgba(255,255,255,.12); } #menu .chips button.on { color:var(--acc); border-color:rgba(255,209,102,.75); background:rgba(255,209,102,.13); }
+  #menu .m-scroll .seg { display:flex; } #menu .hint { font-size:11px; color:rgba(232,236,241,.5); margin:5px 2px 0; min-height:14px; }
+  #menu .vh { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); opacity:0; pointer-events:none; }
+  #raceopts { display:none; } #menu.mode-race #raceopts { display:block; animation:m-in .25s both; }
+  #racerow { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:7px; } #racerow label { display:flex; flex-direction:column; gap:3px; font-size:10.5px; color:var(--mut); grid-column:span 2; min-width:0; } #racerow label.w { grid-column:span 3; } #racerow select { width:100%; }
+  #menu .m-actions { display:flex; gap:8px; padding-top:10px; }
+  #menu button.go { flex:1.5; background:var(--acc); color:#14161a; border:0; font-size:17px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; padding:13px 18px; border-radius:10px; cursor:pointer; box-shadow:0 6px 24px rgba(255,209,102,.22); transition:transform .12s, filter .12s; }
+  #menu button.go:hover { filter:brightness(1.08); transform:translateY(-1px); } #menu button.go:active { transform:translateY(1px); }
+  #menu button.alt { flex:1; background:rgba(255,255,255,.08); border:1px solid var(--line); border-radius:10px; padding:8px 10px; font-size:12.5px; cursor:pointer; } #menu button.alt:hover { background:rgba(255,255,255,.16); }
+  #menu.mode-race #go, #menu.mode-race #watch, #menu:not(.mode-race) #race-go, #menu:not(.mode-race) #race-watch { display:none; }
+  #keys { display:none; position:absolute; z-index:2; top:52px; right:max(20px, env(safe-area-inset-right, 0px)); width:min(560px, calc(100% - 40px)); max-height:calc(100% - 70px); overflow:auto; background:rgba(13,16,22,.95); border:1px solid var(--line); border-radius:12px; padding:14px 16px; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:5px 18px; font-size:12.5px; box-shadow:0 18px 50px rgba(0,0,0,.5); }
+  #menu.help #keys { display:grid; animation:m-in .2s both; }
   kbd { background:rgba(255,255,255,.14); border-radius:3px; padding:1px 5px; font:11px ui-monospace, monospace; margin-right:2px; }
+  #menu #raceopts h5 { margin-top:12px; }
+  @media (min-width: 1700px) and (min-height: 950px) { #menu { --rail:390px; --side:470px; } #menu .m-top, #menu .m-left, #menu .m-right, #menu .m-hero, #keys { zoom:1.25; } }
+  @keyframes m-in { from { opacity:.55; transform:translateY(6px); } to { opacity:1; transform:none; } }
+  @media (prefers-reduced-motion: reduce) { #menu *, .card { animation:none !important; transition:none !important; } }
+  @media (max-width: 1000px), (max-height: 560px) {
+    #menu { --rail:clamp(170px, 24vw, 230px); --side:clamp(250px, 34vw, 300px); }
+    #menu .m-top { padding:6px 12px 4px; gap:8px; } #menu .brand span { display:none; } #menu .brand b { font-size:13px; letter-spacing:.2em; } #menu #m-mode button { padding:5px 12px; font-size:11.5px; } #menu .ghost { padding:5px 10px; }
+    #menu .m-left { padding:2px 0 8px 12px; } #menu .m-right { padding:2px 12px 8px 0; } #menu .m-hero { padding:2px 10px 8px; }
+    .card { padding:6px 8px 6px 0; } .card b { font-size:13px; } #menu .tabs { gap:2px 10px; padding-bottom:5px; margin-bottom:5px; } #menu .tabs button { font-size:10px; letter-spacing:.08em; }
+    #menu .m-carname .b { display:none; } #menu .m-carname .k { font-size:10px; margin-top:3px; }
+    #menu .stats { padding:7px 8px; gap:6px 8px; border-radius:9px; } #menu .stat span { font-size:8.5px; letter-spacing:.04em; } #menu .stat b { font-size:13px; margin-bottom:3px; } #menu .stat b u { font-size:9px; margin-left:1px; }
+    #menu h5 { margin:8px 0 4px; } #menu .circuit { padding:7px 8px; } #tracknote { display:none; } #menu .chips button span { display:none; } #menu .chips button { padding:5px 0; }
+    #aiinfo { display:none; } #m-trackcv { max-height:72px; width:auto; max-width:100%; margin:auto; } #menu h1 { font-size:14px; } #menu .cmeta { font-size:11px; margin-top:3px; } #menu .cbody { margin-top:5px; } #menu .tabs button { font-size:9.5px; letter-spacing:.04em; }
+    #menu .seg button { padding:5px 6px; font-size:11.5px; } #menu button.go { padding:9px 12px; font-size:15px; } #menu .m-actions { padding-top:6px; } #keys { top:40px; }
+  }
+  @media (max-width: 620px) {
+    #menu { grid-template-columns:minmax(0, 1fr); grid-template-rows:auto auto auto auto; overflow-y:auto; background:linear-gradient(180deg, rgba(7,9,13,.8), rgba(7,9,13,.55) 30%, rgba(7,9,13,.9) 60%); }
+    #menu .m-left { padding:2px 12px; order:3; } #cars { max-height:200px; } #menu .m-hero { order:2; min-height:150px; } #menu .m-right { order:4; padding:8px 12px 12px; } #menu .m-scroll { overflow:visible; }
+  }
   #loading { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; font-size:18px; background:#0b0e13; z-index:5; }
   @media (max-width: 900px) { #cluster { width:300px; height:142px; } #map { width:170px; height:111px; } }
 </style>
@@ -49,20 +115,44 @@
 <body>
 <canvas id="gl"></canvas>
 <div id="ui"></div>
-<div id="menu" class="hidden"><div class="inner">
-  <h1 id="trackname">Ravenscar Ridge</h1>
-  <p class="sub" id="tracknote" style="margin:4px 0 2px;opacity:.6;font-size:12px"></p>
-  <p class="sub">Pick a car. Every car runs the same physics model with its own mass, tyres, aero, engine and drivetrain — measured against real-world figures for its class.</p>
-  <div id="cars"></div>
-  <div class="rowb">
-    <button class="go" id="go">Drive</button>
-    <label>Circuit <select id="track"></select></label>
-    <label>Conditions <select id="weather"></select></label>
-    <label>Driving <select id="difficulty"></select></label>
-    <label>Graphics <select id="quality"><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
-    <button class="alt" id="watch">Watch the AI drive</button>
-    <span id="aiinfo" style="font-size:12px;opacity:.75"></span>
-  </div>
+<div id="menu" class="hidden">
+  <header class="m-top">
+    <div class="brand"><b>RAVENS<i>C</i>AR</b><span>Racing Simulator</span></div>
+    <div class="seg" id="m-mode" role="group" aria-label="Session type"><button type="button" data-v="hot">Hot lap</button><button type="button" data-v="race">Race</button></div>
+    <button type="button" class="ghost" id="m-help" aria-expanded="false" aria-controls="keys">Controls</button>
+  </header>
+  <aside class="m-left" aria-label="Cars">
+    <div class="tabs" id="m-tabs"></div>
+    <div id="cars"></div>
+  </aside>
+  <section class="m-hero">
+    <div class="m-carname" id="m-carname"></div>
+    <div class="stats" id="m-stats"></div>
+  </section>
+  <aside class="m-right">
+    <div class="m-scroll">
+      <h5>Circuit</h5>
+      <div class="circuit">
+        <div class="pick"><button type="button" class="ghost" id="m-tprev" aria-label="Previous circuit">‹</button><select id="track" aria-label="Circuit"></select><button type="button" class="ghost" id="m-tnext" aria-label="Next circuit">›</button></div>
+        <div class="cbody"><canvas id="m-trackcv" width="320" height="240"></canvas>
+          <div><h1 id="trackname">Ravenscar Ridge</h1><ul class="cmeta" id="m-cmeta"></ul></div></div>
+        <span id="aiinfo"></span>
+        <p id="tracknote"></p>
+      </div>
+      <h5>Conditions</h5>
+      <div class="chips" id="m-wx"></div><select id="weather" class="vh" tabindex="-1" aria-hidden="true"></select>
+      <h5>Driving aids</h5>
+      <div class="seg" id="m-diff"></div><select id="difficulty" class="vh" tabindex="-1" aria-hidden="true"></select>
+      <div class="hint" id="m-diffhint"></div>
+      <h5>Graphics</h5>
+      <div class="seg" id="m-q"></div><select id="quality" class="vh" tabindex="-1" aria-hidden="true"><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+      <div id="raceopts"><h5>Race</h5></div>
+    </div>
+    <div class="m-actions rowb" id="m-actions">
+      <button type="button" class="go" id="go">Drive</button>
+      <button type="button" class="alt" id="watch">Watch the AI</button>
+    </div>
+  </aside>
   <div id="keys">
     <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows — drive (gamepad supported)</div>
     <div><kbd>Q</kbd><kbd>E</kbd> shift down / up · <kbd>M</kbd> auto / manual box</div>
@@ -75,8 +165,9 @@
     <div><kbd>V</kbd> weather / time of day</div>
     <div><kbd>N</kbd> mute · <kbd>1</kbd>–<kbd>9</kbd> <kbd>0</kbd> or <kbd>[</kbd> <kbd>]</kbd> switch car · <kbd>Esc</kbd> menu</div>
     <div>Hold <kbd>S</kbd> at a standstill to select reverse</div>
+    <div>Menu: <kbd>↑</kbd><kbd>↓</kbd> car · <kbd>←</kbd><kbd>→</kbd> class · <kbd>Enter</kbd> drive · <kbd>Esc</kbd> resume</div>
   </div>
-</div></div>
+</div>
 <div id="loading">Building circuit…</div>
 <script type="module" src="/src/game/main.js"></script>
 </body>

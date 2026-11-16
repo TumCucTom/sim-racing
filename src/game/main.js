@@ -49,6 +49,7 @@ import { wetFor } from '../sim/wet.js';
 
 patchFog();   // before any material is compiled
 import validation from '../data/car-validation.json';
+import { Menu } from './menu.js';
 
 const policyModules = import.meta.glob('../policies/*.json', { eager: true });
 const POLICIES = {};
@@ -66,7 +67,8 @@ const QUALITY = {
   high: { shadows: true, shadowMap: 4096, shadowRange: 110, trees: 1500, treeCap: 20000, detail: 2, maxDpr: 2, bloom: true },
 };
 const params = new URLSearchParams(location.search);
-const CAMS = ['chase', 'far', 'bonnet', 'cockpit', 'tv'];
+const CAMS = ['chase', 'far', 'bonnet', 'cockpit', 'tv', 'tvstatic'];
+const CAM_NAMES = { tv: 'Trackside (tracking)', tvstatic: 'Trackside (static)' };
 
 class Game {
   constructor() {
@@ -117,7 +119,7 @@ class Game {
     this.buildMenu();
     this.raceMode = new RaceMode(this, params, CAMS);   // race against AI cars (racemode.js); ?race=12&laps=3...
     this.setCar(params.get('car') || store.get('rr-car') || 'gt3');
-    this.setWeather(params.get('wx') || store.get('rr-wx') || 'clear', true);
+    this.setWeather(params.get('wx') || (this.track.night ? 'dusk' : store.get('rr-wx')) || 'clear', true);   // night-race circuits open floodlit
     window.addEventListener('resize', () => this.resize()); this.resize();
     document.getElementById('loading').remove();
     if (params.has('autostart')) this.start(params.has('ai')); else this.showMenu(true);
@@ -135,7 +137,7 @@ class Game {
 
   bindKeys() {
     const k = this.input;
-    k.on('KeyC', () => { this.cam = (this.cam + 1) % CAMS.length; this.camInit = false; this.hud.toast(`Camera: ${CAMS[this.cam]}`, 1.2); });
+    k.on('KeyC', () => { this.cam = (this.cam + 1) % CAMS.length; this.camInit = false; this.hud.toast(`Camera: ${CAM_NAMES[CAMS[this.cam]] || CAMS[this.cam]}`, 1.2); });
     k.on('KeyT', () => this.tel.toggle());
     k.on('KeyR', () => this.recover());
     k.on(['Enter', 'Backspace'], () => { if (!this.paused) this.restart(); });
@@ -157,25 +159,8 @@ class Game {
   }
 
   buildMenu() {
-    const root = document.getElementById('cars');
-    // one grid per class, in a scrolling panel (14 cars no longer fit on one screen)
-    for (const grp of CAR_GROUPS) {
-      const h = document.createElement('h4'); h.textContent = grp.title; root.appendChild(h);
-      const wrap = document.createElement('div'); wrap.className = 'grid'; root.appendChild(wrap);
-      for (const id of grp.ids) {
-      const s = CARS[id], v = validation.find(r => r.car === s.name) || {}, pp = peakPower(s);
-      const num = (x) => (typeof x === 'string' ? x.split(' ')[0] : '–');
-      const el = document.createElement('div'); el.className = 'card'; el.dataset.id = id;
-      el.innerHTML = `<h3>${s.name}</h3><div class="k">${s.klass}</div><div class="b">${s.blurb}</div><table>
-        <tr><td>Power / mass</td><td>${Math.round(pp.watts / 745.7)} hp / ${s.mass} kg</td></tr>
-        <tr><td>0–100 km/h</td><td>${num(v['0-100 s'])} s</td></tr>
-        <tr><td>100–0 km/h</td><td>${num(v['100-0 m'])} m</td></tr>
-        <tr><td>Cornering</td><td>${num(v['lat g (R60)'])} g</td></tr>
-        <tr><td>Top speed</td><td>${num(v['top km/h'])} km/h</td></tr></table>`;
-      el.onclick = () => this.setCar(id);
-      el.ondblclick = () => { this.setCar(id); this.start(false); };
-      wrap.appendChild(el);
-    } }
+    // the front end (car rail, selected-car panel, chips) lives in menu.js
+    this.menu = new Menu(this, { validation, store, conditions: CONDITIONS, conditionOrder: CONDITION_ORDER, difficulty: DIFFICULTY, difficultyOrder: DIFFICULTY_ORDER });
     const ts = document.getElementById('track');
     for (const [label, ids] of TRACK_GROUPS) { const g = document.createElement('optgroup'); g.label = label; for (const id of ids) { const o = document.createElement('option'); o.value = id; o.textContent = `${TRACKS[id].name}${TRACKS[id].real ? ' — ' + TRACKS[id].country : ' (original)'}${TRACK_KM[id] ? ' · ' + TRACK_KM[id].toFixed(2) + ' km' : ''}`; g.appendChild(o); } ts.appendChild(g); }
     ts.value = this.trackId;
@@ -207,6 +192,7 @@ class Game {
     this.setupComposer();
     this.wx.apply();
     this.resize();
+    this.menu?.sync();
   }
 
   // Change weather / time of day live. Wet conditions also change the physics
@@ -215,7 +201,7 @@ class Game {
     if (!CONDITIONS[id]) id = 'clear';
     this.wxId = id; store.set('rr-wx', id);
     const ws = document.getElementById('weather'); if (ws) ws.value = id;
-    this.wx.set(id);
+    this.wx.set(id); this.menu?.sync();
     this.setupComposer(); this.resize();
     const c = CONDITIONS[id], wet = wetFor(c.sim);
     if (wet !== this.wet) {
@@ -281,8 +267,9 @@ class Game {
 
   showMenu(show) {
     document.getElementById('menu').classList.toggle('hidden', !show);
+    document.body.classList.toggle('menu-open', show);   // the HUD is hidden behind the front end
     this.paused = show;
-    if (show) this.camInit = false;
+    if (show) { this.camInit = false; this.menu?.sync(); } else this.menu?.help(false);
     this.last = performance.now();
   }
 
@@ -299,6 +286,7 @@ class Game {
     if (!DIFFICULTY[id]) id = 'assist';
     this.diffId = id; store.set('rr-diff', id);
     const sel = document.getElementById('difficulty'); if (sel) sel.value = id;
+    this.menu?.sync();
     this.refreshAssist();
     if (!quiet) this.hud.toast(`Driving: ${DIFFICULTY[id].label}`, 1.8);
   }
@@ -340,6 +328,7 @@ class Game {
     clearTimeout(this.aiTimer);
     this.aiTimer = setTimeout(() => this.computeAILap(spec), 50);
     this.syncVisuals(0);
+    this.menu?.sync();
   }
 
   refreshLineGuide() {
@@ -535,9 +524,10 @@ class Game {
     } else {
       // trackside camera with a checked line of sight to the car (tvcam.js)
       if (!this.tv || this.tv.world !== this.world) this.tv = new TvCam(this.track, this.world);
-      fov = this.tv.update(dt, pos, car, cam);
+      if (mode === 'tvstatic') { fov = this.tv.updateStatic(dt, pos, car, cam); if (this.tv.st?.post) { cam.fov = fov; cam.updateProjectionMatrix(); } }   // fixed framing: no zoom glide
+      else { if (this.tv.st) this.tv.st.post = null; fov = this.tv.update(dt, pos, car, cam); }
     }
-    if (mode !== 'tv') {
+    if (mode !== 'tv' && mode !== 'tvstatic') {
       // engine / road vibration grows with speed; kerbs and grass rattle the camera
       const t = performance.now() * 0.001, k = Math.min(1, spd / 75), off = car.surf && (car.surf[0] || car.surf[1] || car.surf[2] || car.surf[3]) ? Math.min(1, spd / 25) : 0;
       const onBoard = mode === 'bonnet' || mode === 'cockpit';

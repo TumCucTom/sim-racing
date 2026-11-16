@@ -3,6 +3,21 @@
 All notable changes, newest first. Numbers quoted here were measured by the
 tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
 
+## Unreleased — racecraft round two: equal cars fight
+- The first race mode was clean but processional (12 GT3 at Spa: 0.4 clean passes in five laps). Followers now
+  run as close as the corner allows, the tow reaches further, lunges are decided in time and judged at turn-in
+  (nose alongside or back out), the attacker brakes later from the tune's reserve, the inside car alongside keeps
+  its lane and the outside car gives the corner up, a blocked attacker tries the outside, patience runs out
+  behind the same car, and form, corner-type weaknesses and time-costing mistakes bring cars together
+  (`src/sim/drivers/racecraft.js`, `src/sim/race.js`).
+- Clean on-track passes per race, before -> after (`node tools/race-sim.js`, GT3, level 0.96): Spa 0.4 -> 3.4,
+  Monza 1.0 -> 8.2, Monza reverse grid 1.3 -> 10.3, Ravenscar 3.0 -> 3.6, Laguna Seca 0 -> 0, 20 cars at
+  Silverstone 9.3 -> 7.0. Heavy contacts per car-lap 0.007 / 0.007 / 0.006 / 0.017 / 0 / 0.010. Nordschleife
+  (8 cars, 1 lap): spins 5.0 -> 0, heavy contacts 0.25 -> 0 per car-lap in these three seeds. The pass counter no
+  longer drops passes of a car below 8 m/s (the Monza chicane); the old count is still printed as "strict".
+- `tools/race-moments.mjs` lists the passes of a race as the browser runs it (Node and Chromium do not run the
+  same seed identically); `?grid=quali` starts the player's car where its pace puts it, as the headless tool does.
+
 ## Unreleased — race mode: a field of AI cars, contact, slipstream, racecraft
 - **Multi-car racing** (`src/sim/race.js`): N cars at 300 Hz in a fixed order, deterministic and DOM-free.
   Car-to-car contact (oriented rectangles, impulse with restitution and friction at the contact point,
@@ -77,6 +92,17 @@ tools in this repo (`npm test`, `npm run validate`, `npm run benchmark`).
   frame. Near plane 7 cm in the cockpit, 10 cm on the bonnet, 30 cm elsewhere as before.
 - The HUD's dial shrinks in the cockpit view, where the dash shows the same numbers.
 - Tests: `tests/cockpit.test.js` (seating on a synthetic saloon and roadster, overrides, class of every car).
+
+## Unreleased — Singapore, Imola, Albert Park
+- **Marina Bay** (`singapore`), **Imola** (`imola`) and **Albert Park** (`melbourne`) built from OpenStreetMap
+  `type=circuit` relations by the new `tools/osm-circuit.mjs` (lengths +0.2 %, −0.2 %, +0.4 % of official;
+  Singapore and Imola anticlockwise). All 16 cars lap each cleanly, the GT3 in rain too, and a 12-car GT3 race
+  finishes on each without wall contact. Singapore is a walled street circuit (Monaco treatment) that opens
+  at dusk: night-race circuits (`night` in the trackside file) get floodlight poles round the whole lap and a
+  fill light. Flat street circuits no longer get the "falls into the sea" landscape (it produced NaN terrain).
+- Barcelona and Zandvoort are built and surveyed but not registered: with OSM's coarse corner geometry several
+  cars leave the road (Zandvoort around 2.26 km, Barcelona around 2.44 km). Rounding the kinks made it worse
+  and was reverted. Six circuits remain unbuilt (Yas Marina, Baku, Jeddah, Miami, Lusail, Las Vegas).
 
 ## Unreleased — nine Grand Prix circuits (of twenty requested)
 - **Added**: Circuit of the Americas, Hungaroring, Mexico City, Montreal, Bahrain, Interlagos, Shanghai,

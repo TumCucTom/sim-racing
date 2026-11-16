@@ -35,7 +35,8 @@ export function monacoSetup(track) {
   const sc = track.scene, W = sc.win, n = track.n;
   let zMin = Infinity; for (let i = 0; i < n; i++) zMin = Math.min(zMin, track.z[i]);
   const SEA = zMin - 3;
-  const tun = sc.tunnel.filter(([a, b]) => b - a >= 60), under = sc.tunnel.filter(([a, b]) => b - a < 60);
+  // the hotel stands over the road some 25 m before OSM's tunnel way begins: the covered section starts there
+  const tun = sc.tunnel.filter(([a, b]) => b - a >= 60).map(([a, b]) => [a - 24, b]), under = sc.tunnel.filter(([a, b]) => b - a < 60);
   const inTun = (i) => { for (const [a, b] of tun) if (i >= a && i <= b) return true; return false; };
   // the ground over the tunnel starts a few metres inside each portal (the portal structure covers the join)
   const podium = (i) => { for (const [a, b] of tun) if (i >= a + 7 && i <= b - 7) return true; return false; };
@@ -357,7 +358,7 @@ function buildMonaco(M, ctx) {
       color: `{
         float dv = length(vViewPosition);
         // harbour water is greener and paler than the open sea; depth tint by a slow noise
-        vec3 deep = vec3(0.012, 0.075, 0.14), shallow = vec3(0.03, 0.16, 0.2);
+        vec3 deep = vec3(0.006, 0.045, 0.1), shallow = vec3(0.014, 0.095, 0.13);
         diffuseColor.rgb = mix(deep, shallow, 0.5 * vnoise(vWPos.xz / 90.0) + 0.25 * vnoise(vWPos.xz / 17.0)) * (1.0 - 0.35 * uWet);
       }`,
       rough: 'roughnessFactor = mix(0.07, 0.3, smoothstep(150.0, 1500.0, length(vViewPosition))) + 0.12 * uRain;',
@@ -430,7 +431,10 @@ function buildCity(K) {
       const cx = D.reduce((v, p) => v + p[0], 0) / D.length, cy = D.reduce((v, p) => v + p[1], 0) / D.length;
       let moved = 0;
       for (const p of D) { const t = corridorHit(p[0], p[1], 1.7); if (!t) continue; const i = t.idx, hd = track.heading[i], latC = -(cx - track.x[i]) * Math.sin(hd) + (cy - track.y[i]) * Math.cos(hd), s = latC >= 0 ? 1 : -1, o = (s > 0 ? track.wallL[i] : track.wallR[i]) + 1.9, along = (p[0] - track.x[i]) * Math.cos(hd) + (p[1] - track.y[i]) * Math.sin(hd); p[0] = track.x[i] + Math.cos(hd) * along - Math.sin(hd) * s * o; p[1] = track.y[i] + Math.sin(hd) * along + Math.cos(hd) * s * o; moved++; }
-      if (moved) { P = D.filter((p, k) => { const q = D[(k + 1) % D.length]; return Math.hypot(p[0] - q[0], p[1] - q[1]) > 0.3; }); if (P.length < 3) { dropped++; return false; } }
+      if (moved) { P = D.filter((p, k) => { const q = D[(k + 1) % D.length]; return Math.hypot(p[0] - q[0], p[1] - q[1]) > 0.3; }); 
+        // straight runs along the corridor edge collapse back to their end points
+        for (let pass = 0; pass < 3; pass++) P = P.filter((p, k) => { const a = P[(k + P.length - 1) % P.length], c = P[(k + 1) % P.length], L2 = Math.hypot(c[0] - a[0], c[1] - a[1]); return L2 < 1e-3 || k % 2 === pass % 2 || Math.abs((p[0] - a[0]) * (c[1] - a[1]) - (p[1] - a[1]) * (c[0] - a[0])) / L2 > 0.3; });
+        if (P.length < 3) { dropped++; return false; } }
       for (let k = 0; k < P.length; k++) { const a = P[k], c = P[(k + 1) % P.length], Ln = Math.hypot(c[0] - a[0], c[1] - a[1]), st = Math.max(1, Math.ceil(Ln / 2)); for (let q = 0; q <= st; q++) if (corridorHit(a[0] + (c[0] - a[0]) * q / st, a[1] + (c[1] - a[1]) * q / st, 0.9)) { dropped++; K.droppedList.push([Math.round(cx), Math.round(cy), b.mark || '']); return false; } }
       if (polyArea(P) < 18) { dropped++; return false; }
     }

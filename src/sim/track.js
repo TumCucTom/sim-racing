@@ -80,7 +80,7 @@ for (const id of Object.keys(GP)) TRACKS[id] = { ...GP[id], real: true };
 const GP_READY = Object.keys(GP).filter(id => GP[id].ready);
 export const TRACK_ORDER = ['ravenscar', 'silverstone', 'spa', 'monza', 'nordschleife', 'monaco', 'laguna', ...GP_READY];
 // lap lengths in km for the menu (official figures; the built length is tested to be within 1 %)
-export const TRACK_KM = { ravenscar: 2.91, silverstone: 5.891, spa: 7.004, monza: 5.793, nordschleife: 20.832, monaco: 3.337, laguna: 3.602, cota: 5.513, hungaroring: 4.381, mexico: 4.304, montreal: 4.361, bahrain: 5.412, interlagos: 4.309, shanghai: 5.451, redbullring: 4.318, suzuka: 5.807 };
+export const TRACK_KM = { ravenscar: 2.91, silverstone: 5.891, spa: 7.004, monza: 5.793, nordschleife: 20.832, monaco: 3.337, laguna: 3.602, cota: 5.513, hungaroring: 4.381, singapore: 4.94, imola: 4.909, melbourne: 5.278, mexico: 4.304, montreal: 4.361, bahrain: 5.412, interlagos: 4.309, shanghai: 5.451, redbullring: 4.318, suzuka: 5.807 };
 // menu grouping
 export const TRACK_GROUPS = [['Original', ['ravenscar']], ['Grand Prix circuits', ['silverstone', 'spa', 'monza', 'monaco', ...GP_READY].sort((a, b) => TRACKS[a].name.localeCompare(TRACKS[b].name))], ['Other', ['nordschleife', 'laguna']]];
 
@@ -407,7 +407,7 @@ export function buildTrack(id = 'ravenscar') {
   for (let i = 0; i < n; i++) { gravelL[i] = side.gBL[i] > 0 ? 1 : 0; gravelR[i] = side.gBR[i] > 0 ? 1 : 0; }
 
   const t = {
-    id, name: def.name, country: def.country, real, narrow: !!def.runoff, urban, source: def.source || null, theme: tsDef?.theme || null, aiGrip: def.aiGrip ?? 1, scene: def.scene || null, sections: tsDef?.sections || null,
+    id, name: def.name, country: def.country, real, narrow: !!def.runoff, urban, source: def.source || null, theme: tsDef?.theme || null, night: !!tsDef?.night, aiGrip: def.aiGrip ?? 1, scene: def.scene || null, sections: tsDef?.sections || null,
     n, ds, length, halfWidth: HALF_WIDTH, hw, kerbWidth: KERB_WIDTH,
     x, y, z, grade, heading, curv: curvS, s: sArr, gravelL, gravelR, wallL, wallR, deck, under,
     ...side, verge: urban ? SX.PAVE : SX.GRASS,

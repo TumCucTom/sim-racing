@@ -7,7 +7,7 @@
 //
 //   __game.startRace({ n, laps, grid, klass, skill, seed, order, ai })   start (or restart) a race
 //   __game.followCar(i | 'leader' | 'player' | 'battle' | 'next' | 'prev' | 'p3')   car to watch
-//   __game.setCamera('chase' | 'far' | 'bonnet' | 'cockpit' | 'tv' | 'heli' | 'side' | 'front' | 'rear' | 'orbit' | 'director')
+//   __game.setCamera('chase' | 'far' | 'bonnet' | 'cockpit' | 'tv' | 'tvstatic' | 'heli' | 'side' | 'front' | 'rear' | 'orbit' | 'director')
 //   __game.fastForward(seconds)      advance the whole race without rendering (deterministic with &ai)
 //   __game.setTimeScale(k)           slow motion / fast forward of the rendered race
 //   __game.raceInfo()                time, order, gaps and current battles
@@ -101,17 +101,16 @@ export class RaceMode {
 
   // ------------------------------------------------------------------ menu and keys
   buildMenu() {
-    const row = document.querySelector('#menu .rowb'); if (!row) return;
+    const box = document.getElementById('raceopts'), acts = document.getElementById('m-actions'); if (!box || !acts) return;
     const c = this.cfg, opt = (v, label, sel) => `<option value="${v}"${sel ? ' selected' : ''}>${label}</option>`;
     const ns = []; for (let i = 2; i <= 20; i++) ns.push(opt(i, i, i === c.n));
-    row.insertAdjacentHTML('afterend', `<div class="rowb" id="racerow">
-      <button class="go" id="race-go">Race</button>
+    box.insertAdjacentHTML('beforeend', `<div id="racerow">
       <label>Cars <select id="race-n">${ns.join('')}</select></label>
       <label>Laps <select id="race-laps">${[1, 2, 3, 5, 8, 10, 15, 20, 30].map(v => opt(v, v, v === c.laps)).join('')}</select></label>
       <label>Start from <select id="race-grid"></select></label>
-      <label>Opponents <select id="race-klass">${[['same', 'Same car'], ['class', 'Same class'], ['mixed', 'Mixed classes']].map(([v, l]) => opt(v, l, v === c.klass)).join('')}</select></label>
-      <label>AI level <select id="race-skill">${SKILLS.map(([v, l]) => opt(v, l, Math.abs(v - c.skill) < 0.011)).join('')}</select></label>
-      <button class="alt" id="race-watch">Watch an AI race</button></div>`);
+      <label class="w">Opponents <select id="race-klass">${[['same', 'Same car'], ['class', 'Same class'], ['mixed', 'Mixed classes']].map(([v, l]) => opt(v, l, v === c.klass)).join('')}</select></label>
+      <label class="w">AI level <select id="race-skill">${SKILLS.map(([v, l]) => opt(v, l, Math.abs(v - c.skill) < 0.011)).join('')}</select></label></div>`);
+    acts.insertAdjacentHTML('beforeend', '<button type="button" class="go" id="race-go">Race</button><button type="button" class="alt" id="race-watch">Watch an AI race</button>');
     const $ = (id) => document.getElementById(id);
     const grids = () => { const g = $('race-grid'), cur = this.cfg.grid; g.innerHTML = opt('last', 'the back', cur === 'last') + Array.from({ length: this.cfg.n }, (_, i) => opt(i + 1, i === 0 ? 'pole' : `P${i + 1}`, String(cur) === String(i + 1))).join(''); };
     grids();
@@ -298,7 +297,7 @@ export class RaceMode {
     else if (EXTRA_CAMS.includes(name)) { this.extraCam = name; g.cam = Math.max(0, this.CAMS.indexOf('tv')); }
     else return false;
     g.camInit = false; this.cut = 3;
-    g.hud.toast(`Camera: ${name}`, 1.2);
+    g.hud.toast(`Camera: ${{ tv: 'Trackside (tracking)', tvstatic: 'Trackside (static)' }[name] || name}`, 1.2);
     return true;
   }
 
@@ -370,6 +369,7 @@ export class RaceMode {
       if (m.tag && this.tagsOn && d2 < 140 * 140 && d2 > 16) { m.tag.visible = true; m.tag.position.set(car.x, h + c.spec.body.height + 0.55, -car.y); }
       o.position.set(car.x, h, -car.y); o.rotation.set(-gr * she, car.yaw, gr * che, 'YXZ');
       const braking = car.brake > 0.05;
+      if (m.lamps) m.lamps.brake = braking; else g.wx.lampsFor(m, c.spec);   // two headlights, two tail lights on every car, near or far
       if (far) { m.lod.userData.tail.emissiveIntensity = braking ? 3 : 0.3; continue; }
       const spec = c.spec, soft = spec.body.style === 'formula' ? 0.12 : spec.body.style === 'gt' ? 0.3 : 1, delta = car.steer * spec.steerLock;
       m.chassis.rotation.z = clamp(car.axF * 0.0032 * soft, -0.05, 0.05); m.chassis.rotation.x = clamp(car.ayF * 0.0042 * soft, -0.07, 0.07);

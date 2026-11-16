@@ -11,7 +11,10 @@ export class Input {
     this.padPrev = [];
     this.device = 'keyboard';
     window.addEventListener('keydown', (e) => {
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab'].includes(e.code)) e.preventDefault();
+      // in the menu, Tab / Space / arrows keep their normal meaning on form controls
+      const inMenu = !document.getElementById('menu')?.classList.contains('hidden'), tag = e.target?.tagName;
+      const native = inMenu && (e.code === 'Tab' || tag === 'SELECT' || (tag === 'BUTTON' && e.code === 'Space'));
+      if (!native && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab'].includes(e.code)) e.preventDefault();
       if (e.repeat) return;
       this.keys.add(e.code);
       const h = this.handlers[e.code]; if (h) h();

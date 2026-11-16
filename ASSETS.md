@@ -108,3 +108,20 @@ on top of the existing CC0 textures above.
 | `src/sim/tracks/monaco.scene.json` (building footprints and heights, coastline, tunnel range) | OpenStreetMap contributors, processed by `tools/monaco-scene.mjs` | ODbL 1.0 | 71 kB; façades, roofs, yachts are procedural. |
 | `src/sim/tracks/*.trackside.json` | Written by hand from memory of the venues | project licence | Not surveyed; see README "Trackside". |
 
+
+## Monaco
+
+No image or model files were added for the Monaco rebuild. Its data lives in `src/sim/tracks/monaco.scene.json` (about 140 kB,
+bundled with the page), written by `tools/monaco-scene.mjs`:
+
+| Data | Source | Licence |
+|---|---|---|
+| Building footprints, levels / heights where tagged, coastline, piers, pools, parks, streets, steps, retaining walls, the tunnel extent | OpenStreetMap contributors — `api.openstreetmap.org/api/0.6/map` extracts covering 7.411–7.435 °E, 43.726–43.746 °N | ODbL 1.0 (credited in the game's track source line) |
+| Relief (`tools/monaco-cfg/dem.json`: 50 m grid round the circuit, 250 m grid round the principality) | NASA SRTM 30 m via opentopodata.org | Public domain |
+
+Everything drawn from that data is procedural (`src/game/monaco.js`, `monaco-props.js`, `monaco-tex.js`): the façade texture
+array (Belle Époque, plain stucco, balcony-band and loggia towers, curtain wall, shop fronts, arcades, stonework, cornices,
+roof tiles, zinc and copper roofs, grandstand crowd), the hoardings (fictional brands), palms, yachts, street lamps, the sea
+shader and the tunnel. Garden trees reuse `tex/trees_atlas.png`; ground surfaces reuse the asphalt, grass and concrete scans
+listed above. Untagged building heights are guessed from tagged neighbours and footprint size; the Casino, Hôtel de Paris,
+Fairmont and a few other landmarks have hand-set heights and looks (`MARKS` in `monaco-props.js`).

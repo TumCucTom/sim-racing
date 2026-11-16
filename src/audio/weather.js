@@ -5,10 +5,15 @@
 //   const wx = new WeatherAudio(ctx, destinationNode);
 //   wx.set({ rain: 0..1, wet: 0..1 });           // when the conditions change
 //   wx.update(speed m/s, level 0..1, cockpit);   // every frame
-//   wx.thunder(delaySeconds, loudness 0..1);
+//   wx.thunder(delaySeconds, loudness 0..1, { km, double });
+import { renderThunder } from './thunder.js';
+
+// near strike (0.3 km, buffer peak 0.9) about 3 dB over a full-throttle engine after the master compressor
+const THUNDER_GAIN = 1.2;
+
 export class WeatherAudio {
-  constructor(ctx, dest) {
-    this.ctx = ctx; this.rain = 0; this.wet = 0;
+  constructor(ctx, dest, { post = null, verb = null } = {}) {
+    this.ctx = ctx; this.post = post; this.verb = verb; this.rain = 0; this.wet = 0;
     const sr = ctx.sampleRate, n = Math.round(sr * 3), buf = ctx.createBuffer(2, n, sr);
     let seed = 987654321; const rnd = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 2147483648 - 1; };
     for (let ch = 0; ch < 2; ch++) { const d = buf.getChannelData(ch); for (let i = 0; i < n; i++) d[i] = rnd(); }
@@ -39,22 +44,29 @@ export class WeatherAudio {
     this.patter.gain.setTargetAtTime(level * r * (cockpit ? 0.16 : 0.05), t, 0.15);
     this.spray.gain.setTargetAtTime(level * this.wet * 0.22 * k * Math.sqrt(k), t, 0.08);
     this.sprayF.frequency.setTargetAtTime(600 + 1500 * k, t, 0.1);
+    if (this.thBus) { this.thBus.gain.setTargetAtTime(level * THUNDER_GAIN * (cockpit ? 0.8 : 1), t, 0.1); this.thLp.frequency.setTargetAtTime(cockpit ? 1400 : 18000, t, 0.2); }   // muffled inside the car
   }
 
-  // A crack (only when close) followed by a long rolling rumble.
-  thunder(delay = 0, loud = 0.6) {
-    const ctx = this.ctx, t0 = ctx.currentTime + Math.max(0, delay), lvl = this.level * Math.min(1, loud);
-    if (lvl <= 0.001) return;
-    const src = ctx.createBufferSource(); src.buffer = this.noise; src.loop = true; src.playbackRate.value = 0.5;
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 0.7;
-    lp.frequency.setValueAtTime(loud > 0.5 ? 1800 : 500, t0); lp.frequency.exponentialRampToValueAtTime(90, t0 + 1.4);
-    const g = ctx.createGain(); g.gain.setValueAtTime(0, t0);
-    g.gain.linearRampToValueAtTime(1.4 * lvl, t0 + 0.04);
-    // the rumble swells and fades a few times as the sound arrives from along the channel
-    let t = t0 + 0.25, a = 0.8 * lvl;
-    for (let i = 0; i < 5; i++) { g.gain.linearRampToValueAtTime(a * (0.5 + 0.5 * ((i * 7919) % 5) / 4), t); t += 0.45 + 0.2 * (i % 3); a *= 0.62; }
-    g.gain.linearRampToValueAtTime(0, t + 1.2);
-    src.connect(lp); lp.connect(g); g.connect(this.dest);
-    src.start(t0); src.stop(t + 1.4);
+  // Thunder for a strike `km` away, `delay` seconds after the flash. The sound is rendered
+  // by src/audio/thunder.js into a buffer (a near crack, then a 5-15 s roll) and played on its
+  // own bus: past the master compressor, so it cannot pump the engine, with a little sent to
+  // the reverb. `loud` (0..1) is the older interface and only used when km is not given.
+  thunder(delay = 0, loud = 0.6, { km = Math.max(0.3, 1 / Math.max(0.2, loud) - 0.6), double = false, seed = (Math.random() * 0x7fffffff) | 0 } = {}) {
+    const ctx = this.ctx, t0 = ctx.currentTime + Math.max(0, delay);
+    if (this.level <= 0.001) return;
+    if (!this.thBus) {
+      this.thLp = ctx.createBiquadFilter(); this.thLp.type = 'lowpass'; this.thLp.frequency.value = 18000; this.thLp.Q.value = 0.5;
+      this.thBus = ctx.createGain(); this.thBus.gain.value = this.level * THUNDER_GAIN;
+      this.thLp.connect(this.thBus); this.thBus.connect(this.post || this.dest);
+      if (this.verb) { const send = ctx.createGain(); send.gain.value = 0.22; this.thBus.connect(send); send.connect(this.verb); }
+    }
+    // rendered a moment after the flash (tens of ms of work); far strikes have no top end and need fewer samples
+    const make = () => {
+      if (ctx.state === 'closed') return;
+      const th = renderThunder({ sampleRate: km < 1.2 ? 24000 : 12000, km, seed, double });
+      const buf = ctx.createBuffer(2, th.left.length, th.sampleRate); buf.copyToChannel(th.left, 0); buf.copyToChannel(th.right, 1);
+      const src = ctx.createBufferSource(); src.buffer = buf; src.connect(this.thLp); src.start(Math.max(t0, ctx.currentTime));
+    };
+    if (delay > 0.3) setTimeout(make, 120); else make();
   }
 }
